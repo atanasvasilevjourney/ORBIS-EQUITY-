@@ -8,8 +8,9 @@
 #   - ingest-fundamentals : ~4 weekly runs  x 12 min =   48 min
 #   - ingest-fin-reports  : ~4 weekly runs  x 15 min =   60 min
 #   - compute-signals     : ~22 daily runs  x  8 min =  176 min
-#   - overhead (setup/cache)                          = ~726 min
-#   Total estimate                                    ~1,250 min/month
+#   - ingest-pharma       : ~4 weekly runs  x 10 min =   40 min
+#   - overhead (setup/cache)                          = ~756 min
+#   Total estimate                                    ~1,290 min/month
 # =============================================================================
 
 name: KovaView Nightly Pipeline
@@ -210,6 +211,48 @@ jobs:
 
       - name: Run F-Score compute
         run: python -m pipeline.compute.f_score
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+  # ---------------------------------------------------------------------------
+  # 6. Ingest Pharma Trials + Compute Signals — weekly (Monday) or manual
+  # ---------------------------------------------------------------------------
+  ingest-pharma:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: compute-signals
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event.schedule && contains('1', github.event.schedule))
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pipeline/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Ingest pharma trials from ClinicalTrials.gov
+        run: python -m pipeline.ingest.pharma_trials
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+      - name: Compute pharma signals
+        run: python -m pipeline.compute.pharma_signals
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
