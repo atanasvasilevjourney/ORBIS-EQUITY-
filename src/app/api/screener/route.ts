@@ -57,7 +57,8 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query;
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Supabase screener query error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 
   // Post-filter by region/sector (joined fields)

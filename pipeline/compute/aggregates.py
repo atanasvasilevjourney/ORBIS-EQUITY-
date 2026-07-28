@@ -86,7 +86,7 @@ def compute_posture(breadth: dict) -> int:
 
     Components:
       - 50% net breadth: (green% - red%) mapped from [-100,+100] to [0,50]
-      - 30% green strength: green% mapped from [0,100] to [0,30]
+      - 30% directional strength: (green% - red%) / (green% + red%) mapped to [0,30]
       - 20% sector uniformity: fraction of sectors with positive net score
     """
     green_pct = breadth.get("pct_green", 0)
@@ -96,8 +96,13 @@ def compute_posture(breadth: dict) -> int:
     net_breadth = green_pct - red_pct  # range: -100 to +100
     net_score = ((net_breadth + 100) / 200) * 50
 
-    # Green strength (0-30)
-    green_score = (green_pct / 100) * 30
+    # Directional strength (0-30): symmetric — centers at 15 when green=red
+    total_directional = green_pct + red_pct
+    if total_directional > 0:
+        direction_ratio = (green_pct - red_pct) / total_directional  # [-1, +1]
+    else:
+        direction_ratio = 0
+    green_score = ((direction_ratio + 1) / 2) * 30
 
     # Sector uniformity (0-20): how many sectors are net positive
     sector_breadth = breadth.get("sector_breadth", {})
@@ -151,7 +156,7 @@ def main():
     logger.info(f"Computing aggregates for {len(radar.data)} tickers")
 
     # Compute breadth
-    breadth = compute_breadth(radar.data, universe.data)
+    breadth = compute_breadth(radar.data, universe.data or [])
     posture = compute_posture(breadth)
     label = compute_posture_label(posture)
 

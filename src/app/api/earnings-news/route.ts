@@ -5,9 +5,13 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
-  const ticker = sp.get("ticker");
+  const rawTicker = sp.get("ticker");
+  const ticker = rawTicker && /^[A-Z0-9.\-]{1,20}$/i.test(rawTicker) ? rawTicker : null;
+  if (rawTicker && !ticker) {
+    return NextResponse.json({ error: "Invalid ticker" }, { status: 400 });
+  }
   const view = sp.get("view") ?? "all"; // upcoming | reported | all
-  const days = parseInt(sp.get("days") ?? "30", 10);
+  const days = Math.min(parseInt(sp.get("days") ?? "30", 10), 365);
   const limit = Math.min(parseInt(sp.get("limit") ?? "100", 10), 500);
 
   const sb = createServerClient();

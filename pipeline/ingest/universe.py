@@ -199,7 +199,6 @@ def main() -> None:
             "data_source": price_source,
             "fundamentals_source": fundamentals_source,
             "is_active": stock.get("is_actively_trading", True),
-            "market_cap": stock.get("market_cap"),
             "updated_at": now,
         })
 

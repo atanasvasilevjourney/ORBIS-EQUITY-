@@ -9,7 +9,15 @@ export async function GET(req: NextRequest) {
   const minFScore = parseInt(sp.get("min_f") ?? "0", 10);
   const maxPE = parseFloat(sp.get("max_pe") ?? "0");
   const minROE = parseFloat(sp.get("min_roe") ?? "0");
-  const sortBy = sp.get("sort") ?? "market_cap";
+  const ALLOWED_SORTS = new Set([
+    "market_cap", "pe_ratio", "pb_ratio", "ps_ratio", "p_fcf_ratio",
+    "ev_ebitda", "earnings_yield", "fcf_yield", "dividend_yield",
+    "gross_margin", "operating_margin", "net_margin", "roe", "roa", "roic",
+    "current_ratio", "debt_to_equity", "revenue_growth_1y", "eps_growth_1y",
+    "f_score", "price",
+  ]);
+  const rawSort = sp.get("sort") ?? "market_cap";
+  const sortBy = ALLOWED_SORTS.has(rawSort) ? rawSort : "market_cap";
   const sortDir = sp.get("dir") === "asc" ? true : false;
   const limit = Math.min(parseInt(sp.get("limit") ?? "200", 10), 1000);
 
@@ -80,18 +88,20 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query;
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Supabase fundamentals query error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 
   const filtered = data ?? [];
 
-  // Get unique sectors for filter dropdown
-  const sectorSet = new Set<string>();
-  for (const r of data ?? []) {
-    const s = (r as any).universe_members?.sector;
-    if (s) sectorSet.add(s);
-  }
-  const sectors = Array.from(sectorSet).sort();
+  // Get all sectors for dropdown (independent of filters)
+  const { data: sectorData } = await sb
+    .from("universe_members")
+    .select("sector")
+    .not("sector", "is", null);
+  const sectors = Array.from(
+    new Set((sectorData ?? []).map((r: any) => r.sector as string))
+  ).sort();
 
   // Flatten for frontend
   const rows = filtered.map((r: any) => ({

@@ -69,7 +69,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: universe-sync
-    if: always()
+    if: >-
+      always()
+      && (needs.universe-sync.result == 'success'
+          || needs.universe-sync.result == 'skipped')
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4

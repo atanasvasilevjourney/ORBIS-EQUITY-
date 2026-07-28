@@ -16,7 +16,7 @@ Usage:
 """
 import logging
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
@@ -36,7 +36,7 @@ ATR_WINDOW = 14                      # ATR for breakout detection
 ATR_COMPRESSION_RATIO = 0.6          # current ATR / 60d ATR < this = compressed
 VOLUME_CONFIRM_RATIO = 1.2           # volume / 20d avg > this = confirmed
 HIGH_252_PROXIMITY_THRESHOLD = 0.95  # within 5% of 52w high = strong
-MIN_HISTORY_DAYS = 145               # need enough data for momentum (120d + 20d vol + buffer)
+MIN_HISTORY_DAYS = 148               # EWMAC_SLOW(128) + VOL_WINDOW(20) = 148
 
 # State thresholds
 BULL_THRESHOLD = 55       # rank >= this AND net positive → GREEN
@@ -246,7 +246,7 @@ def main():
 
     # Get active universe
     universe = sb.table("universe_members").select("symbol").eq("is_active", True).execute()
-    symbols = [r["symbol"] for r in universe.data]
+    symbols = [r["symbol"] for r in (universe.data or [])]
     logger.info(f"Computing Trend Radar for {len(symbols)} tickers")
 
     # Pre-fetch existing states to preserve state_changed_at
@@ -276,6 +276,7 @@ def main():
                 continue
 
             signals["symbol"] = symbol
+            signals["computed_at"] = datetime.now(timezone.utc).isoformat()
             # Only update state_changed_at when state actually changes
             prev = prev_state_map.get(symbol)
             if prev and prev.get("state") == signals["state"]:

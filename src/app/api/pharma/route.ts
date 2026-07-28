@@ -8,7 +8,11 @@ export async function GET(req: NextRequest) {
   const direction = sp.get("direction"); // LONG | SHORT | WATCH | null (all)
   const phase = sp.get("phase"); // PHASE2 | PHASE3 | null (all)
   const eventType = sp.get("event"); // TRIAL_FAILURE | RESULTS_POSTED | etc.
-  const ticker = sp.get("ticker"); // filter to specific ticker
+  const rawTicker = sp.get("ticker");
+  const ticker = rawTicker && /^[A-Z0-9.\-]{1,20}$/i.test(rawTicker) ? rawTicker : null;
+  if (rawTicker && !ticker) {
+    return NextResponse.json({ error: "Invalid ticker" }, { status: 400 });
+  }
   const limit = Math.min(parseInt(sp.get("limit") ?? "200", 10), 500);
 
   const sb = createServerClient();
@@ -55,7 +59,8 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query;
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Supabase pharma query error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 
   // Flatten for frontend

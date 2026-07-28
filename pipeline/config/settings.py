@@ -6,14 +6,13 @@ from dataclasses import dataclass, field
 class LSEConfig:
     api_url: str = os.getenv("LSE_API_URL", "https://api.londonstrategicedge.com")
     api_key: str = os.getenv("LSE_API_KEY", "")
-    data_api_url: str = os.getenv("LSE_DATA_API_URL", "https://data-api.londonstrategicedge.com")
+    data_api_url: str = os.getenv("LSE_DATA_API_URL") or "https://data-api.londonstrategicedge.com"
     max_rows_per_request: int = 5000
     request_delay: float = 0.2
 
 @dataclass
 class SupabaseConfig:
     url: str = os.getenv("SUPABASE_URL", "")
-    anon_key: str = os.getenv("SUPABASE_ANON_KEY", "")
     service_key: str = os.getenv("SUPABASE_SERVICE_KEY", "")
 
 @dataclass

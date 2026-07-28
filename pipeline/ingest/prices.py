@@ -243,7 +243,6 @@ def main() -> None:
                             row[field] = None
                     except (ValueError, TypeError):
                         row[field] = None
-            row["updated_at"] = datetime.now(timezone.utc).isoformat()
             clean_rows.append(row)
 
     logger.info("Upserting %d price rows into prices_daily...", len(clean_rows))

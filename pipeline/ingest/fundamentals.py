@@ -27,12 +27,7 @@ logger = logging.getLogger(__name__)
 # uses different column names.
 FUNDAMENTALS_FIELD_MAP: dict[str, str] = {
     "symbol": "symbol",
-    "company_name": "company_name",
-    "sector": "sector",
-    "industry": "industry",
-    "country": "country",
-    "exchange": "exchange",
-    "currency": "currency",
+    # Price & market
     "price": "price",
     "market_cap": "market_cap",
     "beta": "beta",
@@ -85,9 +80,6 @@ FUNDAMENTALS_FIELD_MAP: dict[str, str] = {
     "dividend_growth_1y": "dividend_growth_1y",
     "book_value_growth_1y": "book_value_growth_1y",
     # Meta
-    "is_etf": "is_etf",
-    "is_actively_trading": "is_actively_trading",
-    "ipo_date": "ipo_date",
     "ratios_date": "ratios_date",
 }
 
@@ -98,14 +90,10 @@ INSIDER_FIELD_MAP: dict[str, str] = {
     "transaction_date": "transaction_date",
     "reporting_name": "reporting_name",
     "transaction_type": "transaction_type",
-    "securities_owned": "securities_owned",
     "securities_transacted": "securities_transacted",
     "price": "price",
-    "company_name": "company_name",
     "type_of_owner": "type_of_owner",
-    "acquistionOrDisposition": "acquisition_or_disposition",
     "form_type": "form_type",
-    "link": "link",
 }
 
 
@@ -150,7 +138,6 @@ def _ingest_fundamentals(lse: LSEClient, sb: Client) -> int:
             continue
 
         row = _map_row(stock, FUNDAMENTALS_FIELD_MAP)
-        row["snapshot_date"] = now
         row["updated_at"] = now
         rows.append(row)
 
@@ -206,7 +193,6 @@ def _ingest_insider_trades(lse: LSEClient, sb: Client) -> int:
             continue
 
         row = _map_row(trade, INSIDER_FIELD_MAP)
-        row["updated_at"] = now
 
         # Ensure we have a filing_date for conflict resolution
         if not row.get("filing_date"):

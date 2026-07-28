@@ -34,7 +34,7 @@ export async function GET() {
     } catch { /* ignore */ }
   }
 
-  // Data freshness check — warn if older than 2 calendar days
+  // Data freshness check — warn if older than 3 calendar days (allows weekend gap)
   let stale = false;
   if (brief?.asof_date) {
     const asOf = new Date(brief.asof_date);

@@ -15,8 +15,6 @@
   --border: #1e2733;
   --card-bg: #0d1117;
   --badge-bg: #1a2332;
-  --sparkline-up: #00ff88;
-  --sparkline-down: #ff3366;
 }
 
 [data-theme="paper"] {
@@ -33,6 +31,4 @@
   --border: #e7e5e4;
   --card-bg: #ffffff;
   --badge-bg: #f5f5f4;
-  --sparkline-up: #16a34a;
-  --sparkline-down: #dc2626;
 }

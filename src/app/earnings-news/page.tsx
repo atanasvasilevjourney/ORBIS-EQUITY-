@@ -232,7 +232,7 @@ export default function EarningsNewsPage() {
                       </span>
                     )}
                     {n.badge && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-warning)] text-[var(--bg)] font-bold">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-warning)] text-[var(--surface)] font-bold">
                         {n.badge}
                       </span>
                     )}
