@@ -9,8 +9,10 @@
 #   - ingest-fin-reports  : ~4 weekly runs  x 15 min =   60 min
 #   - compute-signals     : ~22 daily runs  x  8 min =  176 min
 #   - ingest-pharma       : ~4 weekly runs  x 10 min =   40 min
-#   - overhead (setup/cache)                          = ~756 min
-#   Total estimate                                    ~1,290 min/month
+#   - ingest-earnings     : ~22 daily runs  x  3 min =   66 min
+#   - ingest-news         : ~22 daily runs  x  5 min =  110 min
+#   - overhead (setup/cache)                          = ~800 min
+#   Total estimate                                    ~1,540 min/month
 # =============================================================================
 
 name: KovaView Nightly Pipeline
@@ -253,6 +255,47 @@ jobs:
 
       - name: Compute pharma signals
         run: python -m pipeline.compute.pharma_signals
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+  # ---------------------------------------------------------------------------
+  # 7. Ingest Earnings + News — runs every weekday
+  # ---------------------------------------------------------------------------
+  ingest-earnings-news:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: compute-signals
+    if: always() && needs.compute-signals.result == 'success'
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pipeline/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Ingest earnings from LSE
+        run: python -m pipeline.ingest.earnings
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          LSE_API_KEY: ${{ secrets.LSE_API_KEY }}
+
+      - name: Ingest news from GDELT
+        run: python -m pipeline.ingest.news
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
