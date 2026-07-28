@@ -1,26 +1,28 @@
 # =============================================================================
 # KovaView Nightly Pipeline
 # =============================================================================
-# Schedule : 19:30 UTC every weekday (Mon-Fri), ~22 runs/month
-# Budget   : ~1,250 min/month of 2,000 free GitHub Actions minutes
-#   - universe-sync       : ~4 weekly runs  x  5 min =   20 min
+# Schedule : Mon 19:30 UTC (weekly+daily), Tue-Fri 19:30 UTC (daily only)
+# Budget   : ~1,040 min/month of 2,000 free GitHub Actions minutes
+#   - universe-sync       : ~4 Mon runs     x  5 min =   20 min
 #   - ingest-prices       : ~22 daily runs  x 10 min =  220 min
-#   - ingest-fundamentals : ~4 weekly runs  x 12 min =   48 min
-#   - ingest-fin-reports  : ~4 weekly runs  x 15 min =   60 min
+#   - ingest-fundamentals : ~4 Mon runs     x 12 min =   48 min
+#   - ingest-fin-reports  : ~4 Mon runs     x 15 min =   60 min
 #   - compute-signals     : ~22 daily runs  x  8 min =  176 min
-#   - ingest-pharma       : ~4 weekly runs  x 10 min =   40 min
+#   - ingest-pharma       : ~4 Mon runs     x 10 min =   40 min
 #   - ingest-earnings     : ~22 daily runs  x  3 min =   66 min
 #   - ingest-news         : ~22 daily runs  x  5 min =  110 min
-#   - overhead (setup/cache)                          = ~800 min
-#   Total estimate                                    ~1,540 min/month
+#   - overhead (setup/cache)                          = ~300 min
+#   Total estimate                                    ~1,040 min/month
 # =============================================================================
 
 name: KovaView Nightly Pipeline
 
 on:
   schedule:
-    # 19:30 UTC weekdays (after US market close)
-    - cron: "30 19 * * 1-5"
+    # Monday 19:30 UTC — triggers weekly + daily jobs
+    - cron: "30 19 * * 1"
+    # Tue-Fri 19:30 UTC — triggers daily-only jobs
+    - cron: "30 19 * * 2-5"
   workflow_dispatch:
 
 jobs:
@@ -32,7 +34,7 @@ jobs:
     timeout-minutes: 15
     if: >-
       github.event_name == 'workflow_dispatch'
-      || (github.event.schedule && contains('1', github.event.schedule))
+      || github.event.schedule == '30 19 * * 1'
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -105,7 +107,7 @@ jobs:
     needs: ingest-prices
     if: >-
       github.event_name == 'workflow_dispatch'
-      || (github.event.schedule && contains('1', github.event.schedule))
+      || github.event.schedule == '30 19 * * 1'
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -143,7 +145,7 @@ jobs:
     needs: ingest-fundamentals
     if: >-
       github.event_name == 'workflow_dispatch'
-      || (github.event.schedule && contains('1', github.event.schedule))
+      || github.event.schedule == '30 19 * * 1'
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -226,7 +228,7 @@ jobs:
     needs: compute-signals
     if: >-
       github.event_name == 'workflow_dispatch'
-      || (github.event.schedule && contains('1', github.event.schedule))
+      || github.event.schedule == '30 19 * * 1'
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4

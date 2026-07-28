@@ -8,6 +8,9 @@ export async function GET(
   { params }: { params: { ticker: string } }
 ) {
   const { ticker } = params;
+  if (!/^[A-Z0-9.\-]{1,20}$/i.test(ticker)) {
+    return NextResponse.json({ error: "Invalid ticker format" }, { status: 400 });
+  }
   const sb = createServerClient();
 
   // Fetch all report types in parallel

@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 @dataclass
 class LSEConfig:
     api_url: str = os.getenv("LSE_API_URL", "https://api.londonstrategicedge.com")
-    api_key: str = os.getenv("LSE_API_KEY", "71f880e1d2ef471664f3b6c04c6dc1e618f94e51f68c87522bc6dcbc0ca173a5")
+    api_key: str = os.getenv("LSE_API_KEY", "")
     data_api_url: str = os.getenv("LSE_DATA_API_URL", "https://data-api.londonstrategicedge.com")
     max_rows_per_request: int = 5000
     request_delay: float = 0.2

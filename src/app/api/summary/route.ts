@@ -34,6 +34,15 @@ export async function GET() {
     } catch { /* ignore */ }
   }
 
+  // Data freshness check — warn if older than 2 calendar days
+  let stale = false;
+  if (brief?.asof_date) {
+    const asOf = new Date(brief.asof_date);
+    const now = new Date();
+    const diffDays = (now.getTime() - asOf.getTime()) / (1000 * 60 * 60 * 24);
+    stale = diffDays > 3; // allow weekends (Fri→Mon = 3 days)
+  }
+
   return NextResponse.json({
     asOfDate: brief?.asof_date ?? null,
     briefText: brief?.brief ?? null,
@@ -50,5 +59,6 @@ export async function GET() {
     bestSector: inputs.breadth?.best_sector ?? null,
     worstSector: inputs.breadth?.worst_sector ?? null,
     regionBreadth: inputs.region_breadth ?? {},
+    stale,
   });
 }

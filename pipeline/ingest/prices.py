@@ -41,7 +41,7 @@ def _fetch_universe(sb: Client) -> list[dict]:
     logger.info("Fetching universe_members from Supabase...")
     result = (
         sb.table("universe_members")
-        .select("symbol, tier, price_source, is_active")
+        .select("symbol, tier, data_source, is_active")
         .eq("is_active", True)
         .execute()
     )
@@ -209,8 +209,8 @@ def main() -> None:
         return
 
     # Split by price_source
-    lse_symbols = [m["symbol"] for m in members if m.get("price_source") == "lse"]
-    yf_symbols = [m["symbol"] for m in members if m.get("price_source") in ("yfinance", "both")]
+    lse_symbols = [m["symbol"] for m in members if m.get("data_source") == "lse"]
+    yf_symbols = [m["symbol"] for m in members if m.get("data_source") in ("yfinance", "both")]
 
     logger.info(
         "Price sources: %d LSE, %d yfinance", len(lse_symbols), len(yf_symbols)

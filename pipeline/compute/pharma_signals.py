@@ -55,12 +55,20 @@ def _compute_signal(trial: dict) -> dict | None:
     direction = None
     event_type = None
 
+    primary_endpoint_met = trial.get("primary_endpoint_met")
+
     if status in ("TERMINATED", "WITHDRAWN", "SUSPENDED"):
         direction = "SHORT"
         event_type = "TRIAL_FAILURE"
-    elif status == "COMPLETED" and results_posted:
+    elif status == "COMPLETED" and results_posted and primary_endpoint_met is True:
         direction = "LONG"
         event_type = "RESULTS_POSTED"
+    elif status == "COMPLETED" and results_posted and primary_endpoint_met is False:
+        direction = "SHORT"
+        event_type = "ENDPOINT_MISSED"
+    elif status == "COMPLETED" and results_posted and primary_endpoint_met is None:
+        direction = "WATCH"
+        event_type = "RESULTS_UNCONFIRMED"
     elif status == "COMPLETED" and not results_posted:
         direction = "WATCH"
         event_type = "PENDING_READOUT"
@@ -70,8 +78,15 @@ def _compute_signal(trial: dict) -> dict | None:
     else:
         return None
 
-    # Confidence scoring
-    confidence = 40 if "PHASE2" in phase else 60
+    # Confidence scoring — explicit phase classification
+    if "PHASE3" in phase:
+        confidence = 60
+    elif "PHASE2" in phase:
+        confidence = 40
+    elif "PHASE1" in phase or "EARLY" in phase:
+        confidence = 20
+    else:
+        confidence = 30  # unknown phase
     if results_posted:
         confidence += 20
     if status in ("TERMINATED", "WITHDRAWN"):
@@ -144,26 +159,20 @@ def main() -> None:
         logger.info("No signals to upsert.")
         return
 
-    # Clear old signals and insert fresh
-    try:
-        sb.table("pharma_signals").delete().neq("id", 0).execute()
-    except Exception:
-        logger.warning("Could not clear old signals, proceeding with upsert")
-
-    # Batch insert
+    # Upsert signals (keyed on nct_id via unique constraint)
     batch_size = 200
-    inserted = 0
+    upserted = 0
 
     for i in range(0, len(signals), batch_size):
         batch = signals[i : i + batch_size]
         try:
-            sb.table("pharma_signals").insert(batch).execute()
-            inserted += len(batch)
-            logger.info("Inserted %d/%d signals", inserted, len(signals))
+            sb.table("pharma_signals").upsert(batch, on_conflict="nct_id").execute()
+            upserted += len(batch)
+            logger.info("Upserted %d/%d signals", upserted, len(signals))
         except Exception:
-            logger.exception("Failed to insert signal batch %d-%d", i, i + len(batch))
+            logger.exception("Failed to upsert signal batch %d-%d", i, i + len(batch))
 
-    logger.info("=== Pharma Signals Compute Complete: %d signals ===", inserted)
+    logger.info("=== Pharma Signals Compute Complete: %d signals ===", upserted)
 
 
 if __name__ == "__main__":

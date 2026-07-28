@@ -84,27 +84,31 @@ def compute_breadth(radar_rows: list[dict], universe_rows: list[dict]) -> dict:
 def compute_posture(breadth: dict) -> int:
     """Market posture score 0-100.
 
-    Weighted: 40% green%, 30% inverse red%, 20% breadth improvement, 10% sector uniformity.
+    Components:
+      - 50% net breadth: (green% - red%) mapped from [-100,+100] to [0,50]
+      - 30% green strength: green% mapped from [0,100] to [0,30]
+      - 20% sector uniformity: fraction of sectors with positive net score
     """
     green_pct = breadth.get("pct_green", 0)
     red_pct = breadth.get("pct_red", 0)
 
-    # Green contribution (0-40)
-    green_score = (green_pct / 100) * 40
+    # Net breadth (0-50): centers at 25 when green=red
+    net_breadth = green_pct - red_pct  # range: -100 to +100
+    net_score = ((net_breadth + 100) / 200) * 50
 
-    # Inverse red contribution (0-30): lower red% = higher score
-    red_score = ((100 - red_pct) / 100) * 30
+    # Green strength (0-30)
+    green_score = (green_pct / 100) * 30
 
-    # Sector uniformity (0-30): how many sectors are net positive
+    # Sector uniformity (0-20): how many sectors are net positive
     sector_breadth = breadth.get("sector_breadth", {})
     if sector_breadth:
         positive_sectors = sum(1 for v in sector_breadth.values() if v > 0)
         uniformity = positive_sectors / len(sector_breadth)
-        uniformity_score = uniformity * 30
+        uniformity_score = uniformity * 20
     else:
-        uniformity_score = 15
+        uniformity_score = 10
 
-    raw = green_score + red_score + uniformity_score
+    raw = net_score + green_score + uniformity_score
     return int(min(max(round(raw), 0), 100))
 
 

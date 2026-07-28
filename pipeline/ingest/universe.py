@@ -196,7 +196,7 @@ def main() -> None:
             "exchange": stock.get("exchange"),
             "currency": stock.get("currency"),
             "tier": tier,
-            "price_source": price_source,
+            "data_source": price_source,
             "fundamentals_source": fundamentals_source,
             "is_active": stock.get("is_actively_trading", True),
             "market_cap": stock.get("market_cap"),

@@ -29,14 +29,14 @@ logger = logging.getLogger(__name__)
 # ── Signal parameters ────────────────────────────────────────────
 
 MOM_LOOKBACKS = [20, 60, 120]       # days for momentum returns
-EWMAC_FAST = 16                      # fast EMA span
-EWMAC_SLOW = 64                      # slow EMA span
+EWMAC_FAST = 32                      # fast EMA span (equity-calibrated)
+EWMAC_SLOW = 128                     # slow EMA span (equity-calibrated)
 VOL_WINDOW = 20                      # rolling volatility window
 ATR_WINDOW = 14                      # ATR for breakout detection
 ATR_COMPRESSION_RATIO = 0.6          # current ATR / 60d ATR < this = compressed
 VOLUME_CONFIRM_RATIO = 1.2           # volume / 20d avg > this = confirmed
 HIGH_252_PROXIMITY_THRESHOLD = 0.95  # within 5% of 52w high = strong
-MIN_HISTORY_DAYS = 130               # need at least ~6 months of data
+MIN_HISTORY_DAYS = 145               # need enough data for momentum (120d + 20d vol + buffer)
 
 # State thresholds
 BULL_THRESHOLD = 55       # rank >= this AND net positive → GREEN
@@ -49,16 +49,16 @@ def compute_momentum_z(prices: pd.Series) -> float:
         return 0.0
 
     zscores = []
-    returns_series = prices.pct_change()
-    vol = returns_series.rolling(VOL_WINDOW).std()
+    returns_series = prices.pct_change().dropna()
 
     for lb in MOM_LOOKBACKS:
         if len(prices) < lb + 1:
             continue
         ret = (prices.iloc[-1] / prices.iloc[-lb - 1]) - 1
-        avg_vol = vol.iloc[-VOL_WINDOW:].mean()
-        if avg_vol > 0:
-            z = ret / (avg_vol * np.sqrt(lb))
+        # Use std of returns over the lookback window directly
+        lb_vol = returns_series.iloc[-lb:].std()
+        if lb_vol > 0:
+            z = ret / (lb_vol * np.sqrt(lb))
             zscores.append(np.clip(z, -3, 3))
 
     return float(np.mean(zscores)) if zscores else 0.0
@@ -122,7 +122,7 @@ def compute_breakout(prices: pd.Series, highs: pd.Series, lows: pd.Series) -> bo
     high_20 = highs.iloc[-20:].max()
     at_range_high = prices.iloc[-1] >= high_20 * 0.98
 
-    return was_compressed or at_range_high
+    return was_compressed and at_range_high
 
 
 def compute_volume_confirmation(
@@ -144,23 +144,25 @@ def compute_volume_confirmation(
 
 def compute_quality_rank(z_mom: float, f_ewmac: float, z_52: float,
                          breakout: bool, vol_confirm: bool) -> int:
-    """Composite rank 0-100 from component signals."""
-    # Normalize each to 0-20 range (5 components × 20 = 100 max)
+    """Composite rank 0-100 from component signals.
 
-    # z_mom: [-3, 3] → [0, 20]
-    mom_score = ((z_mom + 3) / 6) * 20
+    Weights: momentum 30, EWMAC 25, 52w-high 20, breakout 15, volume 10.
+    Continuous signals dominate; binary signals are confirmatory.
+    """
+    # z_mom: [-3, 3] → [0, 30]
+    mom_score = ((z_mom + 3) / 6) * 30
 
-    # f_ewmac: [-3, 3] → [0, 20]
-    ewmac_score = ((f_ewmac + 3) / 6) * 20
+    # f_ewmac: [-3, 3] → [0, 25]
+    ewmac_score = ((f_ewmac + 3) / 6) * 25
 
     # z_52: [-1, 0] → [0, 20]  (0 = at high = best)
     high_score = (z_52 + 1) * 20
 
-    # breakout: bool → 0 or 20
-    brk_score = 20.0 if breakout else 0.0
+    # breakout: bool → 0 or 15
+    brk_score = 15.0 if breakout else 0.0
 
-    # volume: bool → 0 or 20
-    vol_score = 20.0 if vol_confirm else 0.0
+    # volume: bool → 0 or 10
+    vol_score = 10.0 if vol_confirm else 0.0
 
     raw = mom_score + ewmac_score + high_score + brk_score + vol_score
     return int(np.clip(round(raw), 0, 100))
@@ -204,13 +206,15 @@ def process_ticker(df: pd.DataFrame) -> dict | None:
     rank = compute_quality_rank(z_mom, f_ewmac, z_52, breakout, vol_confirm)
     state = determine_state(z_mom, f_ewmac, z_52, rank)
 
-    # Convergence: how many of 5 components agree with the composite direction
+    # Convergence: how many of 5 components are bullish-aligned
+    # For GREY, this enables "almost-GREEN" detection in the screener
+    bullish_count = sum([z_mom > 0, f_ewmac > 0, z_52 > -0.10, breakout, vol_confirm])
     if state == 1:
-        convergence = sum([z_mom > 0, f_ewmac > 0, z_52 > -0.10, breakout, vol_confirm])
+        convergence = bullish_count
     elif state == -1:
         convergence = sum([z_mom < 0, f_ewmac < 0, z_52 < -0.20, not breakout, not vol_confirm])
     else:
-        convergence = 0
+        convergence = bullish_count  # for GREY: shows how close to GREEN
 
     return {
         "state": state,
@@ -245,6 +249,10 @@ def main():
     symbols = [r["symbol"] for r in universe.data]
     logger.info(f"Computing Trend Radar for {len(symbols)} tickers")
 
+    # Pre-fetch existing states to preserve state_changed_at
+    existing_radar = sb.table("trend_radar").select("symbol,state,state_changed_at").execute()
+    prev_state_map = {r["symbol"]: r for r in (existing_radar.data or [])}
+
     # Fetch prices — last 260 trading days (~1 year)
     cutoff = (date.today() - timedelta(days=400)).isoformat()
     results = []
@@ -268,7 +276,12 @@ def main():
                 continue
 
             signals["symbol"] = symbol
-            signals["state_changed_at"] = date.today().isoformat()
+            # Only update state_changed_at when state actually changes
+            prev = prev_state_map.get(symbol)
+            if prev and prev.get("state") == signals["state"]:
+                signals["state_changed_at"] = prev.get("state_changed_at", date.today().isoformat())
+            else:
+                signals["state_changed_at"] = date.today().isoformat()
             results.append(signals)
 
             if (i + 1) % 100 == 0:

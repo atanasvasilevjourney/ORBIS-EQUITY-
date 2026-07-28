@@ -72,19 +72,18 @@ export async function GET(req: NextRequest) {
     query = query.gte("roe", minROE);
   }
 
+  // Push sector filter into DB query via embedded join filter
+  if (sector) {
+    query = query.eq("universe_members.sector", sector);
+  }
+
   const { data, error } = await query;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Post-filter by sector (joined field)
-  let filtered = data ?? [];
-  if (sector) {
-    filtered = filtered.filter(
-      (r: any) => r.universe_members?.sector === sector
-    );
-  }
+  const filtered = data ?? [];
 
   // Get unique sectors for filter dropdown
   const sectorSet = new Set<string>();

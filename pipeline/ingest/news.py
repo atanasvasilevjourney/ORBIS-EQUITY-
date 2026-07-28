@@ -86,11 +86,20 @@ def main() -> None:
 
         if rows:
             try:
-                sb.table("news_items").insert(rows).execute()
+                sb.table("news_items").upsert(rows, on_conflict="ticker,url").execute()
                 total_articles += len(rows)
-                logger.info("  %s: %d articles inserted", ticker, len(rows))
+                logger.info("  %s: %d articles upserted", ticker, len(rows))
             except Exception:
-                logger.exception("Failed to insert news for %s", ticker)
+                logger.exception("Failed to upsert news for %s", ticker)
+
+    # Purge articles older than 30 days
+    try:
+        from datetime import timedelta
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        sb.table("news_items").delete().lt("published_at", cutoff).execute()
+        logger.info("Purged news_items older than 30 days")
+    except Exception:
+        logger.warning("Failed to purge old news_items", exc_info=True)
 
     logger.info("=== News Ingest Complete: %d articles for %d tickers ===", total_articles, len(tickers))
 

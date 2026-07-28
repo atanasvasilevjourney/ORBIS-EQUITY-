@@ -76,14 +76,19 @@ def compute_f_score(sb: Client, symbol: str) -> int | None:
     if not income_cur or not balance_cur:
         return None
 
+    # Need prior-year data for 6 of 9 tests — return None if absent
+    if not income_pri or not balance_pri:
+        return None
+
     score = 0
 
     # --- PROFITABILITY ---
 
-    # 1. ROA > 0
+    # 1. ROA > 0 (using beginning-of-year assets per Piotroski 2000)
     net_income = income_cur.get("netIncome")
-    total_assets = balance_cur.get("totalAssets")
-    roa = _safe_div(net_income, total_assets)
+    total_assets_beg = balance_pri.get("totalAssets")  # beginning-of-year = prior year-end
+    total_assets_cur = balance_cur.get("totalAssets")
+    roa = _safe_div(net_income, total_assets_beg)
     if roa is not None and roa > 0:
         score += 1
 
@@ -93,12 +98,11 @@ def compute_f_score(sb: Client, symbol: str) -> int | None:
         score += 1
 
     # 3. Delta ROA > 0 (improved from prior year)
-    if income_pri and balance_pri:
-        prior_ni = income_pri.get("netIncome")
-        prior_ta = balance_pri.get("totalAssets")
-        prior_roa = _safe_div(prior_ni, prior_ta)
-        if roa is not None and prior_roa is not None and roa > prior_roa:
-            score += 1
+    prior_ni = income_pri.get("netIncome")
+    prior_ta = balance_pri.get("totalAssets")
+    prior_roa = _safe_div(prior_ni, prior_ta)
+    if roa is not None and prior_roa is not None and roa > prior_roa:
+        score += 1
 
     # 4. Accruals: CFO > Net Income
     if cfo is not None and net_income is not None and cfo > net_income:
@@ -107,45 +111,40 @@ def compute_f_score(sb: Client, symbol: str) -> int | None:
     # --- LEVERAGE / LIQUIDITY ---
 
     # 5. Delta long-term debt decreased
-    ltd_cur = balance_cur.get("longTermDebt", 0) or 0
-    if balance_pri:
-        ltd_pri = balance_pri.get("longTermDebt", 0) or 0
-        if ltd_cur < ltd_pri:
-            score += 1
+    ltd_cur = balance_cur.get("longTermDebt")
+    ltd_pri = balance_pri.get("longTermDebt")
+    if ltd_cur is not None and ltd_pri is not None and ltd_cur < ltd_pri:
+        score += 1
 
     # 6. Delta current ratio improved
     tca = balance_cur.get("totalCurrentAssets")
     tcl = balance_cur.get("totalCurrentLiabilities")
     cr_cur = _safe_div(tca, tcl)
-    if balance_pri:
-        tca_pri = balance_pri.get("totalCurrentAssets")
-        tcl_pri = balance_pri.get("totalCurrentLiabilities")
-        cr_pri = _safe_div(tca_pri, tcl_pri)
-        if cr_cur is not None and cr_pri is not None and cr_cur > cr_pri:
-            score += 1
+    tca_pri = balance_pri.get("totalCurrentAssets")
+    tcl_pri = balance_pri.get("totalCurrentLiabilities")
+    cr_pri = _safe_div(tca_pri, tcl_pri)
+    if cr_cur is not None and cr_pri is not None and cr_cur > cr_pri:
+        score += 1
 
     # 7. No dilution (shares outstanding didn't increase)
     shares_cur = income_cur.get("weightedAverageShsOutDil") or income_cur.get("weightedAverageShsOut")
-    if income_pri:
-        shares_pri = income_pri.get("weightedAverageShsOutDil") or income_pri.get("weightedAverageShsOut")
-        if shares_cur and shares_pri and shares_cur <= shares_pri:
-            score += 1
+    shares_pri = income_pri.get("weightedAverageShsOutDil") or income_pri.get("weightedAverageShsOut")
+    if shares_cur and shares_pri and shares_cur <= shares_pri:
+        score += 1
 
     # --- OPERATING EFFICIENCY ---
 
     # 8. Delta gross margin improved
     gm_cur = _safe_div(income_cur.get("grossProfit"), income_cur.get("revenue"))
-    if income_pri:
-        gm_pri = _safe_div(income_pri.get("grossProfit"), income_pri.get("revenue"))
-        if gm_cur is not None and gm_pri is not None and gm_cur > gm_pri:
-            score += 1
+    gm_pri = _safe_div(income_pri.get("grossProfit"), income_pri.get("revenue"))
+    if gm_cur is not None and gm_pri is not None and gm_cur > gm_pri:
+        score += 1
 
-    # 9. Delta asset turnover improved (revenue / total assets)
-    at_cur = _safe_div(income_cur.get("revenue"), total_assets)
-    if income_pri and balance_pri:
-        at_pri = _safe_div(income_pri.get("revenue"), balance_pri.get("totalAssets"))
-        if at_cur is not None and at_pri is not None and at_cur > at_pri:
-            score += 1
+    # 9. Delta asset turnover improved (revenue / beginning-of-year assets)
+    at_cur = _safe_div(income_cur.get("revenue"), total_assets_beg)
+    at_pri = _safe_div(income_pri.get("revenue"), prior_ta)
+    if at_cur is not None and at_pri is not None and at_cur > at_pri:
+        score += 1
 
     return score
 
