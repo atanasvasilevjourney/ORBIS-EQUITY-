@@ -14,6 +14,13 @@ type TickerData = {
   insiderTrades: any[];
 };
 
+type FinancialHistory = {
+  income: any[];
+  balance: any[];
+  cashflow: any[];
+  metrics: any[];
+};
+
 function formatVal(v: number | null | undefined, suffix = ""): string {
   if (v == null) return "—";
   return v.toLocaleString(undefined, { maximumFractionDigits: 2 }) + suffix;
@@ -72,6 +79,151 @@ function FundamentalsGrid({ f }: { f: any }) {
   );
 }
 
+function fmtBig(v: number | null | undefined): string {
+  if (v == null) return "—";
+  const abs = Math.abs(v);
+  if (abs >= 1e12) return (v / 1e12).toFixed(1) + "T";
+  if (abs >= 1e9) return (v / 1e9).toFixed(1) + "B";
+  if (abs >= 1e6) return (v / 1e6).toFixed(0) + "M";
+  return v.toLocaleString();
+}
+
+function FinancialHistorySection({ ticker }: { ticker: string }) {
+  const [hist, setHist] = useState<FinancialHistory | null>(null);
+  const [histTab, setHistTab] = useState<"income" | "balance" | "cashflow">("income");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/fundamentals/${ticker}`)
+      .then((r) => r.json())
+      .then(setHist)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [ticker]);
+
+  if (loading) return <p className="text-[var(--text-muted)] py-4 font-terminal">Loading history...</p>;
+  if (!hist || (hist.income.length === 0 && hist.balance.length === 0))
+    return <p className="text-[var(--text-muted)] py-4 font-terminal">No historical financial reports</p>;
+
+  const histTabs = [
+    { key: "income" as const, label: "INCOME" },
+    { key: "balance" as const, label: "BALANCE" },
+    { key: "cashflow" as const, label: "CASH FLOW" },
+  ];
+
+  return (
+    <div className="mt-6">
+      <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest mb-2">HISTORICAL FINANCIALS (FY)</div>
+      <div className="flex gap-1 mb-3">
+        {histTabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setHistTab(t.key)}
+            className={`px-3 py-1 text-[10px] font-terminal rounded border transition-colors ${
+              histTab === t.key
+                ? "border-[var(--accent-info)] text-[var(--accent-info)] bg-[var(--badge-bg)]"
+                : "border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="rounded border border-[var(--border)] overflow-x-auto">
+        <table className="w-full text-sm font-terminal">
+          {histTab === "income" && (
+            <>
+              <thead>
+                <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
+                  <th className="text-left px-3 py-2">YEAR</th>
+                  <th className="text-right px-3 py-2">REVENUE</th>
+                  <th className="text-right px-3 py-2">NET INCOME</th>
+                  <th className="text-right px-3 py-2">EPS</th>
+                  <th className="text-right px-3 py-2">GROSS MGN</th>
+                  <th className="text-right px-3 py-2">NET MGN</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hist.income.map((r: any) => (
+                  <tr key={r.year} className="border-b border-[var(--border)]">
+                    <td className="px-3 py-2 font-semibold">{r.year}</td>
+                    <td className="px-3 py-2 text-right">{fmtBig(r.revenue)}</td>
+                    <td className="px-3 py-2 text-right" style={{ color: r.netIncome > 0 ? "var(--accent-bull)" : r.netIncome < 0 ? "var(--accent-bear)" : undefined }}>
+                      {fmtBig(r.netIncome)}
+                    </td>
+                    <td className="px-3 py-2 text-right">{r.eps != null ? r.eps.toFixed(2) : "—"}</td>
+                    <td className="px-3 py-2 text-right">{r.grossMargin != null ? (r.grossMargin * 100).toFixed(1) + "%" : "—"}</td>
+                    <td className="px-3 py-2 text-right" style={{ color: r.netMargin > 0 ? "var(--accent-bull)" : r.netMargin < 0 ? "var(--accent-bear)" : undefined }}>
+                      {r.netMargin != null ? (r.netMargin * 100).toFixed(1) + "%" : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </>
+          )}
+          {histTab === "balance" && (
+            <>
+              <thead>
+                <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
+                  <th className="text-left px-3 py-2">YEAR</th>
+                  <th className="text-right px-3 py-2">ASSETS</th>
+                  <th className="text-right px-3 py-2">LIABILITIES</th>
+                  <th className="text-right px-3 py-2">EQUITY</th>
+                  <th className="text-right px-3 py-2">DEBT</th>
+                  <th className="text-right px-3 py-2">CASH</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hist.balance.map((r: any) => (
+                  <tr key={r.year} className="border-b border-[var(--border)]">
+                    <td className="px-3 py-2 font-semibold">{r.year}</td>
+                    <td className="px-3 py-2 text-right">{fmtBig(r.totalAssets)}</td>
+                    <td className="px-3 py-2 text-right">{fmtBig(r.totalLiabilities)}</td>
+                    <td className="px-3 py-2 text-right">{fmtBig(r.totalEquity)}</td>
+                    <td className="px-3 py-2 text-right">{fmtBig(r.totalDebt)}</td>
+                    <td className="px-3 py-2 text-right" style={{ color: "var(--accent-bull)" }}>{fmtBig(r.cash)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </>
+          )}
+          {histTab === "cashflow" && (
+            <>
+              <thead>
+                <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
+                  <th className="text-left px-3 py-2">YEAR</th>
+                  <th className="text-right px-3 py-2">OP CF</th>
+                  <th className="text-right px-3 py-2">CAPEX</th>
+                  <th className="text-right px-3 py-2">FCF</th>
+                  <th className="text-right px-3 py-2">DIVIDENDS</th>
+                  <th className="text-right px-3 py-2">BUYBACKS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hist.cashflow.map((r: any) => (
+                  <tr key={r.year} className="border-b border-[var(--border)]">
+                    <td className="px-3 py-2 font-semibold">{r.year}</td>
+                    <td className="px-3 py-2 text-right" style={{ color: r.operatingCF > 0 ? "var(--accent-bull)" : "var(--accent-bear)" }}>
+                      {fmtBig(r.operatingCF)}
+                    </td>
+                    <td className="px-3 py-2 text-right">{fmtBig(r.capex)}</td>
+                    <td className="px-3 py-2 text-right" style={{ color: r.freeCashFlow > 0 ? "var(--accent-bull)" : "var(--accent-bear)" }}>
+                      {fmtBig(r.freeCashFlow)}
+                    </td>
+                    <td className="px-3 py-2 text-right">{fmtBig(r.dividendsPaid)}</td>
+                    <td className="px-3 py-2 text-right">{fmtBig(r.buybacks)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </>
+          )}
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function TickerPage() {
   const params = useParams();
   const ticker = params.ticker as string;
@@ -115,6 +267,15 @@ export default function TickerPage() {
             <h1 className="text-2xl font-terminal font-bold">{ticker}</h1>
             {r && <BiasChip state={r.state} rank={r.quality_rank} />}
             {r && <AgreementDots signals={signals} />}
+            {f?.f_score != null && (
+              <span className={`text-xs px-2 py-0.5 rounded font-terminal font-bold ${
+                f.f_score >= 7 ? "bg-[var(--badge-bg)] text-[var(--accent-bull)]"
+                : f.f_score <= 3 ? "bg-[var(--badge-bg)] text-[var(--accent-bear)]"
+                : "bg-[var(--badge-bg)] text-[var(--text-muted)]"
+              }`}>
+                F{f.f_score}
+              </span>
+            )}
           </div>
           <p className="text-sm text-[var(--text-secondary)]">
             {u?.company_name ?? ""} &middot; {u?.sector ?? ""} &middot; {u?.exchange ?? ""} &middot;
@@ -169,7 +330,12 @@ export default function TickerPage() {
         </div>
       )}
 
-      {tab === "fundamentals" && <FundamentalsGrid f={f} />}
+      {tab === "fundamentals" && (
+        <div>
+          <FundamentalsGrid f={f} />
+          <FinancialHistorySection ticker={ticker} />
+        </div>
+      )}
 
       {tab === "earnings" && (
         <div className="rounded border border-[var(--border)]">
