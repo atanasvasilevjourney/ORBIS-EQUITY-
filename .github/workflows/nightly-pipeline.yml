@@ -1,0 +1,165 @@
+# =============================================================================
+# KovaView Nightly Pipeline
+# =============================================================================
+# Schedule : 19:30 UTC every weekday (Mon-Fri), ~22 runs/month
+# Budget   : ~1,082 min/month of 2,000 free GitHub Actions minutes
+#   - universe-sync     : ~4 weekly runs  x  5 min =   20 min
+#   - ingest-prices     : ~22 daily runs  x 10 min =  220 min
+#   - ingest-fundamentals: ~4 weekly runs x 12 min =   48 min
+#   - compute-signals   : ~22 daily runs  x  8 min =  176 min
+#   - overhead (setup/cache)                        = ~618 min
+#   Total estimate                                  ~1,082 min/month
+# =============================================================================
+
+name: KovaView Nightly Pipeline
+
+on:
+  schedule:
+    # 19:30 UTC weekdays (after US market close)
+    - cron: "30 19 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Universe Sync — weekly only (Monday) or manual trigger
+  # ---------------------------------------------------------------------------
+  universe-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event.schedule && contains('1', github.event.schedule))
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pipeline/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Run universe sync
+        run: python -m pipeline.ingest.universe
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          LSE_API_KEY: ${{ secrets.LSE_API_KEY }}
+
+  # ---------------------------------------------------------------------------
+  # 2. Ingest Prices — runs every weekday (even if universe-sync was skipped)
+  # ---------------------------------------------------------------------------
+  ingest-prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: universe-sync
+    if: always()
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pipeline/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Run price ingestion
+        run: python -m pipeline.ingest.prices
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          LSE_API_KEY: ${{ secrets.LSE_API_KEY }}
+          LSE_DATA_API_URL: ${{ secrets.LSE_DATA_API_URL }}
+
+  # ---------------------------------------------------------------------------
+  # 3. Ingest Fundamentals — weekly only (Monday) or manual trigger
+  # ---------------------------------------------------------------------------
+  ingest-fundamentals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: ingest-prices
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event.schedule && contains('1', github.event.schedule))
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pipeline/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Run fundamentals ingestion
+        run: python -m pipeline.ingest.fundamentals
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          LSE_API_KEY: ${{ secrets.LSE_API_KEY }}
+          LSE_DATA_API_URL: ${{ secrets.LSE_DATA_API_URL }}
+
+  # ---------------------------------------------------------------------------
+  # 4. Compute Signals — runs every weekday after prices are ingested
+  # ---------------------------------------------------------------------------
+  compute-signals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: ingest-prices
+    if: always() && needs.ingest-prices.result == 'success'
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pipeline/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Run trend radar compute
+        run: echo "TODO: trend radar compute"
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}

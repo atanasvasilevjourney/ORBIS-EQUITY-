@@ -1,0 +1,38 @@
+/* KovaView Theme Tokens — NEON (default) and PAPER */
+
+:root,
+[data-theme="neon"] {
+  --surface: #0a0e14;
+  --surface-alt: #111820;
+  --text-primary: #e6edf3;
+  --text-secondary: #9ca3af;
+  --text-muted: #555d6b;
+  --accent-bull: #00ff88;
+  --accent-bear: #ff3366;
+  --accent-neutral: #6b7280;
+  --accent-info: #00aaff;
+  --accent-warning: #ffcc00;
+  --border: #1e2733;
+  --card-bg: #0d1117;
+  --badge-bg: #1a2332;
+  --sparkline-up: #00ff88;
+  --sparkline-down: #ff3366;
+}
+
+[data-theme="paper"] {
+  --surface: #fafaf9;
+  --surface-alt: #f5f5f4;
+  --text-primary: #1c1917;
+  --text-secondary: #57534e;
+  --text-muted: #a8a29e;
+  --accent-bull: #16a34a;
+  --accent-bear: #dc2626;
+  --accent-neutral: #78716c;
+  --accent-info: #2563eb;
+  --accent-warning: #ca8a04;
+  --border: #e7e5e4;
+  --card-bg: #ffffff;
+  --badge-bg: #f5f5f4;
+  --sparkline-up: #16a34a;
+  --sparkline-down: #dc2626;
+}
