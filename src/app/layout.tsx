@@ -1,47 +1,13 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/theme/ThemeProvider";
 import { DataHonestyBar } from "@/components/cards/DataHonestyBar";
-import { ThemeToggle } from "@/components/cards/ThemeToggle";
+import { Nav } from "@/components/nav/Nav";
 
 export const metadata: Metadata = {
   title: "KovaView Terminal",
   description: "Equity swing terminal — momentum, fundamentals, pharma pipeline, earnings & news",
 };
-
-function Nav() {
-  const links = [
-    { href: "/screener", label: "SCREENER" },
-    { href: "/fundamentals", label: "FUNDAMENTALS" },
-    { href: "/pharma", label: "PHARMA PIPELINE" },
-    { href: "/earnings-news", label: "EARNINGS & NEWS" },
-  ];
-
-  return (
-    <nav className="flex items-center justify-between px-4 py-2 border-b border-[var(--border)] bg-[var(--surface)]">
-      <div className="flex items-center gap-6">
-        <Link href="/" className="text-lg font-bold font-terminal tracking-widest" style={{ color: "var(--accent-info)" }}>
-          KOVAVIEW
-        </Link>
-        <div className="hidden md:flex items-center gap-1">
-          {links.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              className="px-3 py-1.5 text-xs font-terminal rounded hover:bg-[var(--surface-alt)] transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-            >
-              {l.label}
-            </Link>
-          ))}
-        </div>
-      </div>
-      <div className="flex items-center gap-3">
-        <ThemeToggle />
-      </div>
-    </nav>
-  );
-}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

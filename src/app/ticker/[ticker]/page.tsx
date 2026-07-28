@@ -230,6 +230,8 @@ export default function TickerPage() {
   const [data, setData] = useState<TickerData | null>(null);
   const [tab, setTab] = useState<"swing" | "fundamentals" | "earnings" | "insider">("swing");
   const [loading, setLoading] = useState(true);
+  const [pharmaCount, setPharmaCount] = useState(0);
+  const [upcomingEarnings, setUpcomingEarnings] = useState(0);
 
   useEffect(() => {
     fetch(`/api/ticker/${ticker}`)
@@ -237,6 +239,16 @@ export default function TickerPage() {
       .then(setData)
       .catch(console.error)
       .finally(() => setLoading(false));
+
+    // Cross-module enrichment
+    fetch(`/api/pharma?ticker=${ticker}&limit=100`)
+      .then((r) => r.json())
+      .then((d) => setPharmaCount(d?.summary?.total ?? 0))
+      .catch(() => {});
+    fetch(`/api/earnings-news?ticker=${ticker}&view=upcoming&days=90&limit=10`)
+      .then((r) => r.json())
+      .then((d) => setUpcomingEarnings(d?.summary?.upcoming ?? 0))
+      .catch(() => {});
   }, [ticker]);
 
   if (loading) {
@@ -274,6 +286,16 @@ export default function TickerPage() {
                 : "bg-[var(--badge-bg)] text-[var(--text-muted)]"
               }`}>
                 F{f.f_score}
+              </span>
+            )}
+            {upcomingEarnings > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded bg-[var(--badge-bg)] text-[var(--accent-info)] font-terminal font-bold">
+                EARNINGS {upcomingEarnings > 1 ? `x${upcomingEarnings}` : "SOON"}
+              </span>
+            )}
+            {pharmaCount > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded bg-[var(--badge-bg)] text-[var(--accent-warning)] font-terminal font-bold">
+                PHARMA {pharmaCount}
               </span>
             )}
           </div>
@@ -407,9 +429,17 @@ export default function TickerPage() {
 
       {/* Cross-module links */}
       <div className="flex gap-3 mt-6 pt-4 border-t border-[var(--border)]">
-        <Link href={`/pharma?ticker=${ticker}`} className="text-xs font-terminal text-[var(--accent-info)] hover:underline">
-          Pharma Pipeline
+        <Link href="/screener" className="text-xs font-terminal text-[var(--accent-info)] hover:underline">
+          Screener
         </Link>
+        <Link href="/fundamentals" className="text-xs font-terminal text-[var(--accent-info)] hover:underline">
+          Fundamentals
+        </Link>
+        {pharmaCount > 0 && (
+          <Link href={`/pharma?ticker=${ticker}`} className="text-xs font-terminal text-[var(--accent-info)] hover:underline">
+            Pharma ({pharmaCount})
+          </Link>
+        )}
         <Link href={`/earnings-news?ticker=${ticker}`} className="text-xs font-terminal text-[var(--accent-info)] hover:underline">
           Earnings & News
         </Link>
