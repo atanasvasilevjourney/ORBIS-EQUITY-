@@ -17,7 +17,7 @@ export async function GET() {
   // Fetch trend_radar state distribution
   const { data: radar } = await sb
     .from("trend_radar")
-    .select("state, quality_rank");
+    .select("state, quality_rank", { count: "exact" });
 
   const total = radar?.length ?? 0;
   const greens = radar?.filter((r) => r.state === 1).length ?? 0;

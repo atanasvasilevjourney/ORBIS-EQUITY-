@@ -23,120 +23,102 @@ export async function GET(req: NextRequest) {
 
   const sb = createServerClient();
 
+  // Build fundamentals query
   let query = sb
     .from("fundamentals_snapshot")
     .select(`
-      symbol,
-      price,
-      market_cap,
-      pe_ratio,
-      pb_ratio,
-      ps_ratio,
-      p_fcf_ratio,
-      ev_ebitda,
-      earnings_yield,
-      fcf_yield,
-      dividend_yield,
-      gross_margin,
-      operating_margin,
-      net_margin,
-      roe,
-      roa,
-      roic,
-      current_ratio,
-      debt_to_equity,
-      revenue_growth_1y,
-      revenue_growth_3y,
-      net_income_growth_1y,
-      eps_growth_1y,
-      f_score,
-      universe_members!inner (
-        company_name,
-        sector,
-        industry,
-        country,
-        exchange,
-        tier
-      ),
-      trend_radar (
-        state,
-        quality_rank
-      )
-    `)
+      symbol, price, market_cap,
+      pe_ratio, pb_ratio, ps_ratio, p_fcf_ratio, ev_ebitda,
+      earnings_yield, fcf_yield, dividend_yield,
+      gross_margin, operating_margin, net_margin,
+      roe, roa, roic,
+      current_ratio, debt_to_equity,
+      revenue_growth_1y, revenue_growth_3y,
+      net_income_growth_1y, eps_growth_1y, f_score
+    `, { count: "exact" })
     .order(sortBy, { ascending: sortDir })
     .limit(limit);
 
-  // F-Score filter
   if (minFScore > 0) {
     query = query.gte("f_score", minFScore);
   }
-
-  // Valuation filters
   if (maxPE > 0) {
     query = query.lte("pe_ratio", maxPE).gt("pe_ratio", 0);
   }
-
   if (minROE > 0) {
     query = query.gte("roe", minROE);
   }
 
-  // Push sector filter into DB query via embedded join filter
-  if (sector) {
-    query = query.eq("universe_members.sector", sector);
-  }
+  // Fetch fundamentals + universe + radar in parallel
+  const [fundResult, universeResult, radarResult] = await Promise.all([
+    query,
+    sb.from("universe_members").select("symbol, company_name, sector, industry, country, exchange, tier").eq("is_active", true),
+    sb.from("trend_radar").select("symbol, state, quality_rank", { count: "exact" }),
+  ]);
 
-  const { data, error } = await query;
-
-  if (error) {
-    console.error("Supabase fundamentals query error:", error);
+  if (fundResult.error) {
+    console.error("Supabase fundamentals query error:", fundResult.error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 
-  const filtered = data ?? [];
+  // Build lookup maps
+  const uniMap = new Map((universeResult.data ?? []).map((r: any) => [r.symbol, r]));
+  const radarMap = new Map((radarResult.data ?? []).map((r: any) => [r.symbol, r]));
 
-  // Get all sectors for dropdown (independent of filters)
-  const { data: sectorData } = await sb
-    .from("universe_members")
-    .select("sector")
-    .not("sector", "is", null);
+  // Filter by sector in JS (since we can't use embedded join filter)
+  let filtered = fundResult.data ?? [];
+  if (sector) {
+    const sectorSymbols = new Set(
+      (universeResult.data ?? [])
+        .filter((u: any) => u.sector === sector)
+        .map((u: any) => u.symbol)
+    );
+    filtered = filtered.filter((r: any) => sectorSymbols.has(r.symbol));
+  }
+
+  // Get all sectors for dropdown
   const sectors = Array.from(
-    new Set((sectorData ?? []).map((r: any) => r.sector as string))
+    new Set((universeResult.data ?? []).map((r: any) => r.sector as string).filter(Boolean))
   ).sort();
 
   // Flatten for frontend
-  const rows = filtered.map((r: any) => ({
-    symbol: r.symbol,
-    companyName: r.universe_members?.company_name ?? "",
-    sector: r.universe_members?.sector ?? "",
-    country: r.universe_members?.country ?? "",
-    exchange: r.universe_members?.exchange ?? "",
-    tier: r.universe_members?.tier ?? "",
-    state: r.trend_radar?.state ?? null,
-    rank: r.trend_radar?.quality_rank ?? null,
-    price: r.price,
-    marketCap: r.market_cap,
-    pe: r.pe_ratio,
-    pb: r.pb_ratio,
-    ps: r.ps_ratio,
-    pFcf: r.p_fcf_ratio,
-    evEbitda: r.ev_ebitda,
-    earningsYield: r.earnings_yield,
-    fcfYield: r.fcf_yield,
-    divYield: r.dividend_yield,
-    grossMargin: r.gross_margin,
-    opMargin: r.operating_margin,
-    netMargin: r.net_margin,
-    roe: r.roe,
-    roa: r.roa,
-    roic: r.roic,
-    currentRatio: r.current_ratio,
-    debtToEquity: r.debt_to_equity,
-    revGrowth1y: r.revenue_growth_1y,
-    revGrowth3y: r.revenue_growth_3y,
-    niGrowth1y: r.net_income_growth_1y,
-    epsGrowth1y: r.eps_growth_1y,
-    fScore: r.f_score,
-  }));
+  const rows = filtered.map((r: any) => {
+    const u = uniMap.get(r.symbol);
+    const tr = radarMap.get(r.symbol);
+    return {
+      symbol: r.symbol,
+      companyName: u?.company_name ?? "",
+      sector: u?.sector ?? "",
+      country: u?.country ?? "",
+      exchange: u?.exchange ?? "",
+      tier: u?.tier ?? "",
+      state: tr?.state ?? null,
+      rank: tr?.quality_rank ?? null,
+      price: r.price,
+      marketCap: r.market_cap,
+      pe: r.pe_ratio,
+      pb: r.pb_ratio,
+      ps: r.ps_ratio,
+      pFcf: r.p_fcf_ratio,
+      evEbitda: r.ev_ebitda,
+      earningsYield: r.earnings_yield,
+      fcfYield: r.fcf_yield,
+      divYield: r.dividend_yield,
+      grossMargin: r.gross_margin,
+      opMargin: r.operating_margin,
+      netMargin: r.net_margin,
+      roe: r.roe,
+      roa: r.roa,
+      roic: r.roic,
+      currentRatio: r.current_ratio,
+      debtToEquity: r.debt_to_equity,
+      revGrowth1y: r.revenue_growth_1y,
+      revGrowth3y: r.revenue_growth_3y,
+      niGrowth1y: r.net_income_growth_1y,
+      epsGrowth1y: r.eps_growth_1y,
+      fScore: r.f_score,
+    };
+  });
 
   return NextResponse.json({ rows, sectors });
 }

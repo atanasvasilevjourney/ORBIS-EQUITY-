@@ -13,57 +13,64 @@ export async function GET(req: NextRequest) {
 
   const sb = createServerClient();
 
-  // Join trend_radar with universe_members
+  // Fetch trend_radar
   let query = sb
     .from("trend_radar")
-    .select(`
-      symbol,
-      state,
-      quality_rank,
-      z_mom,
-      f_ewmac,
-      z_52,
-      breakout_active,
-      volume_confirmed,
-      convergence_count,
-      state_changed_at,
-      computed_at,
-      universe_members!inner (
-        company_name,
-        sector,
-        industry,
-        country,
-        exchange,
-        tier
-      ),
-      fundamentals_snapshot (
-        price,
-        market_cap,
-        pe_ratio,
-        dividend_yield
-      )
-    `)
+    .select("symbol, state, quality_rank, z_mom, f_ewmac, z_52, breakout_active, volume_confirmed, convergence_count, state_changed_at, computed_at", { count: "exact" })
     .gte("quality_rank", minRank)
     .order("quality_rank", { ascending: false })
     .limit(limit);
 
-  // Direction filter
   if (direction === "bull") {
     query = query.eq("state", 1);
   } else if (direction === "bear") {
     query = query.eq("state", -1);
   }
 
-  const { data, error } = await query;
+  const [radarResult, universeResult, fundResult] = await Promise.all([
+    query,
+    sb.from("universe_members").select("symbol, company_name, sector, industry, country, exchange, tier").eq("is_active", true),
+    sb.from("fundamentals_snapshot").select("symbol, price, market_cap, pe_ratio, dividend_yield"),
+  ]);
 
-  if (error) {
-    console.error("Supabase screener query error:", error);
+  if (radarResult.error) {
+    console.error("Supabase screener query error:", radarResult.error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 
-  // Post-filter by region/sector (joined fields)
-  let filtered = data ?? [];
+  // Build lookup maps
+  const uniMap = new Map((universeResult.data ?? []).map((r: any) => [r.symbol, r]));
+  const fundMap = new Map((fundResult.data ?? []).map((r: any) => [r.symbol, r]));
 
+  // Filter and flatten
+  let rows = (radarResult.data ?? []).map((r: any) => {
+    const u = uniMap.get(r.symbol);
+    const f = fundMap.get(r.symbol);
+    if (!u) return null; // skip if not in universe
+    return {
+      symbol: r.symbol,
+      companyName: u.company_name ?? "",
+      sector: u.sector ?? "",
+      country: u.country ?? "",
+      exchange: u.exchange ?? "",
+      tier: u.tier ?? "",
+      state: r.state,
+      rank: r.quality_rank,
+      zMom: r.z_mom,
+      fEwmac: r.f_ewmac,
+      z52: r.z_52,
+      breakout: r.breakout_active,
+      volumeConfirmed: r.volume_confirmed,
+      convergence: r.convergence_count,
+      stateChangedAt: r.state_changed_at,
+      price: f?.price ?? null,
+      marketCap: f?.market_cap ?? null,
+      peRatio: f?.pe_ratio ?? null,
+      divYield: f?.dividend_yield ?? null,
+    };
+  }).filter(Boolean);
+
+  // Post-filter by region/sector
   if (region && region !== "all") {
     const regionCountries: Record<string, string[]> = {
       us: ["US"],
@@ -72,40 +79,13 @@ export async function GET(req: NextRequest) {
     };
     const countries = regionCountries[region];
     if (countries) {
-      filtered = filtered.filter((r: any) =>
-        countries.includes(r.universe_members?.country)
-      );
+      rows = rows.filter((r: any) => countries.includes(r.country));
     }
   }
 
   if (sector) {
-    filtered = filtered.filter(
-      (r: any) => r.universe_members?.sector === sector
-    );
+    rows = rows.filter((r: any) => r.sector === sector);
   }
-
-  // Flatten for frontend consumption
-  const rows = filtered.map((r: any) => ({
-    symbol: r.symbol,
-    companyName: r.universe_members?.company_name ?? "",
-    sector: r.universe_members?.sector ?? "",
-    country: r.universe_members?.country ?? "",
-    exchange: r.universe_members?.exchange ?? "",
-    tier: r.universe_members?.tier ?? "",
-    state: r.state,
-    rank: r.quality_rank,
-    zMom: r.z_mom,
-    fEwmac: r.f_ewmac,
-    z52: r.z_52,
-    breakout: r.breakout_active,
-    volumeConfirmed: r.volume_confirmed,
-    convergence: r.convergence_count,
-    stateChangedAt: r.state_changed_at,
-    price: r.fundamentals_snapshot?.price ?? null,
-    marketCap: r.fundamentals_snapshot?.market_cap ?? null,
-    peRatio: r.fundamentals_snapshot?.pe_ratio ?? null,
-    divYield: r.fundamentals_snapshot?.dividend_yield ?? null,
-  }));
 
   return NextResponse.json(rows);
 }

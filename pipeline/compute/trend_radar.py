@@ -200,8 +200,8 @@ def process_ticker(df: pd.DataFrame) -> dict | None:
     z_mom = compute_momentum_z(close)
     f_ewmac = compute_ewmac(close)
     z_52 = compute_52w_proximity(close)
-    breakout = compute_breakout(close, high, low)
-    vol_confirm = compute_volume_confirmation(close, volume)
+    breakout = bool(compute_breakout(close, high, low))
+    vol_confirm = bool(compute_volume_confirmation(close, volume))
 
     rank = compute_quality_rank(z_mom, f_ewmac, z_52, breakout, vol_confirm)
     state = determine_state(z_mom, f_ewmac, z_52, rank)
@@ -222,9 +222,9 @@ def process_ticker(df: pd.DataFrame) -> dict | None:
         "z_mom": round(z_mom, 4),
         "f_ewmac": round(f_ewmac, 4),
         "z_52": round(z_52, 4),
-        "breakout_active": breakout,
-        "volume_confirmed": vol_confirm,
-        "convergence_count": convergence,
+        "breakout_active": bool(breakout),
+        "volume_confirmed": bool(vol_confirm),
+        "convergence_count": int(convergence),
         "daily_state": state,
         "weekly_state": None,  # TODO: compute from weekly prices
     }
