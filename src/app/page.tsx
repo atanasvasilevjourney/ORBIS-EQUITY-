@@ -32,9 +32,9 @@ export default function Home() {
   useEffect(() => {
     Promise.all([
       fetch("/api/summary").then((r) => r.json()).catch(() => null),
-      fetch("/api/fundamentals?limit=1").then((r) => r.json()).catch(() => null),
-      fetch("/api/pharma?limit=1").then((r) => r.json()).catch(() => null),
-      fetch("/api/earnings-news?days=30&limit=1").then((r) => r.json()).catch(() => null),
+      fetch("/api/fundamentals").then((r) => r.json()).catch(() => null),
+      fetch("/api/pharma").then((r) => r.json()).catch(() => null),
+      fetch("/api/earnings-news?days=30").then((r) => r.json()).catch(() => null),
     ]).then(([summary, fund, pharma, earnings]) => {
       setD({
         posture: summary?.posture ?? null,

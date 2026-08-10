@@ -86,8 +86,8 @@ def main() -> None:
             "eps_est": eps_est,
             "eps_actual": eps_actual,
             "surprise_pct": surprise_pct,
-            "revenue_est": int(rev_est) if rev_est else None,
-            "revenue_actual": int(rev_actual) if rev_actual else None,
+            "revenue_est": int(float(rev_est)) if rev_est is not None else None,
+            "revenue_actual": int(float(rev_actual)) if rev_actual is not None else None,
         })
 
     logger.info("Mapped %d earnings events for universe symbols", len(rows))

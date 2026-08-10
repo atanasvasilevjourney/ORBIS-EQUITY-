@@ -69,9 +69,9 @@ def _resolve_ticker(sponsor_name: str, lookup: dict[str, str]) -> str | None:
     key = sponsor_name.lower().strip()
     if key in lookup:
         return lookup[key]
-    # Fuzzy: check if any known name is a substring
+    # Fuzzy: check if any known name is a substring (min length 5 to avoid false matches)
     for known, ticker in lookup.items():
-        if known in key or key in known:
+        if len(known) >= 5 and (known in key or key in known):
             return ticker
     return None
 

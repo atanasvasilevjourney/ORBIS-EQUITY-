@@ -32,8 +32,12 @@ def fetch_news_for_ticker(
     Returns:
         List of article dicts with url, title, source, tone, datetime
     """
-    # Strip exchange suffixes for search
-    search_term = ticker.split(".")[0]
+    # Strip exchange suffixes for search; quote to avoid false positives
+    raw_term = ticker.split(".")[0]
+    if len(raw_term) <= 2:
+        search_term = f'"{raw_term}" stock OR shares'
+    else:
+        search_term = f'"{raw_term}"'
 
     params = {
         "query": f"{search_term} sourcelang:english",

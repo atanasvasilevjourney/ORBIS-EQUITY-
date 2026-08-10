@@ -93,9 +93,9 @@ export default function ScreenerPage() {
         <div className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
           <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">BREADTH</div>
           <div className="text-xl font-terminal font-bold mt-1" style={{ color: "var(--accent-bull)" }}>
-            {summary?.breadth.pctGreen ?? "—"}%
+            {summary?.breadth?.pctGreen ?? "—"}%
           </div>
-          <div className="text-xs text-[var(--text-secondary)]">{summary?.breadth.total ?? 0} names</div>
+          <div className="text-xs text-[var(--text-secondary)]">{summary?.breadth?.total ?? 0} names</div>
         </div>
         <div className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
           <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">BEST SECTOR</div>

@@ -162,7 +162,7 @@ def main():
 
     # Per-region breadth
     region_map = {}
-    for u in universe.data:
+    for u in (universe.data or []):
         sym = u["symbol"]
         country = u.get("country", "")
         if country == "US":

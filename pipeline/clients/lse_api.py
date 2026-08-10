@@ -9,6 +9,8 @@ import time
 from typing import Any
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from pipeline.config.settings import LSEConfig
 
@@ -26,6 +28,9 @@ class LSEClient:
             "Content-Type": "application/json",
             "Accept-Encoding": "gzip, deflate, br",
         })
+        # Retry with exponential backoff on transient errors
+        retry = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
+        self.session.mount("https://", HTTPAdapter(max_retries=retry))
 
     def _get(self, table: str, params: dict[str, str] | None = None,
              count: bool = False) -> list[dict[str, Any]]:
@@ -34,7 +39,7 @@ class LSEClient:
         headers = {}
         if count:
             headers["Prefer"] = "count=exact"
-        resp = self.session.get(url, params=params or {}, headers=headers)
+        resp = self.session.get(url, params=params or {}, headers=headers, timeout=30)
         resp.raise_for_status()
         time.sleep(self.cfg.request_delay)
         return resp.json()
