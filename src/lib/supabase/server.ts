@@ -1,7 +1,11 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-// Server-side Supabase client (uses service key for API routes)
-export function createServerClient() {
+// Singleton server-side Supabase client (uses service key for API routes)
+let _client: SupabaseClient | null = null;
+
+export function createServerClient(): SupabaseClient {
+  if (_client) return _client;
+
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_KEY;
   if (!url || !key) {
@@ -9,5 +13,6 @@ export function createServerClient() {
       "Missing SUPABASE_URL or SUPABASE_SERVICE_KEY environment variables"
     );
   }
-  return createClient(url, key);
+  _client = createClient(url, key);
+  return _client;
 }

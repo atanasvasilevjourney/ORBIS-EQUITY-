@@ -145,14 +145,14 @@ export default function FundamentalsPage() {
     }
   };
 
-  // Summary stats
-  const avgPE = filtered.length > 0
-    ? filtered.reduce((s, r) => s + (r.pe && r.pe > 0 ? r.pe : 0), 0) /
-      filtered.filter((r) => r.pe && r.pe > 0).length
+  // Summary stats (guarded against division by zero)
+  const peCount = filtered.filter((r) => r.pe && r.pe > 0).length;
+  const avgPE = peCount > 0
+    ? filtered.reduce((s, r) => s + (r.pe && r.pe > 0 ? r.pe : 0), 0) / peCount
     : 0;
-  const avgFScore = filtered.length > 0
-    ? filtered.reduce((s, r) => s + (r.fScore ?? 0), 0) /
-      filtered.filter((r) => r.fScore != null).length
+  const fCount = filtered.filter((r) => r.fScore != null).length;
+  const avgFScore = fCount > 0
+    ? filtered.reduce((s, r) => s + (r.fScore ?? 0), 0) / fCount
     : 0;
   const highF = filtered.filter((r) => r.fScore != null && r.fScore >= 7).length;
 

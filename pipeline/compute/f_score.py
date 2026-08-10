@@ -49,30 +49,53 @@ def _safe_div(a, b):
     return a / b
 
 
-def _get_latest_two_reports(sb: Client, symbol: str, report_type: str) -> tuple[dict | None, dict | None]:
-    """Fetch the two most recent FY reports for a symbol (current, prior)."""
-    resp = (
-        sb.table("financial_reports")
-        .select("data")
-        .eq("symbol", symbol)
-        .eq("report_type", report_type)
-        .eq("period", "FY")
-        .order("date", desc=True)
-        .limit(2)
-        .execute()
-    )
-    rows = resp.data or []
-    current = rows[0]["data"] if len(rows) > 0 else None
-    prior = rows[1]["data"] if len(rows) > 1 else None
-    return current, prior
+def _fetch_all_reports(sb: Client, report_type: str) -> dict[str, list[dict]]:
+    """Fetch all FY reports of a given type in bulk, grouped by symbol.
+
+    Returns {symbol: [newest_data, second_newest_data]} — at most 2 per symbol.
+    Uses paginated queries to avoid the 5000-row Supabase limit.
+    """
+    page_size = 5000
+    offset = 0
+    all_rows: list[dict] = []
+
+    while True:
+        resp = (
+            sb.table("financial_reports")
+            .select("symbol, data")
+            .eq("report_type", report_type)
+            .eq("period", "FY")
+            .order("symbol")
+            .order("date", desc=True)
+            .range(offset, offset + page_size - 1)
+            .execute()
+        )
+        rows = resp.data or []
+        all_rows.extend(rows)
+        if len(rows) < page_size:
+            break
+        offset += page_size
+
+    logger.info("Fetched %d %s report rows", len(all_rows), report_type)
+
+    # Group by symbol, keep only latest 2 (already sorted newest-first per symbol)
+    grouped: dict[str, list[dict]] = {}
+    for r in all_rows:
+        sym = r["symbol"]
+        if sym not in grouped:
+            grouped[sym] = []
+        if len(grouped[sym]) < 2:
+            grouped[sym].append(r["data"])
+
+    return grouped
 
 
-def compute_f_score(sb: Client, symbol: str) -> int | None:
-    """Compute Piotroski F-Score for a single symbol. Returns 0-9 or None."""
-    income_cur, income_pri = _get_latest_two_reports(sb, symbol, "income")
-    balance_cur, balance_pri = _get_latest_two_reports(sb, symbol, "balance")
-    cashflow_cur, _ = _get_latest_two_reports(sb, symbol, "cashflow")
-
+def compute_f_score(
+    income_cur: dict | None, income_pri: dict | None,
+    balance_cur: dict | None, balance_pri: dict | None,
+    cashflow_cur: dict | None,
+) -> int | None:
+    """Compute Piotroski F-Score from pre-loaded report data. Returns 0-9 or None."""
     if not income_cur or not balance_cur:
         return None
 
@@ -161,26 +184,53 @@ def main() -> None:
 
     # Get all symbols that have fundamentals
     resp = sb.table("fundamentals_snapshot").select("symbol").execute()
-    symbols = [r["symbol"] for r in (resp.data or [])]
+    symbols = {r["symbol"] for r in (resp.data or [])}
     logger.info("Computing F-Score for %d symbols", len(symbols))
 
+    # Pre-fetch ALL financial reports in bulk (3 queries instead of 6N)
+    logger.info("Pre-fetching financial reports...")
+    income_reports = _fetch_all_reports(sb, "income")
+    balance_reports = _fetch_all_reports(sb, "balance")
+    cashflow_reports = _fetch_all_reports(sb, "cashflow")
+    logger.info(
+        "Reports loaded: %d income, %d balance, %d cashflow symbols",
+        len(income_reports), len(balance_reports), len(cashflow_reports),
+    )
+
+    # Compute F-Score for each symbol using in-memory data
     computed = 0
     scores: dict[int, int] = {}  # distribution
+    updates: list[dict] = []
 
-    for i, symbol in enumerate(symbols):
+    for symbol in symbols:
         try:
-            f = compute_f_score(sb, symbol)
+            income = income_reports.get(symbol, [])
+            balance = balance_reports.get(symbol, [])
+            cashflow = cashflow_reports.get(symbol, [])
+
+            income_cur = income[0] if income else None
+            income_pri = income[1] if len(income) > 1 else None
+            balance_cur = balance[0] if balance else None
+            balance_pri = balance[1] if len(balance) > 1 else None
+            cashflow_cur = cashflow[0] if cashflow else None
+
+            f = compute_f_score(income_cur, income_pri, balance_cur, balance_pri, cashflow_cur)
             if f is not None:
-                sb.table("fundamentals_snapshot").update(
-                    {"f_score": f}
-                ).eq("symbol", symbol).execute()
+                updates.append({"symbol": symbol, "f_score": f})
                 computed += 1
                 scores[f] = scores.get(f, 0) + 1
         except Exception:
             logger.exception("Failed to compute F-Score for %s", symbol)
 
-        if (i + 1) % 100 == 0:
-            logger.info("Progress: %d/%d symbols processed", i + 1, len(symbols))
+    # Batch upsert all scores (1-2 queries instead of N)
+    logger.info("Upserting %d F-Score updates...", len(updates))
+    batch_size = 500
+    for i in range(0, len(updates), batch_size):
+        batch = updates[i : i + batch_size]
+        try:
+            sb.table("fundamentals_snapshot").upsert(batch, on_conflict="symbol").execute()
+        except Exception:
+            logger.exception("Failed to upsert F-Score batch %d-%d", i, i + len(batch))
 
     dist = " | ".join(f"F{k}={v}" for k, v in sorted(scores.items()))
     logger.info("=== F-Score Compute Complete: %d scored | Distribution: %s ===", computed, dist)

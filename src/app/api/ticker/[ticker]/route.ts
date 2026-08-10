@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 900; // 15-minute cache — EOD data
 
 export async function GET(
   _req: NextRequest,
@@ -21,6 +21,19 @@ export async function GET(
     sb.from("earnings_calendar").select("*").eq("ticker", ticker).order("event_date", { ascending: false }).limit(8),
     sb.from("insider_trades_snapshot").select("*").eq("symbol", ticker).order("filing_date", { ascending: false }).limit(10),
   ]);
+
+  // Check for query errors
+  const queryError = [radarRes, fundRes, universeRes, earningsRes, insiderRes].find(
+    (r) => r.error && r.error.code !== "PGRST116" // PGRST116 = "not found" for .single()
+  );
+  if (queryError?.error) {
+    console.error("Supabase ticker query error:", queryError.error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+
+  if (!universeRes.data) {
+    return NextResponse.json({ error: "Ticker not found" }, { status: 404 });
+  }
 
   return NextResponse.json({
     radar: radarRes.data,

@@ -166,7 +166,7 @@ def main() -> None:
     for i in range(0, len(signals), batch_size):
         batch = signals[i : i + batch_size]
         try:
-            sb.table("pharma_signals").upsert(batch, on_conflict="nct_id").execute()
+            sb.table("pharma_signals").upsert(batch, on_conflict="nct_id,event_type").execute()
             upserted += len(batch)
             logger.info("Upserted %d/%d signals", upserted, len(signals))
         except Exception:

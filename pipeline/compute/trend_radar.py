@@ -230,7 +230,7 @@ def process_ticker(df: pd.DataFrame) -> dict | None:
     }
 
 
-def main():
+def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -247,30 +247,56 @@ def main():
     # Get active universe
     universe = sb.table("universe_members").select("symbol").eq("is_active", True).execute()
     symbols = [r["symbol"] for r in (universe.data or [])]
-    logger.info(f"Computing Trend Radar for {len(symbols)} tickers")
+    active_symbols = set(symbols)
+    logger.info("Computing Trend Radar for %d tickers", len(symbols))
 
     # Pre-fetch existing states to preserve state_changed_at
     existing_radar = sb.table("trend_radar").select("symbol,state,state_changed_at").execute()
     prev_state_map = {r["symbol"]: r for r in (existing_radar.data or [])}
 
-    # Fetch prices — last 260 trading days (~1 year)
+    # Bulk fetch ALL prices since cutoff with pagination (instead of N+1 per-symbol queries)
     cutoff = (date.today() - timedelta(days=400)).isoformat()
+    all_prices: list[dict] = []
+    page_size = 5000
+    offset = 0
+    logger.info("Fetching all prices since %s...", cutoff)
+
+    while True:
+        resp = (
+            sb.table("prices_daily")
+            .select("symbol,date,open,high,low,close,volume")
+            .gte("date", cutoff)
+            .order("symbol")
+            .order("date")
+            .range(offset, offset + page_size - 1)
+            .execute()
+        )
+        rows = resp.data or []
+        all_prices.extend(rows)
+        if len(rows) < page_size:
+            break
+        offset += page_size
+
+    logger.info("Fetched %d price rows, processing...", len(all_prices))
+
+    if not all_prices:
+        logger.warning("No price data found")
+        return
+
+    prices_df = pd.DataFrame(all_prices)
+    # Filter to active universe symbols only
+    prices_df = prices_df[prices_df["symbol"].isin(active_symbols)]
+
     results = []
     errors = 0
+    grouped = prices_df.groupby("symbol")
+    total_groups = len(grouped)
 
-    for i, symbol in enumerate(symbols):
+    for i, (symbol, df) in enumerate(grouped):
         try:
-            resp = sb.table("prices_daily") \
-                .select("date,open,high,low,close,volume") \
-                .eq("symbol", symbol) \
-                .gte("date", cutoff) \
-                .order("date") \
-                .execute()
-
-            if not resp.data or len(resp.data) < MIN_HISTORY_DAYS:
+            if len(df) < MIN_HISTORY_DAYS:
                 continue
 
-            df = pd.DataFrame(resp.data)
             signals = process_ticker(df)
             if signals is None:
                 continue
@@ -286,10 +312,10 @@ def main():
             results.append(signals)
 
             if (i + 1) % 100 == 0:
-                logger.info(f"  Processed {i + 1}/{len(symbols)}")
+                logger.info("  Processed %d/%d symbols", i + 1, total_groups)
 
         except Exception as e:
-            logger.warning(f"Error computing {symbol}: {e}")
+            logger.warning("Error computing %s: %s", symbol, e)
             errors += 1
 
     # Batch upsert to trend_radar
@@ -297,22 +323,25 @@ def main():
         batch_size = 200
         for j in range(0, len(results), batch_size):
             batch = results[j:j + batch_size]
-            sb.table("trend_radar").upsert(batch, on_conflict="symbol").execute()
+            try:
+                sb.table("trend_radar").upsert(batch, on_conflict="symbol").execute()
+            except Exception:
+                logger.exception("Failed to upsert trend_radar batch %d-%d", j, j + len(batch))
 
         logger.info(
-            f"Trend Radar complete: {len(results)} computed, "
-            f"{errors} errors, {len(symbols) - len(results) - errors} skipped (insufficient data)"
+            "Trend Radar complete: %d computed, %d errors, %d skipped (insufficient data)",
+            len(results), errors, len(symbols) - len(results) - errors,
         )
 
     # Log summary stats
     greens = sum(1 for r in results if r["state"] == 1)
     reds = sum(1 for r in results if r["state"] == -1)
     greys = sum(1 for r in results if r["state"] == 0)
-    logger.info(f"Distribution: GREEN={greens} RED={reds} GREY={greys}")
+    logger.info("Distribution: GREEN=%d RED=%d GREY=%d", greens, reds, greys)
 
     if results:
         avg_rank = np.mean([r["quality_rank"] for r in results])
-        logger.info(f"Average quality rank: {avg_rank:.1f}")
+        logger.info("Average quality rank: %.1f", avg_rank)
 
 
 if __name__ == "__main__":

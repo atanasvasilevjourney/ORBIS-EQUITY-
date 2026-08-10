@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 900; // 15-minute cache — EOD data
 
 export async function GET(
   _req: NextRequest,
@@ -48,6 +48,13 @@ export async function GET(
       .order("date", { ascending: false })
       .limit(10),
   ]);
+
+  // Check for query errors
+  const queryError = [incomeRes, balanceRes, cashflowRes, metricsRes].find((r) => r.error);
+  if (queryError?.error) {
+    console.error("Supabase fundamentals/ticker query error:", queryError.error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 
   // Extract key trends from income statements
   const incomeRows = (incomeRes.data ?? []).map((r: any) => ({

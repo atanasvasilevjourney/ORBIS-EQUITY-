@@ -12,6 +12,7 @@ import logging
 import os
 from datetime import datetime, timezone
 
+import pandas as pd
 import requests
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -32,11 +33,10 @@ EU_COUNTRIES = {"DE", "FR", "NL", "ES", "IT", "CH", "IE"}
 
 
 def _scrape_sp_tickers(url: str) -> set[str]:
-    """Scrape S&P constituent tickers from a Wikipedia page.
+    """Scrape S&P constituent tickers from a Wikipedia page using pandas.
 
-    Each page has an HTML table where the first column contains the ticker
-    symbol.  We parse that column out of the first <table> with class
-    'wikitable' on the page.
+    Uses pd.read_html() for robust table parsing instead of manual HTML
+    string manipulation.
     """
     tickers: set[str] = set()
     try:
@@ -44,55 +44,22 @@ def _scrape_sp_tickers(url: str) -> set[str]:
             "User-Agent": "KovaView-Pipeline/1.0"
         })
         resp.raise_for_status()
-        html = resp.text
-
-        # Find the first wikitable
-        table_start = html.find('<table class="wikitable')
-        if table_start == -1:
-            # Fallback: try any wikitable sortable
-            table_start = html.find('<table class="wikitable sortable')
-        if table_start == -1:
-            logger.warning("No wikitable found at %s", url)
+        from io import StringIO
+        tables = pd.read_html(StringIO(resp.text))
+        if not tables:
+            logger.warning("No tables found at %s", url)
             return tickers
-
-        table_end = html.find("</table>", table_start)
-        table_html = html[table_start:table_end]
-
-        # Parse rows — skip the header row
-        rows = table_html.split("<tr>")[2:]  # [0] is before first <tr>, [1] is header
-        for row in rows:
-            # Extract first <td> content
-            td_start = row.find("<td>")
-            if td_start == -1:
-                continue
-            td_end = row.find("</td>", td_start)
-            cell = row[td_start + 4:td_end]
-
-            # Strip HTML tags to get the ticker text
-            ticker = _strip_html_tags(cell).strip()
-            # Normalize: some Wikipedia entries use dots (BRK.B), our API uses hyphens
-            ticker = ticker.replace(".", "-") if ticker else ticker
+        df = tables[0]
+        # First column typically contains tickers (Symbol column)
+        col = df.columns[0]
+        for val in df[col]:
+            ticker = str(val).strip().replace(".", "-")
             if ticker:
                 tickers.add(ticker)
-
         logger.info("Scraped %d tickers from %s", len(tickers), url)
     except Exception:
         logger.exception("Failed to scrape S&P tickers from %s", url)
     return tickers
-
-
-def _strip_html_tags(text: str) -> str:
-    """Remove HTML tags from a string."""
-    result = []
-    in_tag = False
-    for ch in text:
-        if ch == "<":
-            in_tag = True
-        elif ch == ">":
-            in_tag = False
-        elif not in_tag:
-            result.append(ch)
-    return "".join(result)
 
 
 def _build_sp_indices() -> dict[str, set[str]]:

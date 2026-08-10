@@ -143,8 +143,8 @@ def main():
                             "volume": int(row["Volume"]) if row.get("Volume") is not None else None,
                             "source": "yfinance",
                         })
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Skipping %s prices: %s", sym, e)
         except Exception as e:
             logger.warning("  Chunk download failed: %s", e)
 
@@ -204,8 +204,8 @@ def main():
                 "eps_growth_1y": info.get("earningsGrowth"),
                 "updated_at": now,
             })
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Skipping %s fundamentals: %s", sym, e)
 
         if (ci + 1) % 50 == 0:
             logger.info("  Fundamentals: %d/%d fetched (%d valid)",
