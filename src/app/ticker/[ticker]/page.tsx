@@ -42,9 +42,15 @@ function FundamentalsGrid({ f }: { f: any }) {
       ["Rev 1Y", f.revenue_growth_1y, "%"], ["Rev 3Y", f.revenue_growth_3y, "%"],
       ["NI 1Y", f.net_income_growth_1y, "%"], ["EPS 1Y", f.eps_growth_1y, "%"],
     ]},
-    { title: "HEALTH", items: [
-      ["Current", f.current_ratio], ["Quick", f.quick_ratio],
-      ["D/E", f.debt_to_equity], ["Div Yield", f.dividend_yield, "%"],
+    { title: "FACTOR SCORES", items: [
+      ["Composite", f.composite_factor_score], ["Value", f.value_score],
+      ["Quality", f.quality_score], ["Growth", f.growth_score],
+      ["Earn Quality", f.earnings_quality_score], ["Leverage", f.leverage_score],
+    ]},
+    { title: "SECTOR RANK", items: [
+      ["Value %ile", f.sector_value_pctile], ["Quality %ile", f.sector_quality_pctile],
+      ["F-Score", f.f_score], ["Accruals", f.accruals_ratio],
+      ["Int Coverage", f.interest_coverage],
     ]},
   ];
 
@@ -230,7 +236,6 @@ export default function TickerPage() {
   const [data, setData] = useState<TickerData | null>(null);
   const [tab, setTab] = useState<"swing" | "fundamentals" | "earnings" | "insider">("swing");
   const [loading, setLoading] = useState(true);
-  const [pharmaCount, setPharmaCount] = useState(0);
   const [upcomingEarnings, setUpcomingEarnings] = useState(0);
 
   useEffect(() => {
@@ -240,11 +245,6 @@ export default function TickerPage() {
       .catch(console.error)
       .finally(() => setLoading(false));
 
-    // Cross-module enrichment
-    fetch(`/api/pharma?ticker=${ticker}&limit=100`)
-      .then((r) => r.json())
-      .then((d) => setPharmaCount(d?.summary?.total ?? 0))
-      .catch(() => {});
     fetch(`/api/earnings-news?ticker=${ticker}&view=upcoming&days=90&limit=10`)
       .then((r) => r.json())
       .then((d) => setUpcomingEarnings(d?.summary?.upcoming ?? 0))
@@ -293,9 +293,10 @@ export default function TickerPage() {
                 EARNINGS {upcomingEarnings > 1 ? `x${upcomingEarnings}` : "SOON"}
               </span>
             )}
-            {pharmaCount > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded bg-[var(--badge-bg)] text-[var(--accent-warning)] font-terminal font-bold">
-                PHARMA {pharmaCount}
+            {f?.composite_factor_score != null && (
+              <span className="text-xs px-2 py-0.5 rounded font-terminal font-bold bg-[var(--badge-bg)]"
+                style={{ color: f.composite_factor_score >= 70 ? "var(--accent-bull)" : "var(--text-muted)" }}>
+                COMP {f.composite_factor_score}
               </span>
             )}
           </div>
@@ -435,11 +436,6 @@ export default function TickerPage() {
         <Link href="/fundamentals" className="text-xs font-terminal text-[var(--accent-info)] hover:underline">
           Fundamentals
         </Link>
-        {pharmaCount > 0 && (
-          <Link href={`/pharma?ticker=${ticker}`} className="text-xs font-terminal text-[var(--accent-info)] hover:underline">
-            Pharma ({pharmaCount})
-          </Link>
-        )}
         <Link href={`/earnings-news?ticker=${ticker}`} className="text-xs font-terminal text-[var(--accent-info)] hover:underline">
           Earnings & News
         </Link>

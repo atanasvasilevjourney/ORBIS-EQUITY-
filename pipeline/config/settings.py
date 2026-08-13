@@ -2,24 +2,32 @@
 import os
 from dataclasses import dataclass, field
 
+
+def _env(key: str, default: str = "") -> str:
+    return os.getenv(key, default)
+
+
 @dataclass
 class LSEConfig:
-    api_url: str = os.getenv("LSE_API_URL", "https://api.londonstrategicedge.com")
-    api_key: str = os.getenv("LSE_API_KEY", "")
-    data_api_url: str = os.getenv("LSE_DATA_API_URL") or "https://data-api.londonstrategicedge.com"
+    api_url: str = field(default_factory=lambda: _env("LSE_API_URL", "https://api.londonstrategicedge.com"))
+    api_key: str = field(default_factory=lambda: _env("LSE_API_KEY"))
+    data_api_url: str = field(default_factory=lambda: _env("LSE_DATA_API_URL") or "https://data-api.londonstrategicedge.com")
     max_rows_per_request: int = 5000
     request_delay: float = 0.2
 
+
 @dataclass
 class SupabaseConfig:
-    url: str = os.getenv("SUPABASE_URL", "")
-    service_key: str = os.getenv("SUPABASE_SERVICE_KEY", "")
+    url: str = field(default_factory=lambda: _env("SUPABASE_URL"))
+    service_key: str = field(default_factory=lambda: _env("SUPABASE_SERVICE_KEY"))
+
 
 @dataclass
 class UniverseTier:
     name: str
     source: str  # "lse" | "yfinance" | "both"
     fundamentals_source: str  # "lse" | "yfinance" | "fmp"
+
 
 UNIVERSE_TIERS = {
     "us_large": UniverseTier("S&P 500", "lse", "lse"),
@@ -30,7 +38,6 @@ UNIVERSE_TIERS = {
     "eu": UniverseTier("EURO STOXX 50 + DAX + CAC", "yfinance", "yfinance"),
 }
 
-# Screener API table → fields mapping
 SCREENER_FIELDS = [
     "symbol", "company_name", "sector", "industry", "country", "exchange",
     "currency", "price", "market_cap", "beta", "volume", "average_volume",
@@ -49,16 +56,3 @@ SCREENER_FIELDS = [
 
 FINANCIAL_REPORT_TYPES = ["income", "balance", "cashflow", "growth", "metrics"]
 FINANCIAL_PERIODS = ["FY", "Q1", "Q2", "Q3", "Q4"]
-
-# Healthcare sectors/industries for pharma module
-PHARMA_INDUSTRIES = [
-    "Drug Manufacturers - General",
-    "Drug Manufacturers - Specialty & Generic",
-    "Biotechnology",
-    "Diagnostics & Research",
-    "Medical - Instruments & Supplies",
-    "Medical - Healthcare Plans",
-    "Medical - Care Facilities",
-    "Medical - Distribution",
-    "Medical - Pharmaceuticals",
-]

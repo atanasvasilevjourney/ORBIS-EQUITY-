@@ -9,13 +9,13 @@ Usage:
 """
 import logging
 import os
-from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
 from pipeline.config.settings import SupabaseConfig
 from pipeline.clients.lse_api import LSEClient
+from pipeline.utils.supabase import fetch_active_symbols
 
 load_dotenv()
 
@@ -29,6 +29,15 @@ def _get_supabase_client() -> Client:
     return create_client(cfg.url, cfg.service_key)
 
 
+def _safe_int(val) -> int | None:
+    if val is None:
+        return None
+    try:
+        return int(float(val))
+    except (TypeError, ValueError):
+        return None
+
+
 def main() -> None:
     """Fetch earnings from LSE and upsert into earnings_calendar."""
     logging.basicConfig(
@@ -40,12 +49,9 @@ def main() -> None:
     lse = LSEClient()
     sb = _get_supabase_client()
 
-    # Fetch all universe symbols
-    resp = sb.table("universe_members").select("symbol").eq("is_active", True).execute()
-    symbols = [r["symbol"] for r in (resp.data or [])]
+    symbols = fetch_active_symbols(sb)
     logger.info("Universe has %d active symbols", len(symbols))
 
-    # Fetch earnings in bulk from LSE (no per-symbol filter = all)
     logger.info("Fetching earnings events from LSE API...")
     try:
         raw_earnings = lse.get_earnings(limit=5000)
@@ -55,7 +61,6 @@ def main() -> None:
 
     logger.info("Received %d raw earnings events", len(raw_earnings))
 
-    # Filter to universe symbols
     universe_set = set(symbols)
     rows: list[dict] = []
 
@@ -73,7 +78,6 @@ def main() -> None:
         rev_est = e.get("revenue_estimated")
         rev_actual = e.get("revenue_actual")
 
-        # Compute surprise percentage
         surprise_pct = None
         if eps_est is not None and eps_actual is not None and eps_est != 0:
             surprise_pct = round(((eps_actual - eps_est) / abs(eps_est)) * 100, 2)
@@ -86,8 +90,8 @@ def main() -> None:
             "eps_est": eps_est,
             "eps_actual": eps_actual,
             "surprise_pct": surprise_pct,
-            "revenue_est": int(float(rev_est)) if rev_est is not None else None,
-            "revenue_actual": int(float(rev_actual)) if rev_actual is not None else None,
+            "revenue_est": _safe_int(rev_est),
+            "revenue_actual": _safe_int(rev_actual),
         })
 
     logger.info("Mapped %d earnings events for universe symbols", len(rows))
@@ -96,7 +100,6 @@ def main() -> None:
         logger.info("No earnings to upsert.")
         return
 
-    # Batch upsert
     batch_size = 500
     upserted = 0
 
@@ -111,7 +114,6 @@ def main() -> None:
         except Exception:
             logger.exception("Failed to upsert earnings batch %d-%d", i, i + len(batch))
 
-    # Stats
     reported = sum(1 for r in rows if r["confirmed"])
     beats = sum(1 for r in rows if r["surprise_pct"] is not None and r["surprise_pct"] > 0)
     misses = sum(1 for r in rows if r["surprise_pct"] is not None and r["surprise_pct"] < 0)

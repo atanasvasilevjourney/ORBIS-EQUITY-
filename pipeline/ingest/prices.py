@@ -36,16 +36,21 @@ def _get_supabase_client() -> Client:
     return create_client(cfg.url, cfg.service_key)
 
 
+from pipeline.utils.supabase import fetch_all
+
+
 def _fetch_universe(sb: Client) -> list[dict]:
     """Read universe_members from Supabase to get ticker list with sources."""
+    from pipeline.utils.supabase import fetch_all
+
     logger.info("Fetching universe_members from Supabase...")
-    result = (
-        sb.table("universe_members")
-        .select("symbol, tier, data_source, is_active")
-        .eq("is_active", True)
-        .execute()
+    members = fetch_all(
+        sb,
+        "universe_members",
+        "symbol, tier, data_source, is_active",
+        filters=lambda q: q.eq("is_active", True),
+        order=("symbol", False),
     )
-    members = result.data or []
     logger.info("Loaded %d active universe members", len(members))
     return members
 

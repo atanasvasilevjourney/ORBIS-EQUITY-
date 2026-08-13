@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 
 /**
- * Protect all /api/* routes with a shared API secret.
- * Clients must send the header: x-api-key: <API_SECRET>
+ * Protect external /api/* access with a shared API secret.
+ * Same-origin browser requests (our UI) are exempt via Sec-Fetch-Site.
  *
- * If API_SECRET is not configured, middleware is permissive (dev mode).
+ * External clients must send: x-api-key: <API_SECRET>
  */
 export function middleware(req: NextRequest) {
   const secret = process.env.API_SECRET;
 
-  // If no API_SECRET is set, skip auth (development mode)
   if (!secret) {
+    return NextResponse.next();
+  }
+
+  // Same-origin / same-site browser fetches from our UI
+  const site = req.headers.get("sec-fetch-site");
+  if (site === "same-origin" || site === "same-site" || site === "none") {
     return NextResponse.next();
   }
 

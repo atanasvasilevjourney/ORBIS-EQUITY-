@@ -8,7 +8,6 @@ import { ThemeToggle } from "@/components/cards/ThemeToggle";
 const NAV_LINKS = [
   { href: "/screener", label: "SCREENER" },
   { href: "/fundamentals", label: "FUNDAMENTALS" },
-  { href: "/pharma", label: "PHARMA" },
   { href: "/earnings-news", label: "EARNINGS" },
 ];
 

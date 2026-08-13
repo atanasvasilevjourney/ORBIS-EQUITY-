@@ -12,7 +12,6 @@ Stores results in daily_brief table as inputs for the AI brief generator.
 Usage:
     python -m pipeline.compute.aggregates
 """
-import json
 import logging
 import os
 from collections import Counter
@@ -145,24 +144,30 @@ def main():
 
     sb = create_client(sb_url, sb_key)
 
-    # Fetch all trend_radar rows
-    radar = sb.table("trend_radar").select("symbol,state,quality_rank").execute()
-    universe = sb.table("universe_members").select("symbol,sector,tier,country").eq("is_active", True).execute()
+    from pipeline.utils.supabase import fetch_all
 
-    if not radar.data:
+    radar_data = fetch_all(sb, "trend_radar", "symbol,state,quality_rank")
+    universe_data = fetch_all(
+        sb,
+        "universe_members",
+        "symbol,sector,tier,country",
+        filters=lambda q: q.eq("is_active", True),
+    )
+
+    if not radar_data:
         logger.warning("No trend_radar data found. Run trend_radar compute first.")
         return
 
-    logger.info(f"Computing aggregates for {len(radar.data)} tickers")
+    logger.info(f"Computing aggregates for {len(radar_data)} tickers")
 
     # Compute breadth
-    breadth = compute_breadth(radar.data, universe.data or [])
+    breadth = compute_breadth(radar_data, universe_data)
     posture = compute_posture(breadth)
     label = compute_posture_label(posture)
 
     # Per-region breadth
     region_map = {}
-    for u in (universe.data or []):
+    for u in universe_data:
         sym = u["symbol"]
         country = u.get("country", "")
         if country == "US":
@@ -177,14 +182,14 @@ def main():
     region_breadth = {}
     for region in ["US", "UK", "EU", "Other"]:
         region_symbols = {s for s, r in region_map.items() if r == region}
-        region_rows = [r for r in radar.data if r["symbol"] in region_symbols]
+        region_rows = [r for r in radar_data if r["symbol"] in region_symbols]
         if region_rows:
             total = len(region_rows)
             greens = sum(1 for r in region_rows if r["state"] == 1)
             region_breadth[region] = round(greens / total * 100, 1)
 
     # Average quality rank
-    avg_rank = round(sum(r["quality_rank"] for r in radar.data) / len(radar.data), 1)
+    avg_rank = round(sum(r["quality_rank"] for r in radar_data) / len(radar_data), 1)
 
     # Build summary
     summary = {
@@ -200,7 +205,7 @@ def main():
     sb.table("daily_brief").upsert({
         "asof_date": date.today().isoformat(),
         "brief": f"{label} - {breadth['pct_green']}% GREEN, led by {breadth['best_sector']}",
-        "inputs": json.dumps(summary),
+        "inputs": summary,
         "model": "aggregates_v1",
     }, on_conflict="asof_date").execute()
 

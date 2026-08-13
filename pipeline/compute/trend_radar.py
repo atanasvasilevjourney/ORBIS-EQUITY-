@@ -245,14 +245,21 @@ def main() -> None:
     sb = create_client(sb_url, sb_key)
 
     # Get active universe
-    universe = sb.table("universe_members").select("symbol").eq("is_active", True).execute()
-    symbols = [r["symbol"] for r in (universe.data or [])]
+    from pipeline.utils.supabase import fetch_all
+
+    universe_rows = fetch_all(
+        sb,
+        "universe_members",
+        "symbol",
+        filters=lambda q: q.eq("is_active", True),
+    )
+    symbols = [r["symbol"] for r in universe_rows]
     active_symbols = set(symbols)
     logger.info("Computing Trend Radar for %d tickers", len(symbols))
 
     # Pre-fetch existing states to preserve state_changed_at
-    existing_radar = sb.table("trend_radar").select("symbol,state,state_changed_at").execute()
-    prev_state_map = {r["symbol"]: r for r in (existing_radar.data or [])}
+    existing_rows = fetch_all(sb, "trend_radar", "symbol,state,state_changed_at")
+    prev_state_map = {r["symbol"]: r for r in existing_rows}
 
     # Bulk fetch ALL prices since cutoff with pagination (instead of N+1 per-symbol queries)
     cutoff = (date.today() - timedelta(days=400)).isoformat()

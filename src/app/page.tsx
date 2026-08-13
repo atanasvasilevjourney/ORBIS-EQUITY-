@@ -11,14 +11,10 @@ type DashData = {
   bestSector: string | null;
   worstSector: string | null;
   asOfDate: string | null;
-  // Fundamentals
   fundCount: number;
   highFScore: number;
-  // Pharma
-  pharmaLong: number;
-  pharmaShort: number;
-  pharmaWatch: number;
-  // Earnings
+  highComposite: number;
+  avgComposite: number;
   earningsBeats: number;
   earningsMisses: number;
   earningsUpcoming: number;
@@ -32,10 +28,11 @@ export default function Home() {
   useEffect(() => {
     Promise.all([
       fetch("/api/summary").then((r) => r.json()).catch(() => null),
-      fetch("/api/fundamentals").then((r) => r.json()).catch(() => null),
-      fetch("/api/pharma").then((r) => r.json()).catch(() => null),
+      fetch("/api/fundamentals?limit=1000").then((r) => r.json()).catch(() => null),
       fetch("/api/earnings-news?days=30").then((r) => r.json()).catch(() => null),
-    ]).then(([summary, fund, pharma, earnings]) => {
+    ]).then(([summary, fund, earnings]) => {
+      const rows = fund?.rows ?? [];
+      const composites = rows.filter((r: { compositeScore: number | null }) => r.compositeScore != null);
       setD({
         posture: summary?.posture ?? null,
         postureLabel: summary?.postureLabel ?? null,
@@ -44,11 +41,12 @@ export default function Home() {
         bestSector: summary?.bestSector ?? null,
         worstSector: summary?.worstSector ?? null,
         asOfDate: summary?.asOfDate ?? null,
-        fundCount: fund?.rows?.length ?? 0,
-        highFScore: (fund?.rows ?? []).filter((r: any) => r.fScore >= 7).length,
-        pharmaLong: pharma?.summary?.long ?? 0,
-        pharmaShort: pharma?.summary?.short ?? 0,
-        pharmaWatch: pharma?.summary?.watch ?? 0,
+        fundCount: rows.length,
+        highFScore: rows.filter((r: { fScore: number | null }) => (r.fScore ?? 0) >= 7).length,
+        highComposite: composites.filter((r: { compositeScore: number }) => r.compositeScore >= 70).length,
+        avgComposite: composites.length > 0
+          ? Math.round(composites.reduce((s: number, r: { compositeScore: number }) => s + r.compositeScore, 0) / composites.length)
+          : 0,
         earningsBeats: earnings?.summary?.beats ?? 0,
         earningsMisses: earnings?.summary?.misses ?? 0,
         earningsUpcoming: earnings?.summary?.upcoming ?? 0,
@@ -77,31 +75,31 @@ export default function Home() {
     },
     {
       href: "/fundamentals",
-      title: "FUNDAMENTALS & VALUATION",
+      title: "QUANT FUNDAMENTALS",
       badge: "MODULE 2",
-      desc: "Financial ratios, Piotroski F-Score, 50+ metrics",
+      desc: "Multi-factor scores — value, quality, growth, earnings quality, leverage",
       stats: d ? [
-        { label: "Stocks", value: String(d.fundCount), color: "" },
-        { label: "F-Score 7+", value: String(d.highFScore), color: "var(--accent-bull)" },
-        { label: "Avg Rank", value: String(d.avgRank), color: "" },
+        { label: "Universe", value: String(d.fundCount), color: "" },
+        { label: "Composite 70+", value: String(d.highComposite), color: "var(--accent-bull)" },
+        { label: "Avg Factor", value: d.avgComposite > 0 ? String(d.avgComposite) : "—", color: "" },
       ] : null,
     },
     {
-      href: "/pharma",
-      title: "PHARMA PIPELINE",
+      href: "/fundamentals",
+      title: "F-SCORE & VALUATION",
       badge: "MODULE 3",
-      desc: "Clinical trial catalysts, Phase 2/3 signals — ClinicalTrials.gov",
+      desc: "Piotroski F-Score, 50+ valuation ratios, sector-relative ranks",
       stats: d ? [
-        { label: "LONG", value: String(d.pharmaLong), color: "var(--accent-bull)" },
-        { label: "SHORT", value: String(d.pharmaShort), color: "var(--accent-bear)" },
-        { label: "WATCH", value: String(d.pharmaWatch), color: "var(--accent-warning)" },
+        { label: "F-Score 7+", value: String(d.highFScore), color: "var(--accent-bull)" },
+        { label: "Avg Rank", value: String(d.avgRank), color: "" },
+        { label: "Sectors", value: "50+", color: "" },
       ] : null,
     },
     {
       href: "/earnings-news",
       title: "EARNINGS & NEWS",
       badge: "MODULE 4",
-      desc: "Earnings calendar + GDELT news feed with sentiment",
+      desc: "Earnings calendar + GDELT news feed",
       stats: d ? [
         { label: "Beats", value: String(d.earningsBeats), color: "var(--accent-bull)" },
         { label: "Misses", value: String(d.earningsMisses), color: "var(--accent-bear)" },
@@ -117,7 +115,7 @@ export default function Home() {
           KOVAVIEW TERMINAL
         </h1>
         <p className="text-sm text-[var(--text-secondary)]">
-          Equity Swing Terminal — Free Data, Honest Signals, Global Coverage
+          Systematic Equity Terminal — Momentum, Multi-Factor Fundamentals, Earnings
         </p>
         {d?.asOfDate && (
           <p className="text-xs text-[var(--text-muted)] mt-1 font-terminal">
@@ -126,7 +124,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* Quick posture bar */}
       {d?.breadth && (
         <div className="max-w-4xl mx-auto mb-6">
           <div className="flex items-center gap-4 p-3 rounded border border-[var(--border)] bg-[var(--card-bg)]">
@@ -143,47 +140,31 @@ export default function Home() {
                 <span className="text-xs font-terminal text-[var(--accent-bear)]">{d.breadth.pctRed}% red</span>
               </div>
               <div className="w-full h-2 rounded-full bg-[var(--surface-alt)] overflow-hidden flex">
-                <div
-                  className="h-full rounded-l-full"
-                  style={{ width: `${d.breadth.pctGreen}%`, backgroundColor: "var(--accent-bull)" }}
-                />
-                <div
-                  className="h-full"
-                  style={{ width: `${100 - d.breadth.pctGreen - d.breadth.pctRed}%`, backgroundColor: "var(--surface-alt)" }}
-                />
-                <div
-                  className="h-full rounded-r-full"
-                  style={{ width: `${d.breadth.pctRed}%`, backgroundColor: "var(--accent-bear)" }}
-                />
+                <div className="h-full rounded-l-full" style={{ width: `${d.breadth.pctGreen}%`, backgroundColor: "var(--accent-bull)" }} />
+                <div className="h-full" style={{ width: `${100 - d.breadth.pctGreen - d.breadth.pctRed}%`, backgroundColor: "var(--surface-alt)" }} />
+                <div className="h-full rounded-r-full" style={{ width: `${d.breadth.pctRed}%`, backgroundColor: "var(--accent-bear)" }} />
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Module cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
         {modules.map((m) => (
           <Link
-            key={m.href}
+            key={m.badge}
             href={m.href}
             className="block p-5 rounded-lg border border-[var(--border)] bg-[var(--card-bg)] hover:border-[var(--accent-info)] transition-colors group"
           >
-            <span className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">
-              {m.badge}
-            </span>
-            <h2 className="text-lg font-terminal font-semibold mt-1 mb-1 group-hover:text-[var(--accent-info)] transition-colors">
-              {m.title}
-            </h2>
+            <span className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">{m.badge}</span>
+            <h2 className="text-lg font-terminal font-semibold mt-1 mb-1 group-hover:text-[var(--accent-info)] transition-colors">{m.title}</h2>
             <p className="text-xs text-[var(--text-secondary)] mb-3">{m.desc}</p>
             {m.stats && !loading && (
               <div className="flex gap-4 pt-2 border-t border-[var(--border)]">
                 {m.stats.map((s) => (
                   <div key={s.label} className="text-center">
                     <div className="text-[9px] font-terminal text-[var(--text-muted)] tracking-widest">{s.label}</div>
-                    <div className="text-sm font-terminal font-bold" style={{ color: s.color || undefined }}>
-                      {s.value}
-                    </div>
+                    <div className="text-sm font-terminal font-bold" style={{ color: s.color || undefined }}>{s.value}</div>
                   </div>
                 ))}
               </div>

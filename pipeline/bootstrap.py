@@ -232,8 +232,10 @@ def main():
     from pipeline.compute.aggregates import main as agg_main
     agg_main()
 
-    # F-Score needs financial_reports which we don't have from yfinance
-    # Skip for bootstrap
+    logger.info("Running factor scores...")
+    from pipeline.compute.factor_scores import main as factor_main
+    factor_main()
+
     logger.info("Skipping F-Score (requires financial_reports data)")
 
     # ── Summary ───────────────────────────────────────────────────
