@@ -26,11 +26,42 @@ on:
 
 jobs:
   # ---------------------------------------------------------------------------
+  # 0. Validate secrets — fail fast with a clear message if not configured
+  # ---------------------------------------------------------------------------
+  validate-secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Verify required GitHub Actions secrets
+        run: |
+          missing=()
+          [ -z "${{ secrets.SUPABASE_URL }}" ] && missing+=("SUPABASE_URL")
+          [ -z "${{ secrets.SUPABASE_SERVICE_KEY }}" ] && missing+=("SUPABASE_SERVICE_KEY")
+          [ -z "${{ secrets.LSE_API_KEY }}" ] && missing+=("LSE_API_KEY")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing GitHub Actions secrets: ${missing[*]}"
+            echo ""
+            echo "Add them at: Settings → Secrets and variables → Actions"
+            echo "Repository: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            echo ""
+            echo "Required secrets:"
+            echo "  SUPABASE_URL          — https://your-project.supabase.co"
+            echo "  SUPABASE_SERVICE_KEY  — service_role key (not anon key)"
+            echo "  LSE_API_KEY           — London Strategic Edge API key"
+            echo ""
+            echo "Optional:"
+            echo "  LSE_DATA_API_URL      — defaults to https://data-api.londonstrategicedge.com"
+            exit 1
+          fi
+          echo "All required secrets are configured."
+
+  # ---------------------------------------------------------------------------
   # 1. Universe Sync — weekly only (Monday) or manual trigger
   # ---------------------------------------------------------------------------
   universe-sync:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: validate-secrets
     if: >-
       github.event_name == 'workflow_dispatch'
       || github.event.schedule == '30 19 * * 1'
@@ -67,7 +98,7 @@ jobs:
   ingest-prices:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: universe-sync
+    needs: [validate-secrets, universe-sync]
     if: >-
       always()
       && (needs.universe-sync.result == 'success'

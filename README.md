@@ -57,7 +57,19 @@ pip install -r pipeline/requirements.txt
 python -m pipeline.bootstrap
 ```
 
-### Pipeline (production with LSE API)
+### GitHub Actions secrets (required for nightly pipeline)
+
+Go to **Settings → Secrets and variables → Actions** and add:
+
+| Secret | Value |
+|--------|-------|
+| `SUPABASE_URL` | `https://your-project.supabase.co` |
+| `SUPABASE_SERVICE_KEY` | Supabase **service_role** key (Settings → API) |
+| `LSE_API_KEY` | London Strategic Edge API key |
+
+Optional: `LSE_DATA_API_URL` (defaults to `https://data-api.londonstrategicedge.com`)
+
+Without these secrets the nightly pipeline will fail immediately with a clear error.
 
 Runs nightly via `.github/workflows/nightly-pipeline.yml`:
 universe → prices → fundamentals → financial reports → trend radar → F-Score → factor scores → earnings → news
