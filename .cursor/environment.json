@@ -6,8 +6,8 @@
   "terminals": [
     {
       "name": "web",
-      "command": "npm run dev",
-      "description": "Next.js dev server on http://localhost:3000 (reads Supabase-compatible gateway on :54321)."
+      "command": "bash .cursor/scripts/start.sh && npm run dev",
+      "description": "Ensures the Postgres/PostgREST/nginx data stack is up (idempotent), then runs the Next.js dev server on http://localhost:3000 (reads the Supabase-compatible gateway on :54321)."
     }
   ],
   "ports": [
