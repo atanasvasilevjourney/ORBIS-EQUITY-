@@ -96,9 +96,20 @@ export default function Home() {
       ] : null,
     },
     {
+      href: "/loop",
+      title: "LOOP TERMINAL",
+      badge: "MODULE 4",
+      desc: "Breakout portfolio harness — 2N ATR sizing, sector caps, paper book",
+      stats: d ? [
+        { label: "Posture", value: d.posture ?? "—", color: postureColor },
+        { label: "Breadth", value: d.breadth ? `${d.breadth.pctGreen}% green` : "—", color: "var(--accent-bull)" },
+        { label: "Best", value: d.bestSector ?? "—", color: "" },
+      ] : null,
+    },
+    {
       href: "/earnings-news",
       title: "EARNINGS & NEWS",
-      badge: "MODULE 4",
+      badge: "MODULE 5",
       desc: "Earnings calendar + GDELT news feed",
       stats: d ? [
         { label: "Beats", value: String(d.earningsBeats), color: "var(--accent-bull)" },
