@@ -46,6 +46,8 @@ STOCKS = [
     ("CVX", "Chevron Corp.", "Energy", "Oil & Gas", "US", "NYSE", ("down", -0.0008, 0.018)),
     ("JNJ", "Johnson & Johnson", "Health Care", "Pharmaceuticals", "US", "NYSE", ("down", -0.0006, 0.011)),
     ("PFE", "Pfizer Inc.", "Health Care", "Pharmaceuticals", "US", "NYSE", ("down", -0.0012, 0.015)),
+    ("MRNA", "Moderna Inc.", "Health Care", "Biotechnology", "US", "NASDAQ", ("up", 0.0016, 0.030)),
+    ("MRK", "Merck & Co. Inc.", "Health Care", "Pharmaceuticals", "US", "NYSE", ("up", 0.0009, 0.012)),
     ("PG", "Procter & Gamble", "Consumer Staples", "Household Products", "US", "NYSE", ("side", 0.0002, 0.009)),
     ("KO", "Coca-Cola Co.", "Consumer Staples", "Beverages", "US", "NYSE", ("up", 0.0005, 0.010)),
     ("HD", "Home Depot Inc.", "Consumer Discretionary", "Home Improvement", "US", "NYSE", ("up", 0.0008, 0.014)),

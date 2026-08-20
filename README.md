@@ -12,7 +12,8 @@ Systematic equity research terminal — momentum screener, multi-factor fundamen
 
 1. **Swing Screener** — trend radar signals (momentum, EWMAC, breakout, volume)
 2. **Quant Fundamentals** — cross-sectional factor scores (value, quality, growth, earnings quality, leverage) + Piotroski F-Score
-3. **Earnings & News** — calendar + GDELT headlines
+3. **Health Sector** — pharma/biotech fundamentals + clinical-trial catalyst calendar (ClinicalTrials.gov)
+4. **Earnings & News** — calendar + GDELT headlines
 
 ## Setup
 
@@ -72,7 +73,18 @@ Optional: `LSE_DATA_API_URL` (defaults to `https://data-api.londonstrategicedge.
 Without these secrets the nightly pipeline will fail immediately with a clear error.
 
 Runs nightly via `.github/workflows/nightly-pipeline.yml`:
-universe → prices → fundamentals → financial reports → trend radar → F-Score → factor scores → earnings → news
+universe → prices → fundamentals → financial reports → trend radar → F-Score → factor scores → earnings → news → clinical trials → health signals
+
+## Health Sector (free data, no API key)
+
+Pharma/biotech catalysts come from the **ClinicalTrials.gov Data API v2** — a free, public-domain, key-less REST API. For every Health Care universe member, the pipeline pulls that company's recent interventional trials (by lead sponsor) and derives forward-looking catalyst signals (upcoming readouts, recent readouts, posted results) with a phase-weighted confidence.
+
+```bash
+python -m pipeline.ingest.pharma_trials    # ClinicalTrials.gov → pharma_trials
+python -m pipeline.compute.pharma_signals  # pharma_trials → pharma_signals
+```
+
+Surfaced in the UI at `/health` and via `GET /api/health`. Signals are heuristic and not investment advice.
 
 ## Factor Scores
 
