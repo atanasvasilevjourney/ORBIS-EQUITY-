@@ -13,7 +13,8 @@ Systematic equity research terminal — momentum screener, multi-factor fundamen
 1. **Swing Screener** — trend radar signals (momentum, EWMAC, breakout, volume)
 2. **Quant Fundamentals** — cross-sectional factor scores (value, quality, growth, earnings quality, leverage) + Piotroski F-Score
 3. **Health Sector** — pharma/biotech fundamentals + clinical-trial catalyst calendar (ClinicalTrials.gov)
-4. **Earnings & News** — calendar + GDELT headlines
+4. **Loop Terminal** — equity breakout paper portfolio (2N ATR sizing, sector caps, orders)
+5. **Earnings & News** — calendar + GDELT headlines
 
 ## Setup
 
@@ -85,6 +86,22 @@ python -m pipeline.compute.pharma_signals  # pharma_trials → pharma_signals
 ```
 
 Surfaced in the UI at `/health` and via `GET /api/health`. Signals are heuristic and not investment advice.
+
+## Loop Terminal (paper breakout book)
+
+Turns Trend Radar into a mechanical long-only paper portfolio:
+
+- **Entry:** GREEN + rank ≥ 60 + positive momentum/EWMAC + (breakout or volume confirm)
+- **Size:** Turtle-style — `shares = floor((equity × 1%) / (2N))` with N = 14-day ATR
+- **Stop:** 2N below entry; max 8 names, max 2 per sector, 8% open heat
+- **Skip:** earnings in next 5 days, insufficient ATR, posture &lt; 50 (no new entries)
+- **Exit:** stop hit, state RED, rank decay, dual-momentum failure
+
+```bash
+python -m pipeline.compute.portfolio_loop
+```
+
+Surfaced at `/loop` and `GET /api/loop`. Paper harness only — no live broker orders. Not investment advice.
 
 ## Factor Scores
 

@@ -63,7 +63,12 @@ SQL
 
 echo "== 5/9 Schema migrations =="
 if psql_su "$DBNAME" -tAc "SELECT to_regclass('public.universe_members')" | grep -q universe_members; then
-  echo "   schema already present, skipping migrations"
+  echo "   schema already present, skipping full replay"
+  if ! psql_su "$DBNAME" -tAc "SELECT to_regclass('public.paper_book')" | grep -q paper_book; then
+    echo "   applying supabase/migrations/007_paper_loop.sql"
+    psql_su "$DBNAME" -f supabase/migrations/007_paper_loop.sql >/dev/null
+    psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
+  fi
 else
   for f in supabase/migrations/*.sql; do
     echo "   applying $f"
@@ -174,6 +179,11 @@ SIGNAL_COUNT="$(psql_su "$DBNAME" -tAc 'SELECT count(*) FROM pharma_signals' | t
 if [ "${SIGNAL_COUNT:-0}" = "0" ]; then
   "$REPO_DIR/.venv/bin/python" -m pipeline.ingest.pharma_trials || true
   "$REPO_DIR/.venv/bin/python" -m pipeline.compute.pharma_signals || true
+fi
+# Paper breakout book — run once when empty so LOOP terminal has a first book.
+BOOK_COUNT="$(psql_su "$DBNAME" -tAc 'SELECT count(*) FROM paper_book' | tr -d '[:space:]')"
+if [ "${BOOK_COUNT:-0}" = "0" ]; then
+  "$REPO_DIR/.venv/bin/python" -m pipeline.compute.portfolio_loop || true
 fi
 
 echo "Install complete."
