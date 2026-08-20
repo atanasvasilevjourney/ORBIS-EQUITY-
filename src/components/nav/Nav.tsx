@@ -7,6 +7,7 @@ import { ThemeToggle } from "@/components/cards/ThemeToggle";
 
 const NAV_LINKS = [
   { href: "/screener", label: "SCREENER" },
+  { href: "/loop", label: "LOOP" },
   { href: "/fundamentals", label: "FUNDAMENTALS" },
   { href: "/health", label: "HEALTH" },
   { href: "/earnings-news", label: "EARNINGS" },

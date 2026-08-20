@@ -258,6 +258,12 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
+      - name: Run equity breakout portfolio loop
+        run: python -m pipeline.compute.portfolio_loop
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
   # ---------------------------------------------------------------------------
   # 6. Ingest Earnings + News — runs every weekday
   # ---------------------------------------------------------------------------
