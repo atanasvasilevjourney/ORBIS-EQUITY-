@@ -270,6 +270,18 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
+      - name: Run opening range breakout paper harness
+        run: python -m pipeline.compute.opening_range
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+      - name: Run technical + fundamental stock analysis
+        run: python -m pipeline.compute.stock_analysis
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
   # ---------------------------------------------------------------------------
   # 6. Ingest Earnings + News — runs every weekday
   # ---------------------------------------------------------------------------

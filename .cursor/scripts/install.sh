@@ -74,6 +74,16 @@ if psql_su "$DBNAME" -tAc "SELECT to_regclass('public.universe_members')" | grep
     psql_su "$DBNAME" -f supabase/migrations/008_skew_map.sql >/dev/null
     psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
   fi
+  if ! psql_su "$DBNAME" -tAc "SELECT to_regclass('public.orb_watch')" | grep -q orb_watch; then
+    echo "   applying supabase/migrations/009_orb.sql"
+    psql_su "$DBNAME" -f supabase/migrations/009_orb.sql >/dev/null
+    psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
+  fi
+  if ! psql_su "$DBNAME" -tAc "SELECT to_regclass('public.analysis_names')" | grep -q analysis_names; then
+    echo "   applying supabase/migrations/010_analysis.sql"
+    psql_su "$DBNAME" -f supabase/migrations/010_analysis.sql >/dev/null
+    psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
+  fi
 else
   for f in supabase/migrations/*.sql; do
     echo "   applying $f"
@@ -194,6 +204,14 @@ fi
 SKEW_COUNT="$(psql_su "$DBNAME" -tAc 'SELECT count(*) FROM skew_names' | tr -d '[:space:]')"
 if [ "${SKEW_COUNT:-0}" = "0" ]; then
   "$REPO_DIR/.venv/bin/python" -m pipeline.compute.skew_map || true
+fi
+ORB_COUNT="$(psql_su "$DBNAME" -tAc 'SELECT count(*) FROM orb_watch' | tr -d '[:space:]')"
+if [ "${ORB_COUNT:-0}" = "0" ]; then
+  "$REPO_DIR/.venv/bin/python" -m pipeline.compute.opening_range || true
+fi
+AN_COUNT="$(psql_su "$DBNAME" -tAc 'SELECT count(*) FROM analysis_names' | tr -d '[:space:]')"
+if [ "${AN_COUNT:-0}" = "0" ]; then
+  "$REPO_DIR/.venv/bin/python" -m pipeline.compute.stock_analysis || true
 fi
 
 echo "Install complete."
