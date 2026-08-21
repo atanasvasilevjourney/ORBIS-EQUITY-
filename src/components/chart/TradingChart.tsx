@@ -111,7 +111,7 @@ export function TradingChart({ candles, sma, levels, height = 420 }: Props) {
           color: info,
           lineWidth: 1,
           priceLineVisible: false,
-          lastValueVisible: true,
+          lastValueVisible: false,
           title: "SMA 20",
         });
         line.setData(

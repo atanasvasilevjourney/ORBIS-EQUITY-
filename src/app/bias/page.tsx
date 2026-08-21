@@ -194,6 +194,7 @@ export default function BiasPage() {
               <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] overflow-hidden">
                 <div className="px-3 py-1 text-[10px] font-terminal text-[var(--text-muted)] tracking-widest border-b border-[var(--border)]">
                   {name.ticker} · Daily Bias · {chart?.interval ?? interval} · {chart?.source ?? "…"}
+                  {chart?.interval === "5m" ? " · live Yahoo 5m, levels from EOD book" : ""}
                 </div>
                 <TradingChart candles={chart?.candles ?? []} sma={chart?.sma20} levels={levels} />
               </div>
