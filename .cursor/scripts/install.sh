@@ -69,6 +69,11 @@ if psql_su "$DBNAME" -tAc "SELECT to_regclass('public.universe_members')" | grep
     psql_su "$DBNAME" -f supabase/migrations/007_paper_loop.sql >/dev/null
     psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
   fi
+  if ! psql_su "$DBNAME" -tAc "SELECT to_regclass('public.skew_names')" | grep -q skew_names; then
+    echo "   applying supabase/migrations/008_skew_map.sql"
+    psql_su "$DBNAME" -f supabase/migrations/008_skew_map.sql >/dev/null
+    psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
+  fi
 else
   for f in supabase/migrations/*.sql; do
     echo "   applying $f"
@@ -184,6 +189,11 @@ fi
 BOOK_COUNT="$(psql_su "$DBNAME" -tAc 'SELECT count(*) FROM paper_book' | tr -d '[:space:]')"
 if [ "${BOOK_COUNT:-0}" = "0" ]; then
   "$REPO_DIR/.venv/bin/python" -m pipeline.compute.portfolio_loop || true
+fi
+# Listed IV skew map — first-run snapshot from yfinance option chains.
+SKEW_COUNT="$(psql_su "$DBNAME" -tAc 'SELECT count(*) FROM skew_names' | tr -d '[:space:]')"
+if [ "${SKEW_COUNT:-0}" = "0" ]; then
+  "$REPO_DIR/.venv/bin/python" -m pipeline.compute.skew_map || true
 fi
 
 echo "Install complete."

@@ -211,7 +211,7 @@ jobs:
   # ---------------------------------------------------------------------------
   compute-signals:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     needs: ingest-prices
     if: always() && needs.ingest-prices.result == 'success'
     steps:
@@ -260,6 +260,12 @@ jobs:
 
       - name: Run equity breakout portfolio loop
         run: python -m pipeline.compute.portfolio_loop
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+      - name: Run options skew map + weekend vol
+        run: python -m pipeline.compute.skew_map
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
