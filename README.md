@@ -16,6 +16,8 @@ Systematic equity research terminal — momentum screener, multi-factor fundamen
 4. **Loop Terminal** — equity breakout paper portfolio (2N ATR sizing, sector caps, orders)
 5. **Earnings & News** — calendar + GDELT headlines
 6. **Skew Map** — listed IV surface (skew, term, weekend vol) from yfinance option chains
+7. **Opening Range Breakout** — premarket/open gappers, 15-minute OR, long-only 1R paper brackets
+8. **Stock Analysis** — technical MA/MACD/RSI/regression plus fundamental composite & F-Score
 
 ## Setup
 
@@ -46,6 +48,8 @@ supabase/migrations/005_precision_and_fk.sql
 supabase/migrations/006_equity_factors.sql
 supabase/migrations/007_paper_loop.sql
 supabase/migrations/008_skew_map.sql
+supabase/migrations/009_orb.sql
+supabase/migrations/010_analysis.sql
 ```
 
 ### Web
@@ -77,7 +81,7 @@ Optional: `LSE_DATA_API_URL` (defaults to `https://data-api.londonstrategicedge.
 Without these secrets the nightly pipeline will fail immediately with a clear error.
 
 Runs nightly via `.github/workflows/nightly-pipeline.yml`:
-universe → prices → fundamentals → financial reports → trend radar → F-Score → factor scores → portfolio loop → skew map → earnings → news → clinical trials → health signals
+universe → prices → fundamentals → financial reports → trend radar → F-Score → factor scores → portfolio loop → skew map → opening range → stock analysis → earnings → news → clinical trials → health signals
 
 ## Health Sector (free data, no API key)
 
@@ -120,6 +124,36 @@ python -m pipeline.compute.skew_map
 ```
 
 Surfaced at `/skew` and `GET /api/skew`. IV is inverted from listed last/mid (Yahoo's `impliedVolatility` is unusable when bid/ask are 0). Not a calibrated vol model. Not investment advice.
+
+## Opening Range Breakout (paper)
+
+Port of [michaelzheng67/Full-Stack-Stock-Algorithm](https://github.com/michaelzheng67/Full-Stack-Stock-Algorithm) without Alpaca. Long-only:
+
+1. Screen opening gappers: `|open / prev_close − 1| ≥ 4%`
+2. Opening range = 09:30–09:45 America/New_York on 5-minute bars
+3. Buy the first 5m close after 09:45 above the OR high
+4. Bracket: take-profit = entry + OR, stop = entry − OR (1R)
+5. Size: `floor((equity × 5%) / price)` on a $100k paper book, max 8 names
+
+```bash
+python -m pipeline.compute.opening_range
+```
+
+Surfaced at `/orb` and `GET /api/orb`. Paper harness only — no live broker orders. Not investment advice.
+
+## Stock Analysis (technical + fundamental)
+
+Port of [MorcilloSanz/stockanalysis](https://github.com/MorcilloSanz/stockanalysis) onto `prices_daily`:
+
+- **Long-term:** SMA 100/200, EMA 50/100, linear-regression slope, Golden/Death Cross
+- **Mid-term:** SMA 50/100, EMA 20/50, MACD, RSI, price/volume decision tree
+- **Vote:** majority of the six technical codes (min 2), with composite factor score and Piotroski F-Score shown beside the tape
+
+```bash
+python -m pipeline.compute.stock_analysis
+```
+
+Surfaced at `/analysis` and `GET /api/analysis`. Heuristic signals — not investment advice.
 
 ## Factor Scores
 
