@@ -26,6 +26,8 @@ type DashData = {
   orbBreakouts: number;
   analysisBuys: number;
   analysisSells: number;
+  quantNames: number;
+  quantSharpe: number | null;
 };
 
 export default function Home() {
@@ -40,7 +42,8 @@ export default function Home() {
       fetch("/api/skew").then((r) => r.json()).catch(() => null),
       fetch("/api/orb").then((r) => r.json()).catch(() => null),
       fetch("/api/analysis").then((r) => r.json()).catch(() => null),
-    ]).then(([summary, fund, earnings, skew, orb, analysis]) => {
+      fetch("/api/quantropy").then((r) => r.json()).catch(() => null),
+    ]).then(([summary, fund, earnings, skew, orb, analysis, quant]) => {
       const rows = fund?.rows ?? [];
       const composites = rows.filter((r: { compositeScore: number | null }) => r.compositeScore != null);
       setD({
@@ -68,6 +71,8 @@ export default function Home() {
         orbBreakouts: orb?.summary?.breakouts ?? 0,
         analysisBuys: analysis?.summary?.buys ?? 0,
         analysisSells: analysis?.summary?.sells ?? 0,
+        quantNames: quant?.summary?.names ?? 0,
+        quantSharpe: quant?.summary?.maxSharpe ?? null,
       });
     }).finally(() => setLoading(false));
   }, []);
@@ -165,6 +170,17 @@ export default function Home() {
         { label: "Buy", value: String(d.analysisBuys), color: "var(--accent-bull)" },
         { label: "Sell", value: String(d.analysisSells), color: "var(--accent-bear)" },
         { label: "Stack", value: "6", color: "" },
+      ] : null,
+    },
+    {
+      href: "/quantropy",
+      title: "QUANTROPY",
+      badge: "MODULE 9",
+      desc: "Risk, CAPM, Altman Z, Markowitz allocation from the Quantropy library",
+      stats: d ? [
+        { label: "Names", value: d.quantNames ? String(d.quantNames) : "—", color: "" },
+        { label: "Max Sh", value: d.quantSharpe == null ? "—" : d.quantSharpe.toFixed(2), color: "var(--accent-warning)" },
+        { label: "MPT", value: "on", color: "var(--accent-info)" },
       ] : null,
     },
   ];
