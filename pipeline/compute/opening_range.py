@@ -195,10 +195,14 @@ def run() -> dict:
     tickers = sorted(set(LIQUID) | set(names.keys()))
 
     logger.info("=== ORB start · scan %d names · gap ≥ %.1f%% ===", len(tickers), GAP_PCT)
-    raw = yf.download(
-        tickers, period="10d", interval="1d", auto_adjust=False,
-        progress=False, group_by="ticker", threads=True,
-    )
+    try:
+        raw = yf.download(
+            tickers, period="10d", interval="1d", auto_adjust=False,
+            progress=False, group_by="ticker", threads=True,
+        )
+    except Exception:
+        logger.exception("daily batch download failed")
+        raw = pd.DataFrame()
     frames = _flatten_daily(raw, tickers)
     session = _session_from_daily(frames) or today
 

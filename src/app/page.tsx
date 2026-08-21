@@ -22,6 +22,10 @@ type DashData = {
   skewNames: number;
   skewAtm: number | null;
   skewWeekend: string | null;
+  orbGappers: number;
+  orbBreakouts: number;
+  analysisBuys: number;
+  analysisSells: number;
 };
 
 export default function Home() {
@@ -34,7 +38,9 @@ export default function Home() {
       fetch("/api/fundamentals?limit=1000").then((r) => r.json()).catch(() => null),
       fetch("/api/earnings-news?days=30").then((r) => r.json()).catch(() => null),
       fetch("/api/skew").then((r) => r.json()).catch(() => null),
-    ]).then(([summary, fund, earnings, skew]) => {
+      fetch("/api/orb").then((r) => r.json()).catch(() => null),
+      fetch("/api/analysis").then((r) => r.json()).catch(() => null),
+    ]).then(([summary, fund, earnings, skew, orb, analysis]) => {
       const rows = fund?.rows ?? [];
       const composites = rows.filter((r: { compositeScore: number | null }) => r.compositeScore != null);
       setD({
@@ -58,6 +64,10 @@ export default function Home() {
         skewNames: skew?.summary?.names ?? 0,
         skewAtm: skew?.summary?.avgAtmIv ?? null,
         skewWeekend: skew?.summary?.weekendRichest ?? null,
+        orbGappers: orb?.summary?.names ?? 0,
+        orbBreakouts: orb?.summary?.breakouts ?? 0,
+        analysisBuys: analysis?.summary?.buys ?? 0,
+        analysisSells: analysis?.summary?.sells ?? 0,
       });
     }).finally(() => setLoading(false));
   }, []);
@@ -133,6 +143,28 @@ export default function Home() {
         { label: "Names", value: d.skewNames ? String(d.skewNames) : "—", color: "" },
         { label: "Avg ATM", value: d.skewAtm == null ? "—" : `${(d.skewAtm * 100).toFixed(0)}%`, color: "var(--accent-info)" },
         { label: "Wknd", value: d.skewWeekend ?? "—", color: "var(--accent-warning)" },
+      ] : null,
+    },
+    {
+      href: "/orb",
+      title: "OPENING RANGE",
+      badge: "MODULE 7",
+      desc: "Gapper screen + 15-minute OR breakout, long-only 1R paper brackets",
+      stats: d ? [
+        { label: "Gappers", value: d.orbGappers ? String(d.orbGappers) : "—", color: "var(--accent-info)" },
+        { label: "Longs", value: String(d.orbBreakouts), color: "var(--accent-bull)" },
+        { label: "OR", value: "15m", color: "" },
+      ] : null,
+    },
+    {
+      href: "/analysis",
+      title: "STOCK ANALYSIS",
+      badge: "MODULE 8",
+      desc: "Technical MA/MACD/RSI/regression plus fundamental composite & F-Score",
+      stats: d ? [
+        { label: "Buy", value: String(d.analysisBuys), color: "var(--accent-bull)" },
+        { label: "Sell", value: String(d.analysisSells), color: "var(--accent-bear)" },
+        { label: "Stack", value: "6", color: "" },
       ] : null,
     },
   ];
