@@ -136,7 +136,7 @@ export default function QuantropyPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] p-3">
           <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">MARKOWITZ BULLET · LONG-ONLY</h2>
-          <Frontier pts={d?.frontier ?? []} books={alloc} />
+          <Frontier pts={d?.frontier ?? []} books={alloc ?? null} />
         </div>
         <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] p-3">
           <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">ALLOCATION REGIMES</h2>

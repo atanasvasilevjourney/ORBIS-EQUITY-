@@ -213,8 +213,12 @@ def run() -> dict:
     w_eq = np.ones(len(symbols)) / len(symbols)
     inv = 1.0 / np.maximum(vol, 1e-8)
     w_iv = inv / inv.sum()
-    w_mv = _optimize(mu, cov, "vol") or w_eq
-    w_ms = _optimize(mu, cov, "sharpe") or w_eq
+    w_mv = _optimize(mu, cov, "vol")
+    if w_mv is None:
+        w_mv = w_eq
+    w_ms = _optimize(mu, cov, "sharpe")
+    if w_ms is None:
+        w_ms = w_eq
 
     lo, hi = float(mu.min()), float(mu.max())
     frontier = []
