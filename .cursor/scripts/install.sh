@@ -84,6 +84,11 @@ if psql_su "$DBNAME" -tAc "SELECT to_regclass('public.universe_members')" | grep
     psql_su "$DBNAME" -f supabase/migrations/010_analysis.sql >/dev/null
     psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
   fi
+  if ! psql_su "$DBNAME" -tAc "SELECT to_regclass('public.quantropy_names')" | grep -q quantropy_names; then
+    echo "   applying supabase/migrations/011_quantropy.sql"
+    psql_su "$DBNAME" -f supabase/migrations/011_quantropy.sql >/dev/null
+    psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
+  fi
 else
   for f in supabase/migrations/*.sql; do
     echo "   applying $f"
@@ -212,6 +217,10 @@ fi
 AN_COUNT="$(psql_su "$DBNAME" -tAc 'SELECT count(*) FROM analysis_names' | tr -d '[:space:]')"
 if [ "${AN_COUNT:-0}" = "0" ]; then
   "$REPO_DIR/.venv/bin/python" -m pipeline.compute.stock_analysis || true
+fi
+Q_COUNT="$(psql_su "$DBNAME" -tAc 'SELECT count(*) FROM quantropy_names' | tr -d '[:space:]')"
+if [ "${Q_COUNT:-0}" = "0" ]; then
+  "$REPO_DIR/.venv/bin/python" -m pipeline.compute.quantropy || true
 fi
 
 echo "Install complete."

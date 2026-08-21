@@ -18,6 +18,7 @@ Systematic equity research terminal — momentum screener, multi-factor fundamen
 6. **Skew Map** — listed IV surface (skew, term, weekend vol) from yfinance option chains
 7. **Opening Range Breakout** — premarket/open gappers, 15-minute OR, long-only 1R paper brackets
 8. **Stock Analysis** — technical MA/MACD/RSI/regression plus fundamental composite & F-Score
+9. **Quantropy** — risk, CAPM, Altman Z, Markowitz allocation (port of the Quantropy/Matilda library)
 
 ## Setup
 
@@ -50,6 +51,7 @@ supabase/migrations/007_paper_loop.sql
 supabase/migrations/008_skew_map.sql
 supabase/migrations/009_orb.sql
 supabase/migrations/010_analysis.sql
+supabase/migrations/011_quantropy.sql
 ```
 
 ### Web
@@ -81,7 +83,7 @@ Optional: `LSE_DATA_API_URL` (defaults to `https://data-api.londonstrategicedge.
 Without these secrets the nightly pipeline will fail immediately with a clear error.
 
 Runs nightly via `.github/workflows/nightly-pipeline.yml`:
-universe → prices → fundamentals → financial reports → trend radar → F-Score → factor scores → portfolio loop → skew map → opening range → stock analysis → earnings → news → clinical trials → health signals
+universe → prices → fundamentals → financial reports → trend radar → F-Score → factor scores → portfolio loop → skew map → opening range → stock analysis → Quantropy → earnings → news → clinical trials → health signals
 
 ## Health Sector (free data, no API key)
 
@@ -154,6 +156,21 @@ python -m pipeline.compute.stock_analysis
 ```
 
 Surfaced at `/analysis` and `GET /api/analysis`. Heuristic signals — not investment advice.
+
+## Quantropy (risk + allocation)
+
+Port of [atanasvasilevjourney/Quantropy](https://github.com/atanasvasilevjourney/Quantropy) (Matilda) onto KovaView daily bars. No Alpaca, no Ken-French file drop.
+
+- **Risk:** annual vol, Sharpe, Sortino, max drawdown, historical VaR/CVaR 5%
+- **CAPM:** alpha and beta vs the equal-weight universe
+- **Distress:** public-firm Altman Z (safe &gt; 2.99 / grey / distress &lt; 1.81)
+- **Allocation:** equal, inverse-vol, min-variance, max-Sharpe, Markowitz efficient frontier (long-only SLSQP)
+
+```bash
+python -m pipeline.compute.quantropy
+```
+
+Surfaced at `/quantropy` and `GET /api/quantropy`. Paper analytics — not a broker, not investment advice.
 
 ## Factor Scores
 

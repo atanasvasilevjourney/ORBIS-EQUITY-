@@ -282,6 +282,12 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
+      - name: Run Quantropy risk + Markowitz allocation
+        run: python -m pipeline.compute.quantropy
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
   # ---------------------------------------------------------------------------
   # 6. Ingest Earnings + News — runs every weekday
   # ---------------------------------------------------------------------------
