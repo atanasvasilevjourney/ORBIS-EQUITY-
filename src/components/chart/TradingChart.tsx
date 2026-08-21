@@ -118,8 +118,11 @@ export function TradingChart({ candles, sma, levels, height = 420 }: Props) {
           candles.flatMap((c, i) => (sma[i] == null ? [] : [{ time: c.time, value: sma[i] as number }]))
         );
       }
+      const ideaLines = levels.filter((lv) => lv.title.startsWith("idea "));
+      const other = levels.filter((lv) => !lv.title.startsWith("idea "));
+      const drawn = [...ideaLines, ...other.slice(0, 8)];
       const seen = new Set<string>();
-      for (const lv of levels.slice(0, 10)) {
+      for (const lv of drawn) {
         const key = `${lv.title}:${lv.price}`;
         if (seen.has(key) || !Number.isFinite(lv.price)) continue;
         seen.add(key);

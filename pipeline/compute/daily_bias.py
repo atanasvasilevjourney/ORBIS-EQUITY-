@@ -25,7 +25,7 @@ import numpy as np
 from dotenv import load_dotenv
 from supabase import create_client
 
-from pipeline.compute.tech_signals import EMA, MACD, RSI, SMA
+from pipeline.compute.tech_signals import MACD, RSI
 from pipeline.utils.supabase import fetch_all
 
 load_dotenv()
@@ -54,6 +54,14 @@ def _px(v: float) -> float:
     if av >= 10:
         return round(v, 2)
     return round(v, 4)
+
+
+def trail_sma(close: np.ndarray, period: int) -> float:
+    """Trailing SMA — matches the chart overlay, not the centered ANALYZE low-pass."""
+    if len(close) == 0:
+        return 0.0
+    w = close[-period:] if len(close) >= period else close
+    return float(np.mean(w))
 
 
 def wilder_atr(high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int = ATR_N) -> float:
@@ -152,17 +160,16 @@ def build_card(
     if len(close) < MIN_BARS:
         return None
     last = float(close[-1])
-    prior_h, prior_l, prior_c = float(high[-2]), float(low[-2]), float(close[-2])
+    # Last completed EOD bar *is* the prior session for the next open.
+    prior_h, prior_l = float(high[-1]), float(low[-1])
     atr = wilder_atr(high, low, close)
     if atr <= 0:
         return None
-    piv = classic_pivots(prior_h, prior_l, prior_c)
-    sma20 = SMA(close, 20)
-    sma50 = SMA(close, 50)
+    piv = classic_pivots(prior_h, prior_l, last)
+    sma20_l = trail_sma(close, 20)
+    sma50_l = trail_sma(close, 50)
     rsi = RSI(close)
     macd_line, _, _ = MACD(close)
-    sma20_l = float(sma20[-1]) if np.isfinite(sma20[-1]) else last
-    sma50_l = float(sma50[-1]) if np.isfinite(sma50[-1]) else last
     rsi_l = float(rsi[-1]) if np.isfinite(rsi[-1]) else 50.0
     macd_l = float(macd_line[-1]) if np.isfinite(macd_line[-1]) else 0.0
     sh, sl = swing_levels(high, low)
@@ -226,29 +233,33 @@ def build_card(
         compact.append(lv)
     levels = compact[:10]
 
-    ideas: list[dict] = []
-    n = 1
+    longs: list[dict] = []
+    shorts: list[dict] = []
     if bias in ("LONG", "NEUTRAL"):
         fade_entry = piv["s1"] if sl is None or abs(piv["s1"] - last) < abs(sl - last) else sl
-        idea = _idea(n, "LONG", fade_entry, piv["pp"] if piv["pp"] > fade_entry else fade_entry + atr, fade_entry - 0.75 * atr, "fade S1", last, atr)
+        idea = _idea(1, "LONG", fade_entry, piv["pp"] if piv["pp"] > fade_entry else fade_entry + atr, fade_entry - 0.75 * atr, "fade S1", last, atr)
         if idea:
-            ideas.append(idea)
-            n += 1
-        brk = _idea(n, "LONG", prior_h, prior_h + atr, prior_h - 0.5 * atr, "break prior high", last, atr)
+            longs.append(idea)
+        brk = _idea(1, "LONG", prior_h, prior_h + atr, prior_h - 0.5 * atr, "break prior high", last, atr)
         if brk:
-            ideas.append(brk)
-            n += 1
+            longs.append(brk)
     if bias in ("SHORT", "NEUTRAL"):
         fade_entry = piv["r1"] if sh is None or abs(piv["r1"] - last) < abs(sh - last) else sh
-        idea = _idea(n, "SHORT", fade_entry, piv["pp"] if piv["pp"] < fade_entry else fade_entry - atr, fade_entry + 0.75 * atr, "fade R1", last, atr)
+        idea = _idea(1, "SHORT", fade_entry, piv["pp"] if piv["pp"] < fade_entry else fade_entry - atr, fade_entry + 0.75 * atr, "fade R1", last, atr)
         if idea:
-            ideas.append(idea)
-            n += 1
-        brk = _idea(n, "SHORT", prior_l, prior_l - atr, prior_l + 0.5 * atr, "break prior low", last, atr)
+            shorts.append(idea)
+        brk = _idea(1, "SHORT", prior_l, prior_l - atr, prior_l + 0.5 * atr, "break prior low", last, atr)
         if brk:
-            ideas.append(brk)
-
-    ideas = ideas[:2]
+            shorts.append(brk)
+    if bias == "NEUTRAL":
+        ideas = longs[:1] + shorts[:1]
+    elif bias == "LONG":
+        ideas = longs[:2]
+    else:
+        ideas = shorts[:2]
+    for i, idea in enumerate(ideas, start=1):
+        idea["id"] = i
+        idea["label"] = f"idea {i}: {idea['side']} @ {idea['entry']} -> {idea['target']}, stop {idea['stop']}"
 
     scenarios = [
         {"dir": "up", "text": f"IF reclaim above {_px(piv['r1'])} -> {_px(piv['r2'])} extension"},
@@ -344,6 +355,10 @@ def run() -> dict:
             "computed_at": datetime.now(timezone.utc).isoformat(),
         })
 
+    if not rows:
+        logger.warning("Daily bias produced 0 names; leaving previous snapshot")
+        return {"run_id": None, "names": 0, "headline": "no names", "longs": 0, "shorts": 0}
+
     longs = sum(1 for r in rows if r["bias"] == "LONG")
     shorts = sum(1 for r in rows if r["bias"] == "SHORT")
     headline = f"{today.isoformat()} · {len(rows)} names · {longs} LONG / {shorts} SHORT · ATR pivots, paper ideas"
@@ -360,10 +375,10 @@ def run() -> dict:
     existing = fetch_all(sb, "bias_names", "symbol")
     keep = {r["symbol"] for r in rows}
     stale = [r["symbol"] for r in existing if r.get("symbol") not in keep]
-    if rows:
-        sb.table("bias_names").upsert(rows).execute()
-    if stale:
-        sb.table("bias_names").delete().in_("symbol", stale).execute()
+    for i in range(0, len(rows), 40):
+        sb.table("bias_names").upsert(rows[i:i + 40]).execute()
+    for i in range(0, len(stale), 40):
+        sb.table("bias_names").delete().in_("symbol", stale[i:i + 40]).execute()
 
     logger.info("Daily bias wrote %d names · %s", len(rows), headline)
     return {"run_id": run_id, "names": len(rows), "headline": headline, "longs": longs, "shorts": shorts}

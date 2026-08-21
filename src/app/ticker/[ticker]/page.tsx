@@ -261,10 +261,21 @@ export default function TickerPage() {
   }, [ticker]);
 
   useEffect(() => {
-    fetch(`/api/chart/${ticker}?interval=${chartTf}`)
-      .then((r) => r.json())
-      .then(setChart)
-      .catch(() => setChart(null));
+    const ac = new AbortController();
+    fetch(`/api/chart/${ticker}?interval=${chartTf}`, { signal: ac.signal })
+      .then(async (r) => {
+        if (!r.ok) throw new Error("chart");
+        return r.json();
+      })
+      .then((x) => {
+        if (x?.interval && x.interval !== chartTf) setChartTf(x.interval);
+        setChart(x);
+      })
+      .catch((err) => {
+        if (err?.name === "AbortError") return;
+        setChart(null);
+      });
+    return () => ac.abort();
   }, [ticker, chartTf]);
 
   if (loading) {
@@ -287,8 +298,15 @@ export default function TickerPage() {
     { key: "insider", label: "INSIDER" },
   ] as const;
 
+  const overlayOk = (() => {
+    if (!chart || chart.interval !== "5m") return true;
+    const last5 = chart.candles?.[chart.candles.length - 1]?.close;
+    const eod = bias?.last;
+    if (last5 == null || eod == null || eod === 0) return true;
+    return Math.abs(last5 - eod) / Math.abs(eod) < 0.08;
+  })();
   const chartLevels: ChartLevel[] = [];
-  if (bias) {
+  if (bias && overlayOk) {
     for (const lv of bias.levels ?? []) {
       chartLevels.push({
         price: lv.price,
@@ -400,9 +418,17 @@ export default function TickerPage() {
           <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] overflow-hidden">
             <div className="px-3 py-1 text-[10px] font-terminal text-[var(--text-muted)] tracking-widest border-b border-[var(--border)]">
               {ticker} · Daily Bias · {chart?.interval ?? chartTf} · {chart?.source ?? "…"}
-              {chart?.interval === "5m" ? " · live Yahoo 5m, levels from EOD book" : ""}
+              {chart?.interval === "5m"
+                ? overlayOk
+                  ? " · live Yahoo 5m, levels from EOD book"
+                  : " · live Yahoo 5m · EOD levels hidden (price disagree)"
+                : ""}
             </div>
-            <TradingChart candles={chart?.candles ?? []} sma={chart?.sma20} levels={chartLevels} />
+            <TradingChart
+              candles={chart?.candles ?? []}
+              sma={chart?.interval === "1d" ? chart?.sma20 : undefined}
+              levels={chartLevels}
+            />
           </div>
           {bias && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

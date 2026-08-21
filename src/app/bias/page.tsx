@@ -61,6 +61,13 @@ function ideaLevels(n: Name | null): ChartLevel[] {
   return out;
 }
 
+function eodOverlayOk(chart: { interval?: string; candles?: Candle[] } | null, last: number | null) {
+  if (!chart || chart.interval !== "5m") return true;
+  const last5 = chart.candles?.[chart.candles.length - 1]?.close;
+  if (last5 == null || last == null || last === 0) return true;
+  return Math.abs(last5 - last) / Math.abs(last) < 0.08;
+}
+
 export default function BiasPage() {
   const [d, setD] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,27 +77,46 @@ export default function BiasPage() {
 
   useEffect(() => {
     fetch("/api/bias")
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error("bias");
+        return r.json();
+      })
       .then((x) => {
+        if (!Array.isArray(x?.names)) {
+          setD(null);
+          return;
+        }
         setD(x);
-        setSel((prev) => prev || x?.names?.[0]?.ticker || null);
+        setSel((prev) => prev || x.names[0]?.ticker || null);
       })
       .catch(() => setD(null))
       .finally(() => setLoading(false));
   }, []);
 
-  const name = d?.names.find((n) => n.ticker === sel) ?? d?.names[0] ?? null;
+  const name = d?.names?.find((n) => n.ticker === sel) ?? d?.names?.[0] ?? null;
 
   useEffect(() => {
     if (!name?.ticker) return;
+    const ac = new AbortController();
     setChart(null);
-    fetch(`/api/chart/${name.ticker}?interval=${interval}`)
-      .then((r) => r.json())
-      .then(setChart)
-      .catch(() => setChart(null));
+    fetch(`/api/chart/${name.ticker}?interval=${interval}`, { signal: ac.signal })
+      .then(async (r) => {
+        if (!r.ok) throw new Error("chart");
+        return r.json();
+      })
+      .then((x) => {
+        if (x?.interval && x.interval !== interval) setInterval(x.interval);
+        setChart(x);
+      })
+      .catch((err) => {
+        if (err?.name === "AbortError") return;
+        setChart(null);
+      });
+    return () => ac.abort();
   }, [name?.ticker, interval]);
 
-  const levels = useMemo(() => ideaLevels(name), [name]);
+  const overlayOk = eodOverlayOk(chart, name?.last ?? null);
+  const levels = useMemo(() => (overlayOk ? ideaLevels(name) : []), [name, overlayOk]);
   const s = d?.summary;
 
   return (
@@ -194,9 +220,17 @@ export default function BiasPage() {
               <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] overflow-hidden">
                 <div className="px-3 py-1 text-[10px] font-terminal text-[var(--text-muted)] tracking-widest border-b border-[var(--border)]">
                   {name.ticker} · Daily Bias · {chart?.interval ?? interval} · {chart?.source ?? "…"}
-                  {chart?.interval === "5m" ? " · live Yahoo 5m, levels from EOD book" : ""}
+                  {chart?.interval === "5m"
+                    ? overlayOk
+                      ? " · live Yahoo 5m, levels from EOD book"
+                      : " · live Yahoo 5m · EOD levels hidden (price disagree)"
+                    : ""}
                 </div>
-                <TradingChart candles={chart?.candles ?? []} sma={chart?.sma20} levels={levels} />
+                <TradingChart
+                  candles={chart?.candles ?? []}
+                  sma={chart?.interval === "1d" ? chart?.sma20 : undefined}
+                  levels={levels}
+                />
               </div>
 
               <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] p-3">
