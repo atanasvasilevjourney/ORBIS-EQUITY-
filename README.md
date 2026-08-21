@@ -119,7 +119,7 @@ Builds a live implied-vol map from **yfinance option chains** (free, no API key)
 python -m pipeline.compute.skew_map
 ```
 
-Surfaced at `/skew` and `GET /api/skew`. Yahoo mids, not a calibrated vol model. Not investment advice.
+Surfaced at `/skew` and `GET /api/skew`. IV is inverted from listed last/mid (Yahoo's `impliedVolatility` is unusable when bid/ask are 0). Not a calibrated vol model. Not investment advice.
 
 ## Factor Scores
 

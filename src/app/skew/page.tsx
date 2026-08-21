@@ -484,7 +484,7 @@ export default function SkewPage() {
       </div>
 
       <p className="text-[10px] text-[var(--text-muted)] font-terminal mt-3">
-        Yahoo listed mids → impliedVolatility. Skew uses OTM puts below spot and OTM calls above.
+        Yahoo listed last/mid inverted to IV (Yahoo's impliedVolatility column is a placeholder when bid/ask are 0). Skew uses OTM puts below spot and OTM calls above.
         10% OTM is a 25-delta-style proxy, not an interpolated 25Δ. Weekend vol isolates Friday→Monday calendar variance.
         Not a calibrated vol model and not investment advice.
       </p>

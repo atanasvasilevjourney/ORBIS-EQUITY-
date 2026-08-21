@@ -1,16 +1,18 @@
 """Listed option chains via yfinance — free, no API key.
 
 Pulls every near-term expiry for a ticker, concatenates calls/puts, and
-filters stale / placeholder IVs so the skew-map compute step can slice
-IV vs strike, term structure, and a strike × DTE surface.
+inverts Black-Scholes IV from listed last (or bid/ask mid). Yahoo's
+`impliedVolatility` column is a 1/32-style placeholder whenever the
+session is closed (bid=ask=0), so we never use it as the map.
 
-Yahoo's `impliedVolatility` is already inverted from the listed mid; we
-do not re-solve Black-Scholes. Weekend-vol math lives in
+0DTE rows are skipped — those prints are from the prior session with
+near-zero calendar time. Weekend-vol math lives in
 `pipeline.compute.skew_map`.
 """
 from __future__ import annotations
 
 import logging
+import math
 import os
 import time
 from datetime import date, datetime, timezone
@@ -30,9 +32,11 @@ DEFAULT_TICKERS = [
 MAX_EXPIRIES = 10
 EXPIRY_DELAY = 0.35
 TICKER_DELAY = 0.8
-MIN_IV = 0.03
+MIN_IV = 0.04
 MAX_IV = 2.5
 STALE_DAYS = 7
+MIN_PRICE = 0.05  # skip sub-nickel last/mid (junk inversion)
+RATE = 0.0        # BS rate; IV map is relative, not a funding model
 SLICE_LO, SLICE_HI = 0.80, 1.20
 MONEYNESS_BUCKETS = (0.80, 0.85, 0.90, 0.95, 0.975, 1.00, 1.025, 1.05, 1.10, 1.15, 1.20)
 OTM_PCT = 0.10  # 10% OTM put/call as a 25-delta-style proxy
@@ -66,26 +70,108 @@ def _spot(tk: yf.Ticker, symbol: str) -> float | None:
     return None
 
 
-def _clean_side(df: pd.DataFrame, option_type: str, today: date) -> pd.DataFrame:
+def _norm_cdf(x: float) -> float:
+    return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+
+
+def bs_price(spot: float, strike: float, t_years: float, sig: float, cp: str, rate: float = RATE) -> float:
+    if t_years <= 0 or sig <= 0 or spot <= 0 or strike <= 0:
+        return max(spot - strike, 0.0) if cp == "C" else max(strike - spot, 0.0)
+    vsT = sig * math.sqrt(t_years)
+    d1 = (math.log(spot / strike) + (rate + 0.5 * sig * sig) * t_years) / vsT
+    d2 = d1 - vsT
+    df = math.exp(-rate * t_years)
+    if cp == "C":
+        return spot * _norm_cdf(d1) - strike * df * _norm_cdf(d2)
+    return strike * df * _norm_cdf(-d2) - spot * _norm_cdf(-d1)
+
+
+def implied_vol(price: float, spot: float, strike: float, t_years: float, cp: str) -> float | None:
+    """Bisection IV from a listed last or mid. None if no time value / no bracket."""
+    if price is None or not np.isfinite(price) or price < MIN_PRICE:
+        return None
+    if t_years <= 0 or spot <= 0 or strike <= 0:
+        return None
+    intrinsic = max(spot - strike, 0.0) if cp == "C" else max(strike - spot, 0.0)
+    if price <= intrinsic + 0.01:
+        return None
+    lo, hi = 1e-4, 5.0
+    p_lo = bs_price(spot, strike, t_years, lo, cp)
+    p_hi = bs_price(spot, strike, t_years, hi, cp)
+    if not (p_lo <= price <= p_hi):
+        return None
+    for _ in range(48):
+        mid = 0.5 * (lo + hi)
+        px = bs_price(spot, strike, t_years, mid, cp)
+        if px > price:
+            hi = mid
+        else:
+            lo = mid
+    sig = 0.5 * (lo + hi)
+    if sig < MIN_IV or sig > MAX_IV:
+        return None
+    return sig
+
+
+def _mark_price(bid: float, ask: float, last: float) -> float | None:
+    if np.isfinite(bid) and np.isfinite(ask) and bid > 0 and ask > bid:
+        return 0.5 * (bid + ask)
+    if np.isfinite(last) and last >= MIN_PRICE:
+        return float(last)
+    return None
+
+
+def _t_years(exp_d: date, last_trade) -> float:
+    """Calendar time used to invert the print — last-trade date vs expiry, not today.
+
+    Premarket / weekend snapshots still have Thursday lasts; using *today* as T
+    would inflate 0DTE IV. Floor at a quarter-session so T is never zero.
+    """
+    if last_trade is None or (isinstance(last_trade, float) and np.isnan(last_trade)) or pd.isna(last_trade):
+        days = (exp_d - date.today()).days
+    else:
+        try:
+            ltd = pd.Timestamp(last_trade).date()
+            days = (exp_d - ltd).days
+        except Exception:
+            days = (exp_d - date.today()).days
+    return max(float(days), 0.25) / 365.0
+
+
+def _clean_side(df: pd.DataFrame, option_type: str, today: date, spot: float, exp_d: date) -> pd.DataFrame:
     if df is None or df.empty:
         return pd.DataFrame()
     out = df.copy()
     out["optionType"] = option_type
-    out["impliedVolatility"] = pd.to_numeric(out.get("impliedVolatility"), errors="coerce")
     out["strike"] = pd.to_numeric(out.get("strike"), errors="coerce")
     out["volume"] = pd.to_numeric(out.get("volume"), errors="coerce").fillna(0)
     out["openInterest"] = pd.to_numeric(out.get("openInterest"), errors="coerce").fillna(0)
     out["bid"] = pd.to_numeric(out.get("bid"), errors="coerce")
     out["ask"] = pd.to_numeric(out.get("ask"), errors="coerce")
-    iv = out["impliedVolatility"]
-    out = out[iv.notna() & (iv >= MIN_IV) & (iv <= MAX_IV) & out["strike"].notna() & (out["strike"] > 0)]
+    out["lastPrice"] = pd.to_numeric(out.get("lastPrice"), errors="coerce")
+    out["yfIv"] = pd.to_numeric(out.get("impliedVolatility"), errors="coerce")
     if "lastTradeDate" in out.columns:
         ltd = pd.to_datetime(out["lastTradeDate"], utc=True, errors="coerce")
         cutoff = pd.Timestamp(today, tz="UTC") - pd.Timedelta(days=STALE_DAYS)
         stale = ltd.notna() & (ltd < cutoff)
         dead = (out["volume"] <= 0) & (out["openInterest"] <= 0)
-        out = out[~(stale & dead)]
-    return out.reset_index(drop=True)
+        out = out[~(stale & dead)].copy()
+        out["lastTradeDate"] = ltd.loc[out.index]
+    else:
+        out["lastTradeDate"] = pd.NaT
+
+    out = out[out["strike"].notna() & (out["strike"] > 0)]
+    ivs: list[float | None] = []
+    for row in out.itertuples(index=False):
+        mark = _mark_price(float(row.bid) if row.bid is not None else float("nan"),
+                           float(row.ask) if row.ask is not None else float("nan"),
+                           float(row.lastPrice) if row.lastPrice is not None else float("nan"))
+        t_y = _t_years(exp_d, getattr(row, "lastTradeDate", None))
+        iv = implied_vol(mark, spot, float(row.strike), t_y, option_type) if mark is not None else None
+        ivs.append(iv)
+    out["impliedVolatility"] = ivs
+    out = out[out["impliedVolatility"].notna()].reset_index(drop=True)
+    return out
 
 
 def _interp_iv(df: pd.DataFrame, target: float) -> float | None:
@@ -199,10 +285,10 @@ def fetch_symbol(symbol: str, today: date | None = None) -> dict[str, Any] | Non
         except ValueError:
             continue
         dte = (exp_d - today).days
-        if dte < 0:
+        if dte < 1:
             continue
-        calls = _clean_side(chain.calls, "C", today)
-        puts = _clean_side(chain.puts, "P", today)
+        calls = _clean_side(chain.calls, "C", today, spot, exp_d)
+        puts = _clean_side(chain.puts, "P", today, spot, exp_d)
         if calls.empty and puts.empty:
             continue
 
