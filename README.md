@@ -19,6 +19,7 @@ Systematic equity research terminal — momentum screener, multi-factor fundamen
 7. **Opening Range Breakout** — premarket/open gappers, 15-minute OR, long-only 1R paper brackets
 8. **Stock Analysis** — technical MA/MACD/RSI/regression plus fundamental composite & F-Score
 9. **Quantropy** — risk, CAPM, Altman Z, Markowitz allocation (port of the Quantropy/Matilda library)
+10. **Daily Bias** — TradingView-style chart, key levels, paper trade ideas (ANALYZE vote + ATR pivots)
 
 ## Setup
 
@@ -52,6 +53,7 @@ supabase/migrations/008_skew_map.sql
 supabase/migrations/009_orb.sql
 supabase/migrations/010_analysis.sql
 supabase/migrations/011_quantropy.sql
+supabase/migrations/012_daily_bias.sql
 ```
 
 ### Web
@@ -83,7 +85,7 @@ Optional: `LSE_DATA_API_URL` (defaults to `https://data-api.londonstrategicedge.
 Without these secrets the nightly pipeline will fail immediately with a clear error.
 
 Runs nightly via `.github/workflows/nightly-pipeline.yml`:
-universe → prices → fundamentals → financial reports → trend radar → F-Score → factor scores → portfolio loop → skew map → opening range → stock analysis → Quantropy → earnings → news → clinical trials → health signals
+universe → prices → fundamentals → financial reports → trend radar → F-Score → factor scores → portfolio loop → skew map → opening range → stock analysis → Quantropy → daily bias → earnings → news → clinical trials → health signals
 
 ## Health Sector (free data, no API key)
 
@@ -171,6 +173,24 @@ python -m pipeline.compute.quantropy
 ```
 
 Surfaced at `/quantropy` and `GET /api/quantropy`. Paper analytics — not a broker, not investment advice.
+
+## Daily Bias (chart + paper ideas)
+
+Annotated tape for a selected name, in the style of a daily-bias card:
+
+- **Chart:** TradingView `lightweight-charts` candlesticks (daily from `prices_daily`, optional live 5m from Yahoo)
+- **Levels:** classic floor pivots from the prior session, swing high/low, SMA 20/50, prior high/low, OR high/low when the ORB desk has them
+- **Bias:** ANALYZE majority vote (fallback: close vs SMA50 + RSI + MACD)
+- **Ideas:** fade S1/R1 and break of prior high/low, stop ≥ 0.75×ATR, skip if R:R &lt; 1.2
+- **Range:** last close ± 0.75×ATR, with IF reclaim / IF breakdown scenarios
+
+No GEX, no absorption lots, no MaxSell walls — this book does not have that tape.
+
+```bash
+python -m pipeline.compute.daily_bias
+```
+
+Surfaced at `/bias`, ticker **CHART** tab, `GET /api/bias`, and `GET /api/chart/[ticker]`. Paper ideas — not live orders, not investment advice.
 
 ## Factor Scores
 

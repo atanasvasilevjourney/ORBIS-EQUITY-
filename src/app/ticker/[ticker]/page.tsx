@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { BiasChip } from "@/components/scoreboard/BiasChip";
 import { AgreementDots } from "@/components/scoreboard/AgreementDots";
+import { TradingChart, type Candle, type ChartLevel } from "@/components/chart/TradingChart";
 
 type TickerData = {
   radar: any;
@@ -234,9 +235,12 @@ export default function TickerPage() {
   const params = useParams();
   const ticker = params.ticker as string;
   const [data, setData] = useState<TickerData | null>(null);
-  const [tab, setTab] = useState<"swing" | "fundamentals" | "earnings" | "insider">("swing");
+  const [tab, setTab] = useState<"chart" | "swing" | "fundamentals" | "earnings" | "insider">("chart");
   const [loading, setLoading] = useState(true);
   const [upcomingEarnings, setUpcomingEarnings] = useState(0);
+  const [bias, setBias] = useState<any>(null);
+  const [chartTf, setChartTf] = useState<"1d" | "5m">("1d");
+  const [chart, setChart] = useState<{ candles: Candle[]; sma20: (number | null)[]; source: string; interval: string } | null>(null);
 
   useEffect(() => {
     fetch(`/api/ticker/${ticker}`)
@@ -249,7 +253,30 @@ export default function TickerPage() {
       .then((r) => r.json())
       .then((d) => setUpcomingEarnings(d?.summary?.upcoming ?? 0))
       .catch(() => {});
+
+    fetch("/api/bias")
+      .then((r) => r.json())
+      .then((d) => setBias((d?.names ?? []).find((n: { ticker: string }) => n.ticker === ticker) ?? null))
+      .catch(() => setBias(null));
   }, [ticker]);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    fetch(`/api/chart/${ticker}?interval=${chartTf}`, { signal: ac.signal })
+      .then(async (r) => {
+        if (!r.ok) throw new Error("chart");
+        return r.json();
+      })
+      .then((x) => {
+        if (x?.interval && x.interval !== chartTf) setChartTf(x.interval);
+        setChart(x);
+      })
+      .catch((err) => {
+        if (err?.name === "AbortError") return;
+        setChart(null);
+      });
+    return () => ac.abort();
+  }, [ticker, chartTf]);
 
   if (loading) {
     return <div className="px-4 py-12 text-center text-[var(--text-muted)] font-terminal">Loading {ticker}...</div>;
@@ -264,11 +291,44 @@ export default function TickerPage() {
     : [false, false, false, false, false];
 
   const tabs = [
+    { key: "chart", label: "CHART" },
     { key: "swing", label: "SWING" },
     { key: "fundamentals", label: "FUNDAMENTALS" },
     { key: "earnings", label: "EARNINGS" },
     { key: "insider", label: "INSIDER" },
   ] as const;
+
+  const overlayOk = (() => {
+    if (!chart || chart.interval !== "5m") return true;
+    const last5 = chart.candles?.[chart.candles.length - 1]?.close;
+    const eod = bias?.last;
+    if (last5 == null || eod == null || eod === 0) return true;
+    return Math.abs(last5 - eod) / Math.abs(eod) < 0.08;
+  })();
+  const chartLevels: ChartLevel[] = [];
+  if (bias && overlayOk) {
+    for (const lv of bias.levels ?? []) {
+      chartLevels.push({
+        price: lv.price,
+        title: lv.label,
+        color: lv.kind === "or" ? "var(--accent-info)" : "var(--text-muted)",
+        dashed: lv.kind === "ma" || lv.kind === "pivot",
+      });
+    }
+    for (const idea of bias.ideas ?? []) {
+      chartLevels.push({ price: idea.entry, title: `idea ${idea.id} ${idea.side} @ ${idea.entry}`, color: "var(--accent-warning)" });
+      chartLevels.push({
+        price: idea.target,
+        title: `idea ${idea.id} target ${idea.target}`,
+        color: idea.side === "LONG" ? "var(--accent-bull)" : "var(--accent-bear)",
+      });
+      chartLevels.push({
+        price: idea.stop,
+        title: `idea ${idea.id} stop ${idea.stop}`,
+        color: idea.side === "LONG" ? "var(--accent-bear)" : "var(--accent-bull)",
+      });
+    }
+  }
 
   return (
     <div className="px-4 py-6">
@@ -331,6 +391,78 @@ export default function TickerPage() {
       </div>
 
       {/* Tab content */}
+      {tab === "chart" && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-terminal" style={{
+              color: bias?.bias === "LONG" ? "var(--accent-bull)" : bias?.bias === "SHORT" ? "var(--accent-bear)" : "var(--text-muted)",
+            }}>
+              {bias ? `Bias: ${bias.bias} · Confidence: ${bias.confidence}` : "No daily-bias snapshot — run python -m pipeline.compute.daily_bias"}
+            </div>
+            <div className="flex gap-1">
+              {(["1d", "5m"] as const).map((tf) => (
+                <button
+                  key={tf}
+                  onClick={() => setChartTf(tf)}
+                  className={`px-2 py-1 text-[10px] font-terminal rounded border ${
+                    chartTf === tf
+                      ? "border-[var(--accent-info)] text-[var(--accent-info)] bg-[var(--badge-bg)]"
+                      : "border-[var(--border)] text-[var(--text-muted)]"
+                  }`}
+                >
+                  {tf.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] overflow-hidden">
+            <div className="px-3 py-1 text-[10px] font-terminal text-[var(--text-muted)] tracking-widest border-b border-[var(--border)]">
+              {ticker} · Daily Bias · {chart?.interval ?? chartTf} · {chart?.source ?? "…"}
+              {chart?.interval === "5m"
+                ? overlayOk
+                  ? " · live Yahoo 5m, levels from EOD book"
+                  : " · live Yahoo 5m · EOD levels hidden (price disagree)"
+                : ""}
+            </div>
+            <TradingChart
+              candles={chart?.candles ?? []}
+              sma={chart?.interval === "1d" ? chart?.sma20 : undefined}
+              levels={chartLevels}
+            />
+          </div>
+          {bias && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] p-3">
+                <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">TRADE IDEAS</h2>
+                {(bias.ideas ?? []).length === 0 ? (
+                  <p className="text-xs text-[var(--text-muted)] font-terminal">No idea cleared the 1.2R filter.</p>
+                ) : (
+                  <ul className="space-y-1 text-sm font-terminal">
+                    {bias.ideas.map((i: { id: number; side: string; label: string; kind: string; rr: number }) => (
+                      <li key={i.id} style={{ color: i.side === "LONG" ? "var(--accent-bull)" : "var(--accent-bear)" }}>
+                        {i.label} <span className="text-[var(--text-muted)]">({i.kind} · {i.rr.toFixed(1)}R)</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="text-xs font-terminal text-[var(--text-secondary)] mt-3">
+                  Expected range {bias.rangeLo} – {bias.rangeHi}
+                </p>
+                {(bias.scenarios ?? []).map((sc: { dir: string; text: string }) => (
+                  <p key={sc.text} className="text-xs font-terminal text-[var(--text-secondary)]">
+                    {sc.dir === "up" ? "↑" : "↓"} {sc.text}
+                  </p>
+                ))}
+              </div>
+              <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] p-3">
+                <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">RATIONALE</h2>
+                <p className="text-xs font-terminal text-[var(--text-secondary)] leading-relaxed">{bias.rationale}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {tab === "swing" && r && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {[
@@ -438,6 +570,9 @@ export default function TickerPage() {
         </Link>
         <Link href={`/earnings-news?ticker=${ticker}`} className="text-xs font-terminal text-[var(--accent-info)] hover:underline">
           Earnings & News
+        </Link>
+        <Link href="/bias" className="text-xs font-terminal text-[var(--accent-info)] hover:underline">
+          Daily Bias
         </Link>
       </div>
     </div>

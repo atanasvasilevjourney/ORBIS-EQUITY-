@@ -89,6 +89,11 @@ if psql_su "$DBNAME" -tAc "SELECT to_regclass('public.universe_members')" | grep
     psql_su "$DBNAME" -f supabase/migrations/011_quantropy.sql >/dev/null
     psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
   fi
+  if ! psql_su "$DBNAME" -tAc "SELECT to_regclass('public.bias_names')" | grep -q bias_names; then
+    echo "   applying supabase/migrations/012_daily_bias.sql"
+    psql_su "$DBNAME" -f supabase/migrations/012_daily_bias.sql >/dev/null
+    psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
+  fi
 else
   for f in supabase/migrations/*.sql; do
     echo "   applying $f"
@@ -221,6 +226,10 @@ fi
 Q_COUNT="$(psql_su "$DBNAME" -tAc 'SELECT count(*) FROM quantropy_names' | tr -d '[:space:]')"
 if [ "${Q_COUNT:-0}" = "0" ]; then
   "$REPO_DIR/.venv/bin/python" -m pipeline.compute.quantropy || true
+fi
+BIAS_COUNT="$(psql_su "$DBNAME" -tAc 'SELECT count(*) FROM bias_names' | tr -d '[:space:]')"
+if [ "${BIAS_COUNT:-0}" = "0" ]; then
+  "$REPO_DIR/.venv/bin/python" -m pipeline.compute.daily_bias || true
 fi
 
 echo "Install complete."
