@@ -166,8 +166,8 @@ function LineChart({
 }
 
 function Heatmap({ cells }: { cells: SurfaceCell[] }) {
-  const dtes = [...new Set(cells.map((c) => c.dte))].sort((a, b) => a - b);
-  const ks = [...new Set(cells.map((c) => c.kPct))].sort((a, b) => a - b);
+  const dtes = Array.from(new Set(cells.map((c) => c.dte))).sort((a, b) => a - b);
+  const ks = Array.from(new Set(cells.map((c) => c.kPct))).sort((a, b) => a - b);
   if (!dtes.length || !ks.length) {
     return <div className="text-xs text-[var(--text-muted)] font-terminal px-3 py-8 text-center">No surface</div>;
   }
