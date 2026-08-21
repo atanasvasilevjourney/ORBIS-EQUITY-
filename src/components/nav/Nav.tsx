@@ -11,6 +11,7 @@ const NAV_LINKS = [
   { href: "/orb", label: "ORB" },
   { href: "/skew", label: "SKEW" },
   { href: "/analysis", label: "ANALYZE" },
+  { href: "/bias", label: "BIAS" },
   { href: "/quantropy", label: "QUANT" },
   { href: "/fundamentals", label: "FUNDAMENTALS" },
   { href: "/health", label: "HEALTH" },

@@ -28,6 +28,8 @@ type DashData = {
   analysisSells: number;
   quantNames: number;
   quantSharpe: number | null;
+  biasLongs: number;
+  biasShorts: number;
 };
 
 export default function Home() {
@@ -43,7 +45,8 @@ export default function Home() {
       fetch("/api/orb").then((r) => r.json()).catch(() => null),
       fetch("/api/analysis").then((r) => r.json()).catch(() => null),
       fetch("/api/quantropy").then((r) => r.json()).catch(() => null),
-    ]).then(([summary, fund, earnings, skew, orb, analysis, quant]) => {
+      fetch("/api/bias").then((r) => r.json()).catch(() => null),
+    ]).then(([summary, fund, earnings, skew, orb, analysis, quant, bias]) => {
       const rows = fund?.rows ?? [];
       const composites = rows.filter((r: { compositeScore: number | null }) => r.compositeScore != null);
       setD({
@@ -73,6 +76,8 @@ export default function Home() {
         analysisSells: analysis?.summary?.sells ?? 0,
         quantNames: quant?.summary?.names ?? 0,
         quantSharpe: quant?.summary?.maxSharpe ?? null,
+        biasLongs: bias?.summary?.longs ?? 0,
+        biasShorts: bias?.summary?.shorts ?? 0,
       });
     }).finally(() => setLoading(false));
   }, []);
@@ -181,6 +186,17 @@ export default function Home() {
         { label: "Names", value: d.quantNames ? String(d.quantNames) : "—", color: "" },
         { label: "Max Sh", value: d.quantSharpe == null ? "—" : d.quantSharpe.toFixed(2), color: "var(--accent-warning)" },
         { label: "MPT", value: "on", color: "var(--accent-info)" },
+      ] : null,
+    },
+    {
+      href: "/bias",
+      title: "DAILY BIAS",
+      badge: "MODULE 10",
+      desc: "TradingView-style tape, key levels, and paper trade ideas from ANALYZE + ATR pivots",
+      stats: d ? [
+        { label: "Long", value: String(d.biasLongs), color: "var(--accent-bull)" },
+        { label: "Short", value: String(d.biasShorts), color: "var(--accent-bear)" },
+        { label: "Chart", value: "TV", color: "var(--accent-info)" },
       ] : null,
     },
   ];
