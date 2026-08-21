@@ -37,7 +37,7 @@ type NameRow = {
   rationale: string | null;
 };
 
-export function mapBiasName(r: NameRow) {
+function mapBiasName(r: NameRow) {
   return {
     ticker: r.symbol,
     companyName: r.company_name ?? "",
