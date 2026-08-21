@@ -19,6 +19,9 @@ type DashData = {
   earningsMisses: number;
   earningsUpcoming: number;
   newsCount: number;
+  skewNames: number;
+  skewAtm: number | null;
+  skewWeekend: string | null;
 };
 
 export default function Home() {
@@ -30,7 +33,8 @@ export default function Home() {
       fetch("/api/summary").then((r) => r.json()).catch(() => null),
       fetch("/api/fundamentals?limit=1000").then((r) => r.json()).catch(() => null),
       fetch("/api/earnings-news?days=30").then((r) => r.json()).catch(() => null),
-    ]).then(([summary, fund, earnings]) => {
+      fetch("/api/skew").then((r) => r.json()).catch(() => null),
+    ]).then(([summary, fund, earnings, skew]) => {
       const rows = fund?.rows ?? [];
       const composites = rows.filter((r: { compositeScore: number | null }) => r.compositeScore != null);
       setD({
@@ -51,6 +55,9 @@ export default function Home() {
         earningsMisses: earnings?.summary?.misses ?? 0,
         earningsUpcoming: earnings?.summary?.upcoming ?? 0,
         newsCount: earnings?.summary?.totalNews ?? 0,
+        skewNames: skew?.summary?.names ?? 0,
+        skewAtm: skew?.summary?.avgAtmIv ?? null,
+        skewWeekend: skew?.summary?.weekendRichest ?? null,
       });
     }).finally(() => setLoading(false));
   }, []);
@@ -115,6 +122,17 @@ export default function Home() {
         { label: "Beats", value: String(d.earningsBeats), color: "var(--accent-bull)" },
         { label: "Misses", value: String(d.earningsMisses), color: "var(--accent-bear)" },
         { label: "Upcoming", value: String(d.earningsUpcoming), color: "var(--accent-info)" },
+      ] : null,
+    },
+    {
+      href: "/skew",
+      title: "SKEW MAP",
+      badge: "MODULE 6",
+      desc: "Listed IV surface — skew, term, weekend vol from option chains",
+      stats: d ? [
+        { label: "Names", value: d.skewNames ? String(d.skewNames) : "—", color: "" },
+        { label: "Avg ATM", value: d.skewAtm == null ? "—" : `${(d.skewAtm * 100).toFixed(0)}%`, color: "var(--accent-info)" },
+        { label: "Wknd", value: d.skewWeekend ?? "—", color: "var(--accent-warning)" },
       ] : null,
     },
   ];
