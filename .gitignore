@@ -11,3 +11,6 @@ dist/
 build/
 .vercel/
 data/cold/*.parquet
+test-results/
+playwright-report/
+.pytest_cache/

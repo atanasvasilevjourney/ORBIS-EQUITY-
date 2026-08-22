@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
-import { createMockSupabase } from "./helpers/mockSupabase";
+import { createMockSupabase, type QueryResult } from "./helpers/mockSupabase";
 
 const mockCreateServerClient = vi.fn();
 

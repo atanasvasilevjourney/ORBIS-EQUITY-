@@ -2,7 +2,7 @@
  * Mock Supabase client builder for API route tests.
  * Supabase query builders are thenable — routes await them directly.
  */
-type QueryResult = { data: unknown; error: unknown; count?: number };
+export type QueryResult = { data: unknown; error: unknown; count?: number };
 
 function buildChain(getResult: () => QueryResult) {
   const chain: Record<string, unknown> = {};
