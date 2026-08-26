@@ -160,10 +160,10 @@ Latest qualified sample (2023→2026, rank≥60, conv≥4):
 |-------|--------|----------|---------|--------|----------|
 | Leave GREEN (no regime/ATR) | 90 | 33% | +0.15% | −0.74% | 12d |
 | Until RED (no regime/ATR) | 42 | 55% | +2.38% | +2.84% | 50d |
-| Until RED + **regime gate + ATR stop** | **37** | **49%** | **+1.63%** | −0.69% | **41d** |
-| **sma20_trail + timing + cooldown** | *(re-run after this PR)* | | | | |
+| Until RED + **regime gate + ATR stop** | 37 | 49% | +1.63% | −0.69% | 41d |
+| **sma20_trail + regime + too_late + cooldown** | **56** | **57%** | **+1.44%** | **+0.79%** | **22d** |
 
-Takeaway: gate new risk with SPY regime + ADX + too_late; size with ATR; prefer wide SMA20 trail (or exit-on-RED) over exit-on-GREY.
+Takeaway: gate new risk with SPY regime + ADX + too_late; size with ATR; prefer wide SMA20 trail (33/56 trail exits in the gated sample) over exit-on-GREY. Many alert bars still land as `wait_pullback` — optional `--skip-wait-pullback` tightens further.
 
 ## What we explicitly skip
 
