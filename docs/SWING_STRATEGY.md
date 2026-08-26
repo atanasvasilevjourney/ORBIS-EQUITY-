@@ -165,6 +165,27 @@ Latest qualified sample (2023→2026, rank≥60, conv≥4):
 
 Takeaway: gate new risk with SPY regime + ADX + too_late; size with ATR; prefer wide SMA20 trail (33/56 trail exits in the gated sample) over exit-on-GREY. Many alert bars still land as `wait_pullback` — optional `--skip-wait-pullback` tightens further.
 
+## EOD email alert digest
+
+After nightly Trend Radar compute, `pipeline.notify.alert_digest` emails today's
+GREEN flips that pass discretionary filters (default rank≥60, conv≥4, not `too_late`).
+
+```bash
+# Preview without sending
+PYTHONPATH=/workspace python -m pipeline.notify.alert_digest --dry-run
+
+# Send (needs Resend + mailbox)
+export RESEND_API_KEY=re_...
+export ALERT_EMAIL=you@example.com
+# Optional: ALERT_EMAIL_FROM, APP_BASE_URL, ALERT_SKIP_WAIT_PULLBACK=true
+PYTHONPATH=/workspace python -m pipeline.notify.alert_digest
+```
+
+GitHub Actions (`nightly-pipeline` → `compute-signals`) runs this after
+`trend_radar`. Set repo secrets `RESEND_API_KEY`, `ALERT_EMAIL`, and optionally
+`ALERT_EMAIL_FROM`. Without those secrets the step logs and skips send (pipeline
+still succeeds).
+
 ## What we explicitly skip
 
 - Per-ticker Optuna in production
