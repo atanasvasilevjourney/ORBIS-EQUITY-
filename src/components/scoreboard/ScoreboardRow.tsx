@@ -16,6 +16,7 @@ export type ScreenerRow = {
   z52: number;
   breakout: boolean;
   volumeConfirmed: boolean;
+  kamaRegime?: number;
   convergence: number;
   stateChangedAt: string | null;
   price: number | null;
@@ -49,10 +50,10 @@ export function ScoreboardRow({ row }: { row: ScreenerRow }) {
     row.z52 > -0.10,
     row.breakout,
     row.volumeConfirmed,
+    (row.kamaRegime ?? 0) > 0,
   ];
 
-  // Sector breadth placeholder (will be computed from full data)
-  const sectorCtx = `${row.convergence}/5`;
+  const sectorCtx = `${row.convergence}/6`;
   const flip = isRecentFlip(row.stateChangedAt);
 
   return (

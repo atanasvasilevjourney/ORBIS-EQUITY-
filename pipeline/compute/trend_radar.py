@@ -1,6 +1,6 @@
 """Trend Radar compute engine — core signal layer for KovaView.
 
-Reads prices_daily, computes five component signals per ticker, produces
+Reads prices_daily, computes component signals per ticker, produces
 a composite quality_rank (0-100) and state (GREEN/GREY/RED). Writes to
 trend_radar table.
 
@@ -10,6 +10,10 @@ Components:
   3. z_52    — 52-week-high proximity (0 = at high, negative = far below)
   4. breakout — compression detection (ATR contraction) + expansion trigger
   5. volume  — volume confirmation (above 20d average on up-days)
+  6. kama_regime — dual-KAMA trend regime (stability-promoted global params)
+
+Parameter changes (EWMAC spans, KAMA defaults, thresholds) must pass
+pipeline.compute.param_stability before promotion to production constants.
 
 Usage:
     python -m pipeline.compute.trend_radar
@@ -20,13 +24,13 @@ from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
-from dotenv import load_dotenv
-from supabase import create_client
 
-load_dotenv()
+from pipeline.compute.kama_regime import compute_kama_regime
+
 logger = logging.getLogger(__name__)
 
 # ── Signal parameters ────────────────────────────────────────────
+# Promote changes only after param_stability.score_candidates clears them.
 
 MOM_LOOKBACKS = [20, 60, 120]       # days for momentum returns
 EWMAC_FAST = 32                      # fast EMA span (equity-calibrated)
@@ -142,43 +146,69 @@ def compute_volume_confirmation(
     return today_up and vol_above
 
 
-def compute_quality_rank(z_mom: float, f_ewmac: float, z_52: float,
-                         breakout: bool, vol_confirm: bool) -> int:
+def compute_quality_rank(
+    z_mom: float,
+    f_ewmac: float,
+    z_52: float,
+    breakout: bool,
+    vol_confirm: bool,
+    kama_regime: int = 0,
+) -> int:
     """Composite rank 0-100 from component signals.
 
-    Weights: momentum 30, EWMAC 25, 52w-high 20, breakout 15, volume 10.
-    Continuous signals dominate; binary signals are confirmatory.
+    Weights: momentum 26, EWMAC 22, 52w-high 18, breakout 12, volume 8,
+    dual-KAMA regime 14. Continuous signals dominate; regime/binary confirm.
     """
-    # z_mom: [-3, 3] → [0, 30]
-    mom_score = ((z_mom + 3) / 6) * 30
+    # z_mom: [-3, 3] → [0, 26]
+    mom_score = ((z_mom + 3) / 6) * 26
 
-    # f_ewmac: [-3, 3] → [0, 25]
-    ewmac_score = ((f_ewmac + 3) / 6) * 25
+    # f_ewmac: [-3, 3] → [0, 22]
+    ewmac_score = ((f_ewmac + 3) / 6) * 22
 
-    # z_52: [-1, 0] → [0, 20]  (0 = at high = best)
-    high_score = (z_52 + 1) * 20
+    # z_52: [-1, 0] → [0, 18]  (0 = at high = best)
+    high_score = (z_52 + 1) * 18
 
-    # breakout: bool → 0 or 15
-    brk_score = 15.0 if breakout else 0.0
+    # breakout: bool → 0 or 12
+    brk_score = 12.0 if breakout else 0.0
 
-    # volume: bool → 0 or 10
-    vol_score = 10.0 if vol_confirm else 0.0
+    # volume: bool → 0 or 8
+    vol_score = 8.0 if vol_confirm else 0.0
 
-    raw = mom_score + ewmac_score + high_score + brk_score + vol_score
+    # dual-KAMA regime: bullish 14, unknown 7, bearish 0
+    if kama_regime > 0:
+        kama_score = 14.0
+    elif kama_regime < 0:
+        kama_score = 0.0
+    else:
+        kama_score = 7.0
+
+    raw = mom_score + ewmac_score + high_score + brk_score + vol_score + kama_score
     return int(np.clip(round(raw), 0, 100))
 
 
-def determine_state(z_mom: float, f_ewmac: float, z_52: float,
-                    quality_rank: int) -> int:
-    """Determine state: 1=GREEN, 0=GREY, -1=RED."""
-    # Count positive signals
+def determine_state(
+    z_mom: float,
+    f_ewmac: float,
+    z_52: float,
+    quality_rank: int,
+    kama_regime: int = 0,
+) -> int:
+    """Determine state: 1=GREEN, 0=GREY, -1=RED.
+
+    Dual-KAMA is a soft regime gate: GREEN requires non-bearish KAMA;
+    RED is reinforced when KAMA is bearish.
+    """
     positives = sum([
         z_mom > 0,
         f_ewmac > 0,
         z_52 > -0.10,  # within 10% of 52w high
     ])
 
-    if quality_rank >= BULL_THRESHOLD and positives >= 2:
+    if (
+        quality_rank >= BULL_THRESHOLD
+        and positives >= 2
+        and kama_regime >= 0
+    ):
         return 1   # GREEN
     elif quality_rank <= BEAR_THRESHOLD and positives <= 1:
         return -1  # RED
@@ -202,17 +232,34 @@ def process_ticker(df: pd.DataFrame) -> dict | None:
     z_52 = compute_52w_proximity(close)
     breakout = bool(compute_breakout(close, high, low))
     vol_confirm = bool(compute_volume_confirmation(close, volume))
+    kama_regime = int(compute_kama_regime(close))
 
-    rank = compute_quality_rank(z_mom, f_ewmac, z_52, breakout, vol_confirm)
-    state = determine_state(z_mom, f_ewmac, z_52, rank)
+    rank = compute_quality_rank(
+        z_mom, f_ewmac, z_52, breakout, vol_confirm, kama_regime
+    )
+    state = determine_state(z_mom, f_ewmac, z_52, rank, kama_regime)
 
-    # Convergence: how many of 5 components are bullish-aligned
-    # For GREY, this enables "almost-GREEN" detection in the screener
-    bullish_count = sum([z_mom > 0, f_ewmac > 0, z_52 > -0.10, breakout, vol_confirm])
+    # Convergence: how many components are directionally aligned
+    bullish_flags = [
+        z_mom > 0,
+        f_ewmac > 0,
+        z_52 > -0.10,
+        breakout,
+        vol_confirm,
+        kama_regime > 0,
+    ]
+    bullish_count = sum(bullish_flags)
     if state == 1:
         convergence = bullish_count
     elif state == -1:
-        convergence = sum([z_mom < 0, f_ewmac < 0, z_52 < -0.20, not breakout, not vol_confirm])
+        convergence = sum([
+            z_mom < 0,
+            f_ewmac < 0,
+            z_52 < -0.20,
+            not breakout,
+            not vol_confirm,
+            kama_regime < 0,
+        ])
     else:
         convergence = bullish_count  # for GREY: shows how close to GREEN
 
@@ -224,6 +271,7 @@ def process_ticker(df: pd.DataFrame) -> dict | None:
         "z_52": round(z_52, 4),
         "breakout_active": bool(breakout),
         "volume_confirmed": bool(vol_confirm),
+        "kama_regime": kama_regime,
         "convergence_count": int(convergence),
         "daily_state": state,
         "weekly_state": None,  # TODO: compute from weekly prices
@@ -231,6 +279,10 @@ def process_ticker(df: pd.DataFrame) -> dict | None:
 
 
 def main() -> None:
+    from dotenv import load_dotenv
+    from supabase import create_client
+
+    load_dotenv()
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
