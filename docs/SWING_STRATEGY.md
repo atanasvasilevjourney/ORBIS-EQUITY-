@@ -87,6 +87,26 @@ Takeaways:
 - OOS window is a strong equity bull; buyhold leads — KAMA is a risk/regime filter, not an alpha engine alone.
 - Re-run the harness before changing production KAMA constants.
 
+## Radar alert trade backtest
+
+Entries mirror terminal alerts (GREEN_FLIP / breakout). Fills next open; no lookahead.
+
+```bash
+PYTHONPATH=/workspace python -m pipeline.research.radar_alert_backtest \
+  --tickers SPY,AAPL,MSFT,JPM,XOM \
+  --from-date 2023-01-01 --min-rank 60 --min-convergence 4 \
+  --exit-mode red_only --max-trades 12
+```
+
+Latest qualified sample (2023→2026, rank≥60, conv≥4):
+
+| Exit rule | Trades | Win rate | Avg ret | Median | Avg hold |
+|-----------|--------|----------|---------|--------|----------|
+| Leave GREEN (FLIP off) | 90 | 33% | +0.15% | −0.74% | 12d |
+| Hold through GREY until RED | **42** | **55%** | **+2.38%** | **+2.84%** | **50d** |
+
+Takeaway: raw GREEN_FLIP + exit-on-GREY whipsaws. For swing alerts, **enter on GREEN_FLIP (high rank/conv) and exit on RED** (or max hold), not on every GREY dip.
+
 ## What we explicitly skip
 
 - Per-ticker Optuna in production
