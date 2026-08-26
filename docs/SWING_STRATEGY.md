@@ -9,11 +9,12 @@ nightly Optuna.
 
 | Layer | Job | Current implementation |
 |-------|-----|------------------------|
-| Regime | Trade with structure | **Market:** SPY SMA200 + vol pctl (`market_regime`); **Ticker:** dual-KAMA + EWMAC |
+| Regime | Trade with structure | **Market:** SPY SMA200 + vol pctl (`market_regime`); **Ticker:** dual-KAMA + EWMAC + **ADX** |
 | Momentum | Move has legs | `z_mom`, `f_ewmac` |
 | Vol / risk | Risk governor | **ATR×2.5 stop + 1.25% equity risk sizing** (`atr_risk`) |
 | Relative strength | Rank vs universe | **Not yet** — highest priority gap |
-| Entry | Timing | ATR compression breakout + volume confirm; GREEN_FLIP alerts |
+| Entry | Timing | ATR compression breakout + volume; **too_late / wait_pullback** vetoes |
+| Exit | Hold winners | Prefer **SMA20 wide trail** (+ BE@+3%, 2-loss cooldown); else exit-on-RED |
 
 ## Dual-KAMA regime
 
@@ -29,11 +30,31 @@ KAMAs converge; a floating-point cross is brittle. Price vs long KAMA is the
 stable regime gate.
 
 - Feeds `trend_radar.kama_regime` (`1` / `-1` / `0`)
-- Contributes up to 14 points of `quality_rank`
+- Contributes up to 12 points of `quality_rank`
 - GREEN requires non-bearish KAMA (`kama_regime >= 0`)
 
 Defaults (`KAMA_SHORT_N=10`, `KAMA_LONG_N=30`, fast=2, slow=30) are fixed
 production constants. Change them only after stability promotion.
+
+## ADX trend-strength gate (from swing-screener)
+
+`pipeline/compute/adx.py` — Wilder ADX(14) + DI+/DI−:
+
+- Up to **8** quality_rank points when ADX ≥ 25 and DI+ > DI−
+- GREEN requires `adx_ok` (ADX ≥ 20 and DI+ > DI−)
+- Counts toward convergence (`/7`)
+
+## Entry timing vetoes (from swing-screener)
+
+`pipeline/compute/entry_timing.py`:
+
+| Label | Rule (examples) | Effect |
+|-------|-----------------|--------|
+| `too_late` | >50% runup from 50d low, >12% above MA20, RSI+Stoch exhaustion | Demotes GREEN → GREY; alert journal skips |
+| `wait_pullback` | >30% runup, >6% above MA20, RSI/Stoch overbought | Advisory badge; optional skip flag |
+| `ok` | None of the above | Normal |
+
+Stored on `trend_radar.entry_timing`.
 
 ## Market regime gate (from River)
 
@@ -55,6 +76,17 @@ Alert entries should call `apply_regime_filter("buy", regime)` / skip when
 - Long stop: `entry − stop_distance`
 
 Wired into the radar alert trade journal (stop, shares, optional ATR-stop exit).
+
+## SMA20 wide trail + cooldown (from Edge-Swing v3.2)
+
+`pipeline/compute/trail_exit.py`:
+
+- Initial stop = ATR plan stop
+- At **+3%**: move stop to breakeven
+- Trail: `max(peak × (1 − 7%), SMA20)`; after **+10%** profit, trail **SMA20 only**
+- **2 consecutive losses** → skip the next entry (cooldown)
+
+Default alert backtest exit mode is `sma20_trail` (tight % trails intentionally avoided).
 
 ## Parameter stability (KAMA-DF)
 
@@ -116,22 +148,27 @@ Entries mirror terminal alerts (GREEN_FLIP / breakout). Fills next open; no look
 PYTHONPATH=/workspace python -m pipeline.research.radar_alert_backtest \
   --tickers SPY,AAPL,MSFT,JPM,XOM \
   --from-date 2023-01-01 --min-rank 60 --min-convergence 4 \
-  --exit-mode red_only --require-regime --max-trades 12
+  --exit-mode sma20_trail --require-regime --skip-too-late --cooldown \
+  --max-trades 12
 ```
 
-Gates: SPY buys_allowed; ATR stop + 1.25% risk sizing on each fill.
+Gates: SPY buys_allowed; too_late veto; ATR stop + 1.25% risk sizing; optional wait_pullback skip.
 
 Latest qualified sample (2023→2026, rank≥60, conv≥4):
 
-| Exit rule | Trades | Win rate | Avg ret | Median | Avg hold |
-|-----------|--------|----------|---------|--------|----------|
-| Leave GREEN (FLIP off) | 90 | 33% | +0.15% | −0.74% | 12d |
-| Hold through GREY until RED | **42** | **55%** | **+2.38%** | **+2.84%** | **50d** |
+| Setup | Trades | Win rate | Avg ret | Median | Avg hold |
+|-------|--------|----------|---------|--------|----------|
+| Leave GREEN (no regime/ATR) | 90 | 33% | +0.15% | −0.74% | 12d |
+| Until RED (no regime/ATR) | 42 | 55% | +2.38% | +2.84% | 50d |
+| Until RED + **regime gate + ATR stop** | **37** | **49%** | **+1.63%** | −0.69% | **41d** |
+| **sma20_trail + timing + cooldown** | *(re-run after this PR)* | | | | |
 
-Takeaway: raw GREEN_FLIP + exit-on-GREY whipsaws. For swing alerts, **enter on GREEN_FLIP (high rank/conv) under market buys_allowed, size with ATR risk, and exit on RED** (or ATR stop / max hold).
+Takeaway: gate new risk with SPY regime + ADX + too_late; size with ATR; prefer wide SMA20 trail (or exit-on-RED) over exit-on-GREY.
 
 ## What we explicitly skip
 
 - Per-ticker Optuna in production
 - Blended CCI/RSI/Fisher pane oscillators as ranking inputs
 - Cycle-adaptive StochRSI at universe scale
+- Tight / tiered %-profit trails (Edge-Swing v2/v3.1 failure mode)
+- IDX RL ensemble / LLM narrative layers from peer screeners

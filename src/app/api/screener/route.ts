@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   // Fetch trend_radar
   let query = sb
     .from("trend_radar")
-    .select("symbol, state, quality_rank, z_mom, f_ewmac, z_52, breakout_active, volume_confirmed, kama_regime, convergence_count, state_changed_at, computed_at", { count: "exact" })
+    .select("symbol, state, quality_rank, z_mom, f_ewmac, z_52, breakout_active, volume_confirmed, kama_regime, adx, entry_timing, convergence_count, state_changed_at, computed_at", { count: "exact" })
     .gte("quality_rank", minRank)
     .order("quality_rank", { ascending: false })
     .limit(limit);
@@ -62,6 +62,8 @@ export async function GET(req: NextRequest) {
       breakout: r.breakout_active,
       volumeConfirmed: r.volume_confirmed,
       kamaRegime: r.kama_regime ?? 0,
+      adx: r.adx ?? null,
+      entryTiming: r.entry_timing ?? null,
       convergence: r.convergence_count,
       stateChangedAt: r.state_changed_at,
       price: f?.price ?? null,

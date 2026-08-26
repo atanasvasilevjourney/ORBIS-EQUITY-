@@ -11,6 +11,9 @@ Components:
   4. breakout — compression detection (ATR contraction) + expansion trigger
   5. volume  — volume confirmation (above 20d average on up-days)
   6. kama_regime — dual-KAMA trend regime (stability-promoted global params)
+  7. adx     — Wilder ADX / DI+ trend-strength gate (swing-screener)
+
+Entry timing vetoes (too_late / wait_pullback) demote extended GREEN names.
 
 Parameter changes (EWMAC spans, KAMA defaults, thresholds) must pass
 pipeline.compute.param_stability before promotion to production constants.
@@ -25,6 +28,13 @@ from datetime import date, datetime, timedelta, timezone
 import numpy as np
 import pandas as pd
 
+from pipeline.compute.adx import (
+    ADX_TREND_MIN,
+    adx_ok,
+    adx_score,
+    latest_adx,
+)
+from pipeline.compute.entry_timing import evaluate_entry_timing
 from pipeline.compute.kama_regime import compute_kama_regime
 
 logger = logging.getLogger(__name__)
@@ -41,6 +51,7 @@ ATR_COMPRESSION_RATIO = 0.6          # current ATR / 60d ATR < this = compressed
 VOLUME_CONFIRM_RATIO = 1.2           # volume / 20d avg > this = confirmed
 HIGH_252_PROXIMITY_THRESHOLD = 0.95  # within 5% of 52w high = strong
 MIN_HISTORY_DAYS = 148               # EWMAC_SLOW(128) + VOL_WINDOW(20) = 148
+CONVERGENCE_MAX = 7                  # mom, ewmac, 52w, breakout, vol, kama, adx
 
 # State thresholds
 BULL_THRESHOLD = 55       # rank >= this AND net positive → GREEN
@@ -153,20 +164,23 @@ def compute_quality_rank(
     breakout: bool,
     vol_confirm: bool,
     kama_regime: int = 0,
+    adx: float = 0.0,
+    plus_di: float = 0.0,
+    minus_di: float = 0.0,
 ) -> int:
     """Composite rank 0-100 from component signals.
 
-    Weights: momentum 26, EWMAC 22, 52w-high 18, breakout 12, volume 8,
-    dual-KAMA regime 14. Continuous signals dominate; regime/binary confirm.
+    Weights: momentum 24, EWMAC 20, 52w-high 16, breakout 12, volume 8,
+    dual-KAMA regime 12, ADX 8. Continuous signals dominate; regime/ADX confirm.
     """
-    # z_mom: [-3, 3] → [0, 26]
-    mom_score = ((z_mom + 3) / 6) * 26
+    # z_mom: [-3, 3] → [0, 24]
+    mom_score = ((z_mom + 3) / 6) * 24
 
-    # f_ewmac: [-3, 3] → [0, 22]
-    ewmac_score = ((f_ewmac + 3) / 6) * 22
+    # f_ewmac: [-3, 3] → [0, 20]
+    ewmac_score = ((f_ewmac + 3) / 6) * 20
 
-    # z_52: [-1, 0] → [0, 18]  (0 = at high = best)
-    high_score = (z_52 + 1) * 18
+    # z_52: [-1, 0] → [0, 16]  (0 = at high = best)
+    high_score = (z_52 + 1) * 16
 
     # breakout: bool → 0 or 12
     brk_score = 12.0 if breakout else 0.0
@@ -174,15 +188,20 @@ def compute_quality_rank(
     # volume: bool → 0 or 8
     vol_score = 8.0 if vol_confirm else 0.0
 
-    # dual-KAMA regime: bullish 14, unknown 7, bearish 0
+    # dual-KAMA regime: bullish 12, unknown 6, bearish 0
     if kama_regime > 0:
-        kama_score = 14.0
+        kama_score = 12.0
     elif kama_regime < 0:
         kama_score = 0.0
     else:
-        kama_score = 7.0
+        kama_score = 6.0
 
-    raw = mom_score + ewmac_score + high_score + brk_score + vol_score + kama_score
+    a_score = adx_score(adx, plus_di, minus_di)
+
+    raw = (
+        mom_score + ewmac_score + high_score + brk_score
+        + vol_score + kama_score + a_score
+    )
     return int(np.clip(round(raw), 0, 100))
 
 
@@ -192,11 +211,14 @@ def determine_state(
     z_52: float,
     quality_rank: int,
     kama_regime: int = 0,
+    *,
+    adx_trend_ok: bool = True,
+    too_late: bool = False,
 ) -> int:
     """Determine state: 1=GREEN, 0=GREY, -1=RED.
 
-    Dual-KAMA is a soft regime gate: GREEN requires non-bearish KAMA;
-    RED is reinforced when KAMA is bearish.
+    Dual-KAMA is a soft regime gate: GREEN requires non-bearish KAMA.
+    ADX must show bullish trend strength; too_late demotes GREEN → GREY.
     """
     positives = sum([
         z_mom > 0,
@@ -208,6 +230,8 @@ def determine_state(
         quality_rank >= BULL_THRESHOLD
         and positives >= 2
         and kama_regime >= 0
+        and adx_trend_ok
+        and not too_late
     ):
         return 1   # GREEN
     elif quality_rank <= BEAR_THRESHOLD and positives <= 1:
@@ -233,11 +257,19 @@ def process_ticker(df: pd.DataFrame) -> dict | None:
     breakout = bool(compute_breakout(close, high, low))
     vol_confirm = bool(compute_volume_confirmation(close, volume))
     kama_regime = int(compute_kama_regime(close))
+    adx_val, plus_di, minus_di = latest_adx(high, low, close)
+    trend_ok = adx_ok(adx_val, plus_di, minus_di, ADX_TREND_MIN)
+    timing = evaluate_entry_timing(close, high, low)
 
     rank = compute_quality_rank(
-        z_mom, f_ewmac, z_52, breakout, vol_confirm, kama_regime
+        z_mom, f_ewmac, z_52, breakout, vol_confirm, kama_regime,
+        adx_val, plus_di, minus_di,
     )
-    state = determine_state(z_mom, f_ewmac, z_52, rank, kama_regime)
+    state = determine_state(
+        z_mom, f_ewmac, z_52, rank, kama_regime,
+        adx_trend_ok=trend_ok,
+        too_late=timing.is_too_late,
+    )
 
     # Convergence: how many components are directionally aligned
     bullish_flags = [
@@ -247,6 +279,7 @@ def process_ticker(df: pd.DataFrame) -> dict | None:
         breakout,
         vol_confirm,
         kama_regime > 0,
+        trend_ok,
     ]
     bullish_count = sum(bullish_flags)
     if state == 1:
@@ -259,6 +292,7 @@ def process_ticker(df: pd.DataFrame) -> dict | None:
             not breakout,
             not vol_confirm,
             kama_regime < 0,
+            not trend_ok,
         ])
     else:
         convergence = bullish_count  # for GREY: shows how close to GREEN
@@ -272,6 +306,8 @@ def process_ticker(df: pd.DataFrame) -> dict | None:
         "breakout_active": bool(breakout),
         "volume_confirmed": bool(vol_confirm),
         "kama_regime": kama_regime,
+        "adx": round(adx_val, 2),
+        "entry_timing": timing.label,
         "convergence_count": int(convergence),
         "daily_state": state,
         "weekly_state": None,  # TODO: compute from weekly prices

@@ -17,6 +17,8 @@ export type ScreenerRow = {
   breakout: boolean;
   volumeConfirmed: boolean;
   kamaRegime?: number;
+  adx?: number | null;
+  entryTiming?: string | null;
   convergence: number;
   stateChangedAt: string | null;
   price: number | null;
@@ -51,9 +53,10 @@ export function ScoreboardRow({ row }: { row: ScreenerRow }) {
     row.breakout,
     row.volumeConfirmed,
     (row.kamaRegime ?? 0) > 0,
+    (row.adx ?? 0) >= 20,
   ];
 
-  const sectorCtx = `${row.convergence}/6`;
+  const sectorCtx = `${row.convergence}/7`;
   const flip = isRecentFlip(row.stateChangedAt);
 
   return (
@@ -83,6 +86,16 @@ export function ScoreboardRow({ row }: { row: ScreenerRow }) {
           {row.breakout && (
             <span className="text-[10px] px-1 py-0.5 rounded bg-[var(--badge-bg)] text-[var(--accent-warning)] font-terminal">
               BRK
+            </span>
+          )}
+          {row.entryTiming === "too_late" && (
+            <span className="text-[10px] px-1 py-0.5 rounded bg-[var(--badge-bg)] text-[var(--accent-bear)] font-terminal">
+              LATE
+            </span>
+          )}
+          {row.entryTiming === "wait_pullback" && (
+            <span className="text-[10px] px-1 py-0.5 rounded bg-[var(--badge-bg)] text-[var(--accent-warning)] font-terminal">
+              WAIT
             </span>
           )}
         </div>
