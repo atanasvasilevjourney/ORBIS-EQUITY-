@@ -4,12 +4,15 @@ Entry alerts mirror what the terminal surfaces today:
   - GREEN_FLIP  — state flips into GREEN (scoreboard FLIP badge)
   - BREAKOUT_ALERT — GREEN + breakout_active + volume_confirmed
 
-Exits when state leaves GREEN. Fills at next-bar open (no lookahead).
+Exits when state leaves GREEN (or red_only). Fills at next-bar open.
+Optional River-style gates:
+  - SPY market regime must allow buys (SMA200 bull + vol risk_on)
+  - ATR stop + risk-% share sizing attached to each trade
 
 Usage:
   PYTHONPATH=/workspace python -m pipeline.research.radar_alert_backtest
   PYTHONPATH=/workspace python -m pipeline.research.radar_alert_backtest \\
-      --tickers SPY,AAPL,MSFT,JPM --start 2020-01-01 --max-trades 12
+      --tickers SPY,AAPL,MSFT,JPM --exit-mode red_only --require-regime
 """
 from __future__ import annotations
 
@@ -22,12 +25,19 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from pipeline.compute.atr_risk import (
+    ATR_STOP_MULTIPLIER,
+    RISK_PER_TRADE_PCT,
+    compute_atr,
+    size_long_position,
+)
 from pipeline.compute.kama_regime import (
     KAMA_LONG_FAST,
     KAMA_LONG_N,
     KAMA_LONG_SLOW,
     calculate_kama,
 )
+from pipeline.compute.market_regime import regime_series
 from pipeline.compute.trend_radar import (
     ATR_COMPRESSION_RATIO,
     ATR_WINDOW,
@@ -43,6 +53,8 @@ from pipeline.compute.trend_radar import (
     determine_state,
 )
 
+DEFAULT_EQUITY = 100_000.0
+
 
 @dataclass(frozen=True)
 class Trade:
@@ -57,6 +69,13 @@ class Trade:
     entry_rank: int
     entry_convergence: int
     exit_reason: str
+    stop_price: float | None = None
+    stop_distance: float | None = None
+    shares: int | None = None
+    position_value: float | None = None
+    atr: float | None = None
+    market_buys_allowed: bool | None = None
+
 
 
 def download_ohlcv(ticker: str, start: str) -> pd.DataFrame:
@@ -200,6 +219,7 @@ def build_radar_history(ohlcv: pd.DataFrame) -> pd.DataFrame:
             "quality_rank": ranks,
             "state": states,
             "convergence": convs,
+            "atr": compute_atr(ohlcv).values,
         },
         index=ohlcv.index,
     )
@@ -233,12 +253,17 @@ def simulate_trades(
     min_convergence: int = 0,
     from_date: str | None = None,
     exit_mode: str = "left_green",
+    market_regime: pd.DataFrame | None = None,
+    require_regime: bool = False,
+    equity: float = DEFAULT_EQUITY,
 ) -> list[Trade]:
     """Long-only: enter next open after alert; exit next open after signal.
 
     exit_mode:
       - left_green: exit when state != GREEN (default, matches FLIP off)
       - red_only: exit only when state == RED (hold through GREY)
+    require_regime:
+      - if True, skip entries on days when SPY buys_allowed is False
     """
     allowed = alert_types or {
         "GREEN_FLIP",
@@ -257,6 +282,15 @@ def simulate_trades(
         if int(row["quality_rank"]) < min_rank or int(row["convergence"]) < min_convergence:
             i += 1
             continue
+
+        signal_ts = hist.index[i]
+        buys_allowed = True
+        if market_regime is not None and signal_ts in market_regime.index:
+            buys_allowed = bool(market_regime.loc[signal_ts, "buys_allowed"])
+        if require_regime and not buys_allowed:
+            i += 1
+            continue
+
         entry_i = i + 1
         if entry_i >= n:
             break
@@ -270,13 +304,31 @@ def simulate_trades(
             continue
         entry_rank = int(row["quality_rank"])
         entry_conv = int(row["convergence"])
+        atr_val = float(row["atr"]) if np.isfinite(row["atr"]) else float("nan")
+
+        plan = size_long_position(
+            equity=equity,
+            buying_power=equity,
+            entry_price=entry_px,
+            atr=atr_val if np.isfinite(atr_val) else 0.0,
+        )
 
         exit_i = None
         exit_reason = "end_of_data"
         for j in range(entry_i, n):
             held = j - entry_i
+            # ATR hard stop checked on open (conservative)
+            if (
+                plan.shares
+                and np.isfinite(plan.stop_price)
+                and j > entry_i
+                and float(hist.iloc[j]["open"]) <= float(plan.stop_price)
+            ):
+                exit_i = j
+                exit_reason = "atr_stop"
+                break
+
             st = int(hist.iloc[j]["state"])
-            should_exit = False
             if exit_mode == "red_only":
                 should_exit = st == -1 and j > entry_i
                 reason = "hit_red"
@@ -297,9 +349,10 @@ def simulate_trades(
             i = entry_i + 1
             continue
 
-        exit_px = float(hist.iloc[exit_i]["open"])
         if exit_reason == "end_of_data":
             exit_px = float(hist.iloc[exit_i]["close"])
+        else:
+            exit_px = float(hist.iloc[exit_i]["open"])
         ret = (exit_px / entry_px) - 1.0
         trades.append(
             Trade(
@@ -314,6 +367,12 @@ def simulate_trades(
                 entry_rank=entry_rank,
                 entry_convergence=entry_conv,
                 exit_reason=exit_reason,
+                stop_price=round(plan.stop_price, 4) if plan.shares else None,
+                stop_distance=round(plan.stop_distance, 4) if plan.shares else None,
+                shares=plan.shares if plan.shares else None,
+                position_value=round(plan.position_value, 2) if plan.shares else None,
+                atr=round(atr_val, 4) if np.isfinite(atr_val) else None,
+                market_buys_allowed=buys_allowed,
             )
         )
         i = exit_i + 1
@@ -340,23 +399,26 @@ def summarize(trades: list[Trade]) -> dict:
         "avg_bars_held": round(float(np.mean([t.bars_held for t in trades])), 1),
         "best_trade_pct": round(max(rets), 2),
         "worst_trade_pct": round(min(rets), 2),
+        "atr_stop_exits": sum(1 for t in trades if t.exit_reason == "atr_stop"),
     }
 
 
 def print_journal(trades: list[Trade], limit: int | None = None) -> None:
     show = trades if limit is None else trades[:limit]
-    print("=" * 100)
-    print("KOVA VIEW RADAR ALERT TRADE JOURNAL")
-    print("=" * 100)
+    print("=" * 110)
+    print("KOVA VIEW RADAR ALERT TRADE JOURNAL (+ regime gate + ATR sizing)")
+    print("=" * 110)
     print(
-        f"{'#':>3} {'Ticker':<6} {'Alert':<20} {'Entry':<12} {'Exit':<12} "
-        f"{'In':>8} {'Out':>8} {'Ret%':>7} {'Days':>4} {'Rank':>4} {'Conv':>4} {'Exit reason'}"
+        f"{'#':>3} {'Ticker':<6} {'Alert':<14} {'Entry':<12} {'Exit':<12} "
+        f"{'In':>8} {'Stop':>8} {'Sh':>5} {'Ret%':>7} {'Days':>4} {'Rank':>4} {'Exit'}"
     )
     for i, t in enumerate(show, 1):
+        stop = f"{t.stop_price:.2f}" if t.stop_price is not None else "—"
+        sh = f"{t.shares}" if t.shares is not None else "—"
         print(
-            f"{i:3d} {t.ticker:<6} {t.alert:<20} {t.entry_date:<12} {t.exit_date:<12} "
-            f"{t.entry_price:8.2f} {t.exit_price:8.2f} {t.return_pct:7.2f} "
-            f"{t.bars_held:4d} {t.entry_rank:4d} {t.entry_convergence:4d} {t.exit_reason}"
+            f"{i:3d} {t.ticker:<6} {t.alert:<14} {t.entry_date:<12} {t.exit_date:<12} "
+            f"{t.entry_price:8.2f} {stop:>8} {sh:>5} {t.return_pct:7.2f} "
+            f"{t.bars_held:4d} {t.entry_rank:4d} {t.exit_reason}"
         )
 
 
@@ -369,8 +431,19 @@ def run(
     min_convergence: int = 4,
     from_date: str = "2023-01-01",
     exit_mode: str = "left_green",
+    require_regime: bool = True,
+    equity: float = DEFAULT_EQUITY,
     out_json: Path | None = None,
 ) -> list[Trade]:
+    print(
+        f"Loading SPY market regime (require_regime={require_regime}, "
+        f"risk={RISK_PER_TRADE_PCT:.2%} ATR×{ATR_STOP_MULTIPLIER})...",
+        flush=True,
+    )
+    spy = download_ohlcv("SPY", start)
+    # Need enough history before from_date for SMA200 / vol pctl
+    mkt = regime_series(spy)
+
     all_trades: list[Trade] = []
     for t in tickers:
         print(f"Building radar history for {t}...", flush=True)
@@ -384,23 +457,25 @@ def run(
                 min_convergence=min_convergence,
                 from_date=from_date,
                 exit_mode=exit_mode,
+                market_regime=mkt,
+                require_regime=require_regime,
+                equity=equity,
             )
             print(f"  {t}: {len(trades)} qualified alert trades (from {from_date})")
             all_trades.extend(trades)
         except Exception as exc:
             print(f"  SKIP {t}: {exc}")
 
-    # Chronological journal: most recent max_trades in the window (current relevance)
     all_trades.sort(key=lambda tr: tr.entry_date)
     journal = all_trades[-max_trades:] if len(all_trades) > max_trades else all_trades
     print_journal(journal)
     summary = summarize(journal)
-    print("\n" + "=" * 100)
+    print("\n" + "=" * 110)
     print(
-        f"SUMMARY (most recent {len(journal)} trades | min_rank>={min_rank} "
-        f"conv>={min_convergence} exit={exit_mode} from {from_date})"
+        f"SUMMARY (most recent {len(journal)} | min_rank>={min_rank} "
+        f"conv>={min_convergence} exit={exit_mode} regime_gate={require_regime})"
     )
-    print("=" * 100)
+    print("=" * 110)
     for k, v in summary.items():
         print(f"  {k}: {v}")
 
@@ -411,14 +486,25 @@ def run(
 
     if out_json is not None:
         out_json.parent.mkdir(parents=True, exist_ok=True)
+        # Snapshot latest regime
+        latest_regime = {
+            "trend_regime": str(mkt["trend_regime"].iloc[-1]),
+            "vol_regime": str(mkt["vol_regime"].iloc[-1]),
+            "buys_allowed": bool(mkt["buys_allowed"].iloc[-1]),
+        }
         payload = {
             "filters": {
                 "min_rank": min_rank,
                 "min_convergence": min_convergence,
                 "from_date": from_date,
                 "exit_mode": exit_mode,
+                "require_regime": require_regime,
+                "equity": equity,
+                "risk_pct": RISK_PER_TRADE_PCT,
+                "atr_stop_mult": ATR_STOP_MULTIPLIER,
                 "tickers": tickers,
             },
+            "market_regime_latest": latest_regime,
             "summary_shown": summary,
             "summary_full": full,
             "trades": [asdict(t) for t in journal],
@@ -432,17 +518,23 @@ def run(
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--tickers", default="SPY,AAPL,MSFT,JPM,XOM")
-    p.add_argument("--start", default="2020-01-01")
+    p.add_argument("--start", default="2019-01-01")
     p.add_argument("--max-trades", type=int, default=12)
     p.add_argument("--min-rank", type=int, default=60)
     p.add_argument("--min-convergence", type=int, default=4)
     p.add_argument("--from-date", default="2023-01-01")
     p.add_argument(
         "--exit-mode",
-        default="left_green",
+        default="red_only",
         choices=["left_green", "red_only"],
-        help="left_green=exit when not GREEN; red_only=hold through GREY until RED",
     )
+    p.add_argument(
+        "--require-regime",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Gate entries on SPY bull + vol risk_on (default: true)",
+    )
+    p.add_argument("--equity", type=float, default=DEFAULT_EQUITY)
     p.add_argument(
         "--out",
         default="pipeline/research/artifacts/radar_alert_trades.json",
@@ -457,6 +549,8 @@ def main(argv: list[str] | None = None) -> int:
         min_convergence=args.min_convergence,
         from_date=args.from_date,
         exit_mode=args.exit_mode,
+        require_regime=args.require_regime,
+        equity=args.equity,
         out_json=Path(args.out),
     )
     return 0

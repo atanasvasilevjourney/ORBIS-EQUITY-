@@ -9,11 +9,11 @@ nightly Optuna.
 
 | Layer | Job | Current implementation |
 |-------|-----|------------------------|
-| Regime | Trade with structure | Dual-KAMA (`kama_regime`) soft gate; EWMAC trend |
+| Regime | Trade with structure | **Market:** SPY SMA200 + vol pctl (`market_regime`); **Ticker:** dual-KAMA + EWMAC |
 | Momentum | Move has legs | `z_mom`, `f_ewmac` |
-| Volatility | Risk governor | ATR used in breakout compression (ATR sizing TBD) |
+| Vol / risk | Risk governor | **ATR×2.5 stop + 1.25% equity risk sizing** (`atr_risk`) |
 | Relative strength | Rank vs universe | **Not yet** — highest priority gap |
-| Entry | Timing | ATR compression breakout + volume confirm |
+| Entry | Timing | ATR compression breakout + volume confirm; GREEN_FLIP alerts |
 
 ## Dual-KAMA regime
 
@@ -34,6 +34,27 @@ stable regime gate.
 
 Defaults (`KAMA_SHORT_N=10`, `KAMA_LONG_N=30`, fast=2, slow=30) are fixed
 production constants. Change them only after stability promotion.
+
+## Market regime gate (from River)
+
+`pipeline/compute/market_regime.py` — SPY-level hard gate for new buys:
+
+- `trend_regime`: bull if SPY ≥ SMA200, else bear
+- `vol_regime`: risk_off if realized-vol percentile > 75, else risk_on
+- `buys_allowed`: bull **and** risk_on
+
+Alert entries should call `apply_regime_filter("buy", regime)` / skip when
+`buys_allowed` is false. Sells always pass.
+
+## ATR risk sizing (from River)
+
+`pipeline/compute/atr_risk.py`:
+
+- `stop_distance = ATR(14) × 2.5`
+- `shares = floor(equity × 1.25% / stop_distance)`, capped by buying power
+- Long stop: `entry − stop_distance`
+
+Wired into the radar alert trade journal (stop, shares, optional ATR-stop exit).
 
 ## Parameter stability (KAMA-DF)
 
@@ -95,8 +116,10 @@ Entries mirror terminal alerts (GREEN_FLIP / breakout). Fills next open; no look
 PYTHONPATH=/workspace python -m pipeline.research.radar_alert_backtest \
   --tickers SPY,AAPL,MSFT,JPM,XOM \
   --from-date 2023-01-01 --min-rank 60 --min-convergence 4 \
-  --exit-mode red_only --max-trades 12
+  --exit-mode red_only --require-regime --max-trades 12
 ```
+
+Gates: SPY buys_allowed; ATR stop + 1.25% risk sizing on each fill.
 
 Latest qualified sample (2023→2026, rank≥60, conv≥4):
 
@@ -105,7 +128,7 @@ Latest qualified sample (2023→2026, rank≥60, conv≥4):
 | Leave GREEN (FLIP off) | 90 | 33% | +0.15% | −0.74% | 12d |
 | Hold through GREY until RED | **42** | **55%** | **+2.38%** | **+2.84%** | **50d** |
 
-Takeaway: raw GREEN_FLIP + exit-on-GREY whipsaws. For swing alerts, **enter on GREEN_FLIP (high rank/conv) and exit on RED** (or max hold), not on every GREY dip.
+Takeaway: raw GREEN_FLIP + exit-on-GREY whipsaws. For swing alerts, **enter on GREEN_FLIP (high rank/conv) under market buys_allowed, size with ATR risk, and exit on RED** (or ATR stop / max hold).
 
 ## What we explicitly skip
 

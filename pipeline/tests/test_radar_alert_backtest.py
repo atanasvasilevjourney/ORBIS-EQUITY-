@@ -28,15 +28,20 @@ def test_build_radar_history_has_alert_columns():
     assert "green_flip" in hist.columns
     assert "breakout_alert" in hist.columns
     assert "alert" in hist.columns
+    assert "atr" in hist.columns
     assert "state" in hist.columns
     assert set(hist["state"].unique()).issubset({-1, 0, 1})
 
 
-def test_simulate_trades_no_lookahead_and_summary():
+def test_simulate_trades_includes_atr_sizing():
     hist = build_radar_history(_ohlcv(260, seed=5))
     trades = simulate_trades("TEST", hist)
     for t in trades:
         assert t.entry_date <= t.exit_date
         assert t.bars_held >= 0
+        if t.shares:
+            assert t.stop_price is not None
+            assert t.stop_price < t.entry_price
     s = summarize(trades)
     assert "n_trades" in s
+    assert "atr_stop_exits" in s
