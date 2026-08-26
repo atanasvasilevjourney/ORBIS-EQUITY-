@@ -62,6 +62,31 @@ selection = evaluate_param_grid(param_dicts, eval_fn)
 
 Apply the same gate when retuning `EWMAC_FAST` / `EWMAC_SLOW`.
 
+## IS / OOS validation harness
+
+```bash
+PYTHONPATH=/workspace python -m pipeline.research.kama_backtest \
+  --tickers SPY,QQQ,IWM,AAPL,MSFT,XOM,JPM \
+  --start 2018-01-01 \
+  --out pipeline/research/artifacts/kama_oos_validation.json
+```
+
+Latest run (train 2018-01 → 2023-03, test 2023-03 → 2026-08):
+
+| Strategy (OOS Sharpe, equal-weight) | Mean | Median |
+|-------------------------------------|------|--------|
+| Buy & hold | 1.08 | 0.94 |
+| Production regime (close > long KAMA) | **0.85** | **0.96** |
+| Production dual-KAMA cross | 0.73 | 0.67 |
+| Stability-selected regime | 0.71 | 0.67 |
+| Stability-selected cross | 0.21 | 0.18 |
+
+Takeaways:
+- **Production regime beats the raw cross** on OOS — keep price-vs-long-KAMA as the gate.
+- **Stability-selected crosses overfit IS** and degrade OOS; do not auto-promote per-ticker winners.
+- OOS window is a strong equity bull; buyhold leads — KAMA is a risk/regime filter, not an alpha engine alone.
+- Re-run the harness before changing production KAMA constants.
+
 ## What we explicitly skip
 
 - Per-ticker Optuna in production

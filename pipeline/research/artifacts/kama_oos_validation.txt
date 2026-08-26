@@ -1,0 +1,121 @@
+Downloading SPY...
+Downloading QQQ...
+Downloading IWM...
+Downloading AAPL...
+Downloading MSFT...
+Downloading XOM...
+Downloading JPM...
+========================================================================================
+KAMA-DF STABILITY VALIDATION — IS / OOS BACKTEST
+========================================================================================
+
+### SPY  (2018-01-02→2023-03-07 IS | 2023-03-08→2026-08-25 OOS)  grid=64 qualified=2
+  Stable params: {'n_short': 15, 'fast_short': 3, 'slow_short': 30, 'n_long': 60, 'fast_long': 2, 'slow_long': 30}  (neighbor OOS std=0.2282)
+  Production:    {'n_short': 10, 'fast_short': 2, 'slow_short': 30, 'n_long': 30, 'fast_long': 2, 'slow_long': 30}
+  --- In-sample ---
+  buyhold_is             Sharpe=  0.54  CAGR=   9.7%  Vol=  21.4%  MaxDD= -33.7%  WR=  54.3%  Trades=  0 (0.0/y)
+  production_cross_is    Sharpe=  0.30  CAGR=   2.9%  Vol=  11.9%  MaxDD= -22.2%  WR=  54.4%  Trades= 38 (7.3/y)
+  production_regime_is   Sharpe=  0.56  CAGR=   5.9%  Vol=  11.2%  MaxDD= -19.5%  WR=  55.0%  Trades= 99 (19.1/y)
+  stable_cross_is        Sharpe=  1.04  CAGR=  10.9%  Vol=  10.5%  MaxDD= -14.1%  WR=  57.7%  Trades= 17 (3.3/y)
+  stable_regime_is       Sharpe=  0.49  CAGR=   5.2%  Vol=  11.8%  MaxDD= -17.1%  WR=  55.2%  Trades= 75 (14.5/y)
+  --- Out-of-sample ---
+  buyhold_oos            Sharpe=  1.42  CAGR=  22.4%  Vol=  15.0%  MaxDD= -18.8%  WR=  56.8%  Trades=  0 (0.0/y)
+  production_cross_oos   Sharpe=  1.16  CAGR=  11.3%  Vol=   9.6%  MaxDD= -10.1%  WR=  56.5%  Trades= 27 (7.8/y)
+  production_regime_oos  Sharpe=  1.51  CAGR=  14.5%  Vol=   9.3%  MaxDD=  -7.5%  WR=  56.9%  Trades= 75 (21.7/y)
+  stable_cross_oos       Sharpe=  0.60  CAGR=   4.8%  Vol=   8.4%  MaxDD= -11.1%  WR=  56.2%  Trades= 17 (4.9/y)
+  stable_regime_oos      Sharpe=  1.40  CAGR=  14.0%  Vol=   9.6%  MaxDD=  -7.7%  WR=  56.8%  Trades= 45 (13.0/y)
+
+### QQQ  (2018-01-02→2023-03-07 IS | 2023-03-08→2026-08-25 OOS)  grid=55 qualified=0
+  Stable params: NONE (no IS Sharpe > 1.0)
+  Production:    {'n_short': 10, 'fast_short': 2, 'slow_short': 30, 'n_long': 30, 'fast_long': 2, 'slow_long': 30}
+  --- In-sample ---
+  buyhold_is             Sharpe=  0.62  CAGR=  13.6%  Vol=  26.1%  MaxDD= -35.1%  WR=  55.6%  Trades=  0 (0.0/y)
+  production_cross_is    Sharpe=  0.31  CAGR=   3.6%  Vol=  14.5%  MaxDD= -23.2%  WR=  57.0%  Trades= 43 (8.3/y)
+  production_regime_is   Sharpe=  0.52  CAGR=   6.5%  Vol=  14.2%  MaxDD= -23.8%  WR=  56.7%  Trades=109 (21.1/y)
+  --- Out-of-sample ---
+  buyhold_oos            Sharpe=  1.39  CAGR=  29.4%  Vol=  20.0%  MaxDD= -22.8%  WR=  56.7%  Trades=  0 (0.0/y)
+  production_cross_oos   Sharpe=  0.90  CAGR=  12.5%  Vol=  14.2%  MaxDD= -13.5%  WR=  55.9%  Trades= 28 (8.1/y)
+  production_regime_oos  Sharpe=  0.96  CAGR=  12.2%  Vol=  12.9%  MaxDD= -14.6%  WR=  56.1%  Trades= 82 (23.8/y)
+
+### IWM  (2018-01-02→2023-03-07 IS | 2023-03-08→2026-08-25 OOS)  grid=64 qualified=0
+  Stable params: NONE (no IS Sharpe > 1.0)
+  Production:    {'n_short': 10, 'fast_short': 2, 'slow_short': 30, 'n_long': 30, 'fast_long': 2, 'slow_long': 30}
+  --- In-sample ---
+  buyhold_is             Sharpe=  0.32  CAGR=   5.1%  Vol=  26.2%  MaxDD= -41.1%  WR=  53.4%  Trades=  0 (0.0/y)
+  production_cross_is    Sharpe=  0.41  CAGR=   5.5%  Vol=  16.0%  MaxDD= -28.3%  WR=  53.8%  Trades= 41 (7.9/y)
+  production_regime_is   Sharpe=  0.16  CAGR=   1.2%  Vol=  16.0%  MaxDD= -37.7%  WR=  52.7%  Trades=141 (27.3/y)
+  --- Out-of-sample ---
+  buyhold_oos            Sharpe=  0.82  CAGR=  16.1%  Vol=  20.9%  MaxDD= -27.5%  WR=  52.8%  Trades=  0 (0.0/y)
+  production_cross_oos   Sharpe=  0.62  CAGR=   8.7%  Vol=  15.2%  MaxDD= -16.9%  WR=  53.0%  Trades= 21 (6.1/y)
+  production_regime_oos  Sharpe=  0.62  CAGR=   8.6%  Vol=  15.4%  MaxDD= -12.5%  WR=  52.4%  Trades= 69 (20.0/y)
+
+### AAPL  (2018-01-02→2023-03-07 IS | 2023-03-08→2026-08-25 OOS)  grid=64 qualified=20
+  Stable params: {'n_short': 15, 'fast_short': 2, 'slow_short': 30, 'n_long': 40, 'fast_long': 2, 'slow_long': 30}  (neighbor OOS std=0.1067)
+  Production:    {'n_short': 10, 'fast_short': 2, 'slow_short': 30, 'n_long': 30, 'fast_long': 2, 'slow_long': 30}
+  --- In-sample ---
+  buyhold_is             Sharpe=  0.93  CAGR=  28.8%  Vol=  33.2%  MaxDD= -38.5%  WR=  53.2%  Trades=  0 (0.0/y)
+  production_cross_is    Sharpe=  1.05  CAGR=  21.2%  Vol=  20.1%  MaxDD= -21.8%  WR=  54.2%  Trades= 41 (7.9/y)
+  production_regime_is   Sharpe=  1.11  CAGR=  21.5%  Vol=  19.3%  MaxDD= -20.8%  WR=  53.7%  Trades=105 (20.3/y)
+  stable_cross_is        Sharpe=  1.11  CAGR=  21.4%  Vol=  19.1%  MaxDD= -26.7%  WR=  54.5%  Trades= 29 (5.6/y)
+  stable_regime_is       Sharpe=  1.17  CAGR=  22.7%  Vol=  19.0%  MaxDD= -20.5%  WR=  54.0%  Trades=101 (19.5/y)
+  --- Out-of-sample ---
+  buyhold_oos            Sharpe=  0.94  CAGR=  23.3%  Vol=  25.9%  MaxDD= -33.4%  WR=  54.2%  Trades=  0 (0.0/y)
+  production_cross_oos   Sharpe=  0.67  CAGR=   9.7%  Vol=  15.6%  MaxDD= -23.1%  WR=  55.1%  Trades= 27 (7.8/y)
+  production_regime_oos  Sharpe=  1.02  CAGR=  16.5%  Vol=  16.3%  MaxDD= -13.4%  WR=  54.7%  Trades= 66 (19.1/y)
+  stable_cross_oos       Sharpe=  0.14  CAGR=   0.9%  Vol=  15.7%  MaxDD= -20.8%  WR=  53.6%  Trades= 27 (7.8/y)
+  stable_regime_oos      Sharpe=  0.81  CAGR=  12.0%  Vol=  15.5%  MaxDD= -15.5%  WR=  54.3%  Trades= 65 (18.8/y)
+
+### MSFT  (2018-01-02→2023-03-07 IS | 2023-03-08→2026-08-25 OOS)  grid=47 qualified=4
+  Stable params: {'n_short': 12, 'fast_short': 3, 'slow_short': 30, 'n_long': 60, 'fast_long': 2, 'slow_long': 30}  (neighbor OOS std=0.1407)
+  Production:    {'n_short': 10, 'fast_short': 2, 'slow_short': 30, 'n_long': 30, 'fast_long': 2, 'slow_long': 30}
+  --- In-sample ---
+  buyhold_is             Sharpe=  0.87  CAGR=  24.8%  Vol=  31.0%  MaxDD= -37.1%  WR=  54.0%  Trades=  0 (0.0/y)
+  production_cross_is    Sharpe=  0.62  CAGR=  10.6%  Vol=  19.4%  MaxDD= -32.1%  WR=  54.7%  Trades= 31 (6.0/y)
+  production_regime_is   Sharpe=  0.21  CAGR=   2.3%  Vol=  19.1%  MaxDD= -28.7%  WR=  53.3%  Trades=127 (24.6/y)
+  stable_cross_is        Sharpe=  1.02  CAGR=  16.7%  Vol=  16.5%  MaxDD= -20.6%  WR=  55.9%  Trades= 19 (3.7/y)
+  stable_regime_is       Sharpe=  0.43  CAGR=   6.3%  Vol=  18.1%  MaxDD= -25.4%  WR=  53.3%  Trades=101 (19.5/y)
+  --- Out-of-sample ---
+  buyhold_oos            Sharpe=  0.89  CAGR=  22.1%  Vol=  26.1%  MaxDD= -34.5%  WR=  53.5%  Trades=  0 (0.0/y)
+  production_cross_oos   Sharpe=  0.19  CAGR=   1.7%  Vol=  15.4%  MaxDD= -21.8%  WR=  52.2%  Trades= 27 (7.8/y)
+  production_regime_oos  Sharpe=  0.49  CAGR=   7.4%  Vol=  17.6%  MaxDD= -21.0%  WR=  54.3%  Trades= 63 (18.2/y)
+  stable_cross_oos       Sharpe= -0.12  CAGR=  -2.5%  Vol=  13.9%  MaxDD= -31.9%  WR=  50.8%  Trades= 17 (4.9/y)
+  stable_regime_oos      Sharpe=  0.53  CAGR=   7.5%  Vol=  16.2%  MaxDD= -21.2%  WR=  53.0%  Trades= 59 (17.1/y)
+
+### XOM  (2018-01-02→2023-03-07 IS | 2023-03-08→2026-08-25 OOS)  grid=47 qualified=4
+  Stable params: {'n_short': 8, 'fast_short': 3, 'slow_short': 30, 'n_long': 60, 'fast_long': 2, 'slow_long': 30}  (neighbor OOS std=0.1143)
+  Production:    {'n_short': 10, 'fast_short': 2, 'slow_short': 30, 'n_long': 30, 'fast_long': 2, 'slow_long': 30}
+  --- In-sample ---
+  buyhold_is             Sharpe=  0.48  CAGR=  11.1%  Vol=  33.6%  MaxDD= -61.0%  WR=  50.8%  Trades=  0 (0.0/y)
+  production_cross_is    Sharpe=  0.59  CAGR=  12.1%  Vol=  24.4%  MaxDD= -29.5%  WR=  51.6%  Trades= 30 (5.8/y)
+  production_regime_is   Sharpe=  0.70  CAGR=  14.9%  Vol=  23.9%  MaxDD= -28.7%  WR=  52.9%  Trades=105 (20.3/y)
+  stable_cross_is        Sharpe=  1.07  CAGR=  28.8%  Vol=  27.1%  MaxDD= -27.2%  WR=  54.0%  Trades= 13 (2.5/y)
+  stable_regime_is       Sharpe=  0.59  CAGR=  12.0%  Vol=  24.4%  MaxDD= -33.6%  WR=  52.4%  Trades= 87 (16.8/y)
+  --- Out-of-sample ---
+  buyhold_oos            Sharpe=  0.72  CAGR=  15.4%  Vol=  23.7%  MaxDD= -20.1%  WR=  53.1%  Trades=  0 (0.0/y)
+  production_cross_oos   Sharpe=  0.14  CAGR=   1.0%  Vol=  15.9%  MaxDD= -30.2%  WR=  52.7%  Trades= 21 (6.1/y)
+  production_regime_oos  Sharpe=  0.28  CAGR=   3.3%  Vol=  16.6%  MaxDD= -31.3%  WR=  53.2%  Trades= 83 (24.0/y)
+  stable_cross_oos       Sharpe=  0.23  CAGR=   2.4%  Vol=  16.9%  MaxDD= -32.3%  WR=  52.7%  Trades= 21 (6.1/y)
+  stable_regime_oos      Sharpe=  0.09  CAGR=  -0.0%  Vol=  17.0%  MaxDD= -37.9%  WR=  52.4%  Trades= 75 (21.7/y)
+
+### JPM  (2018-01-02→2023-03-07 IS | 2023-03-08→2026-08-25 OOS)  grid=64 qualified=0
+  Stable params: NONE (no IS Sharpe > 1.0)
+  Production:    {'n_short': 10, 'fast_short': 2, 'slow_short': 30, 'n_long': 30, 'fast_long': 2, 'slow_long': 30}
+  --- In-sample ---
+  buyhold_is             Sharpe=  0.40  CAGR=   8.1%  Vol=  31.7%  MaxDD= -43.6%  WR=  50.5%  Trades=  0 (0.0/y)
+  production_cross_is    Sharpe=  0.14  CAGR=   0.9%  Vol=  20.0%  MaxDD= -33.4%  WR=  49.7%  Trades= 45 (8.7/y)
+  production_regime_is   Sharpe=  0.18  CAGR=   1.6%  Vol=  17.9%  MaxDD= -27.3%  WR=  49.1%  Trades=117 (22.6/y)
+  --- Out-of-sample ---
+  buyhold_oos            Sharpe=  1.40  CAGR=  34.8%  Vol=  23.3%  MaxDD= -24.4%  WR=  56.9%  Trades=  0 (0.0/y)
+  production_cross_oos   Sharpe=  1.43  CAGR=  26.5%  Vol=  17.5%  MaxDD= -20.4%  WR=  58.6%  Trades= 21 (6.1/y)
+  production_regime_oos  Sharpe=  1.06  CAGR=  17.9%  Vol=  16.8%  MaxDD= -19.4%  WR=  56.7%  Trades= 75 (21.7/y)
+
+========================================================================================
+OOS SHARPE SUMMARY (equal-weight across tickers)
+========================================================================================
+  buyhold_oos            mean=  1.08  median=  0.94  min=  0.72  max=  1.42  n=7
+  production_cross_oos   mean=  0.73  median=  0.67  min=  0.14  max=  1.43  n=7
+  production_regime_oos  mean=  0.85  median=  0.96  min=  0.28  max=  1.51  n=7
+  stable_cross_oos       mean=  0.21  median=  0.18  min= -0.12  max=  0.60  n=4
+  stable_regime_oos      mean=  0.71  median=  0.67  min=  0.09  max=  1.40  n=4
+
+Wrote pipeline/research/artifacts/kama_oos_validation.json
