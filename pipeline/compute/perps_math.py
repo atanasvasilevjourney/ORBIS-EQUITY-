@@ -3,10 +3,10 @@
 QMIE (atanasvasilevjourney/QMIE) does not ship strategies named TEMA or
 Carver. This module is the KovaView mapping:
 
-  TEMA    Triple EMA stack (8/21/55) — tactical trend, QMIE-style
-          1.5 ATR stop / 2.5 ATR target, ranked B+ book.
-  Carver  Robert Carver *Systematic Trading* EWMAC forecasts
-          (16/64 + 32/128), clipped ±20, volatility-targeted notional.
+  TEMA    Triple EMA swing stack (9/99/199) — 9 is the trigger,
+          99 the swing, 199 the regime. 2.5 ATR stop / 4 ATR target.
+  Carver  EWMAC 16/64 + 32/128, vol-target, drawdown scalar, and
+          LIVE / REDUCE / CASH rotation from forecast breadth.
 
 Signals run on listed-equity daily bars. Sizing is as a USDT-M perpetual:
 leverage, isolated margin, liquidation. No live exchange orders.
@@ -18,17 +18,22 @@ from dataclasses import dataclass
 
 import numpy as np
 
-# ── TEMA ────────────────────────────────────────────────────────────────
-TEMA_FAST = 8
-TEMA_MID = 21
-TEMA_SLOW = 55
-TEMA_SL_ATR = 1.5
-TEMA_TP_ATR = 2.5
-TEMA_MIN_GRADE = "B"  # daily equity; QMIE's A is calibrated to 1h/4h crypto
+# ── TEMA swing (9 / 99 / 199) ───────────────────────────────────────────
+# Daily: 9 ≈ 2 weeks, 99 ≈ 5 months, 199 ≈ 10 months. Feasible as a
+# systematic swing if you have ≥ ~220 EOD bars (TEMA-199 is only fully
+# settled after ~400). Full 9>99>199 stacks are uncommon — that is the
+# point of a swing book, not a bug.
+TEMA_FAST = 9
+TEMA_MID = 99
+TEMA_SLOW = 199
+TEMA_SL_ATR = 2.5
+TEMA_TP_ATR = 4.0
+TEMA_MIN_GRADE = "B"
 TEMA_TOP_LONG = 3
 TEMA_TOP_SHORT = 3
 TEMA_CLUSTER_MAX = 2
-TEMA_RISK_PCT = 0.02  # of allocated slot capital at the 1.5 ATR stop
+TEMA_RISK_PCT = 0.02  # of allocated slot capital at the 2.5 ATR stop
+TEMA_WARMUP_FULL = 400
 
 # ── Carver ──────────────────────────────────────────────────────────────
 EWMAC_FAST_PAIR = (16, 64, 3.75)   # Lfast, Lslow, forecast scalar
@@ -40,6 +45,10 @@ CARVER_PRICE_SIGMA_WINDOW = 25
 CARVER_TARGET_VOL = 0.25          # levered CTA sleeve
 CARVER_IDM = 1.2
 CARVER_GROSS_LEV_CAP = 3.0
+CARVER_DD_SOFT = 0.10             # start tapering risk
+CARVER_DD_HARD = 0.25             # CASH (Carver-style max-DD overlay)
+CARVER_LIVE_MIN = 3               # forecasts |f|>=min to stay LIVE
+CARVER_REDUCE_TOP = 2             # names kept in REDUCE rotation
 
 # ── Shared perp overlay ─────────────────────────────────────────────────
 MAX_LEVERAGE = 5.0
@@ -50,7 +59,7 @@ FUNDING_SKIP = 0.001              # QMIE SIG_FUNDING_RATE_THRESHOLD (0.1%/8h)
 EQUITY = 100_000.0
 TEMA_SLEEVE_FRAC = 0.50
 CARVER_SLEEVE_FRAC = 0.50
-MIN_BARS = 160
+MIN_BARS = 220  # TEMA 199 + a short EMA settle
 
 _GRADE_RANK = {"A+": 4, "A": 3, "B": 2, "C": 1, "REJECT": 0, "NEUTRAL": 0}
 
@@ -147,33 +156,37 @@ class TemaSignal:
     side: str  # BUY / SELL / FLAT
     grade: str
     score: float
-    t8: float
-    t21: float
-    t55: float
+    t_fast: float
+    t_mid: float
+    t_slow: float
     strength: float
     stop: float
     take_profit: float
+    warmup: str  # full | partial
 
 
 def tema_signal(close: np.ndarray, high: np.ndarray, low: np.ndarray, atr: float) -> TemaSignal | None:
-    if len(close) < TEMA_SLOW + 5 or atr <= 0:
+    if len(close) < MIN_BARS or atr <= 0:
         return None
-    t8 = float(tema(close, TEMA_FAST)[-1])
-    t21 = float(tema(close, TEMA_MID)[-1])
-    t55 = float(tema(close, TEMA_SLOW)[-1])
+    t_fast = float(tema(close, TEMA_FAST)[-1])
+    t_mid = float(tema(close, TEMA_MID)[-1])
+    t_slow = float(tema(close, TEMA_SLOW)[-1])
     last = float(close[-1])
     atr_pct = (atr / last) * 100.0
     vol_bonus = 5.0 if MIN_ATR_PCT <= atr_pct <= MAX_ATR_PCT else 0.0
+    warmup = "full" if len(close) >= TEMA_WARMUP_FULL else "partial"
 
-    stacked_up = t8 > t21 > t55 and last > t21
-    stacked_dn = t8 < t21 < t55 and last < t21
-    # Fan width in ATR — T8 vs T55, not the tight T8/T21 pair (that stays
-    # near zero on a slow grind and would REJECT every daily equity).
-    fan = abs(t8 - t55) / atr
-    if stacked_up:
+    # Swing rule (not a 3-line ribbon stack). TEMA overshoots, so requiring
+    # 9>99>199 inverts on sharp dumps. Use 199 as regime and 9 vs 99 as trigger.
+    regime_up = last > t_slow
+    regime_dn = last < t_slow
+    trigger_up = t_fast > t_mid
+    trigger_dn = t_fast < t_mid
+    fan = abs(t_fast - t_mid) / atr
+    if regime_up and trigger_up:
         side = "BUY"
         strength = float(fan)
-    elif stacked_dn:
+    elif regime_dn and trigger_dn:
         side = "SELL"
         strength = float(fan)
     else:
@@ -193,8 +206,8 @@ def tema_signal(close: np.ndarray, high: np.ndarray, low: np.ndarray, atr: float
         stop = tp = last
     return TemaSignal(
         side=side, grade=grade, score=round(score, 1),
-        t8=t8, t21=t21, t55=t55, strength=round(strength, 3),
-        stop=stop, take_profit=tp,
+        t_fast=t_fast, t_mid=t_mid, t_slow=t_slow, strength=round(strength, 3),
+        stop=stop, take_profit=tp, warmup=warmup,
     )
 
 
@@ -250,18 +263,77 @@ def size_perp(notional: float, allocated: float, entry: float, side: str,
 
 
 def tema_notional(allocated: float, price: float, atr: float) -> float:
-    """Notional so that a 1.5 ATR stop loses TEMA_RISK_PCT of allocated capital."""
+    """Notional so that a TEMA_SL_ATR stop loses TEMA_RISK_PCT of allocated capital."""
     stop_dist = TEMA_SL_ATR * atr
     if stop_dist <= 0 or price <= 0 or allocated <= 0:
         return 0.0
     return allocated * TEMA_RISK_PCT * (price / stop_dist)
 
 
-def carver_notional(forecast: float, sleeve_equity: float, inst_vol: float) -> float:
+def carver_notional(forecast: float, sleeve_equity: float, inst_vol: float,
+                    dd_scalar: float = 1.0) -> float:
     if inst_vol <= 0 or sleeve_equity <= 0 or abs(forecast) < CARVER_MIN_ABS:
         return 0.0
+    if dd_scalar <= 0:
+        return 0.0
     weight = (forecast / 10.0) * CARVER_IDM * (CARVER_TARGET_VOL / inst_vol)
-    return weight * sleeve_equity
+    return weight * sleeve_equity * max(0.0, min(1.0, dd_scalar))
+
+
+def peak_drawdown_current(equity: np.ndarray) -> tuple[float, float]:
+    """Return (current DD from peak, max DD), both ≤ 0."""
+    if len(equity) < 2:
+        return 0.0, 0.0
+    peak = np.maximum.accumulate(equity)
+    dd = equity / np.where(peak > 0, peak, 1.0) - 1.0
+    return float(dd[-1]), float(np.min(dd))
+
+
+def equal_weight_equity(closes: list[np.ndarray]) -> np.ndarray:
+    """Align series from the end and compound equal-weight daily returns."""
+    usable = [c.astype(float) for c in closes if len(c) >= 21]
+    if not usable:
+        return np.array([1.0])
+    n = min(len(c) for c in usable)
+    rets = np.vstack([(c[-n:][1:] / c[-n:][:-1]) - 1.0 for c in usable])
+    mean_r = np.mean(rets, axis=0)
+    eq = np.empty(n, dtype=float)
+    eq[0] = 1.0
+    eq[1:] = np.cumprod(1.0 + mean_r)
+    return eq
+
+
+def drawdown_scalar(current_dd: float, soft: float = CARVER_DD_SOFT,
+                    hard: float = CARVER_DD_HARD) -> float:
+    """Carver risk overlay: 1.0 until |DD|=soft, 0.0 at |DD|≥hard, linear between.
+
+    `current_dd` is signed (e.g. -0.12). Recovered books return to 1.0.
+    """
+    if hard <= soft:
+        return 1.0
+    depth = abs(min(0.0, current_dd))
+    if depth <= soft:
+        return 1.0
+    if depth >= hard:
+        return 0.0
+    return float(1.0 - (depth - soft) / (hard - soft))
+
+
+def rotation_regime(dd_scalar: float, n_active: int, live_min: int = CARVER_LIVE_MIN) -> str:
+    """LIVE / REDUCE / CASH from drawdown scalar and forecast breadth."""
+    if dd_scalar <= 0.0 or n_active <= 0:
+        return "CASH"
+    if dd_scalar < 0.7 or n_active < live_min:
+        return "REDUCE"
+    return "LIVE"
+
+
+def rotation_size_mult(regime: str) -> float:
+    if regime == "CASH":
+        return 0.0
+    if regime == "REDUCE":
+        return 0.5
+    return 1.0
 
 
 def scale_gross(notionals: list[float], sleeve_equity: float, cap: float) -> list[float]:

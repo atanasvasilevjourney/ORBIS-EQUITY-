@@ -74,6 +74,9 @@ function mapName(r: NameRow) {
     temaSide: r.tema_side,
     temaGrade: r.tema_grade,
     temaScore: r.tema_score,
+    temaT9: r.tema_t8,
+    temaT99: r.tema_t21,
+    temaT199: r.tema_t55,
     temaT8: r.tema_t8,
     temaT21: r.tema_t21,
     temaT55: r.tema_t55,
@@ -137,6 +140,7 @@ export async function GET() {
       stale = (Date.now() - new Date(latest.asof_date).getTime()) / 86400000 > 3;
     }
     const listed = names.filter((n) => n.venueListed).length;
+    const cfg = latest.config && typeof latest.config === "object" ? latest.config : {};
     return NextResponse.json({
       summary: {
         names: latest.names,
@@ -148,6 +152,11 @@ export async function GET() {
         lastRunAt: latest.computed_at,
         listed,
         synthetic: names.length - listed,
+        regime: typeof cfg.regime === "string" ? cfg.regime : "LIVE",
+        drawdown: typeof cfg.drawdown === "number" ? cfg.drawdown : null,
+        ddScalar: typeof cfg.ddScalar === "number" ? cfg.ddScalar : null,
+        maxDrawdown: typeof cfg.maxDrawdown === "number" ? cfg.maxDrawdown : null,
+        activeForecasts: typeof cfg.activeForecasts === "number" ? cfg.activeForecasts : null,
       },
       names: names.sort((a, b) => a.ticker.localeCompare(b.ticker)),
       temaBook,

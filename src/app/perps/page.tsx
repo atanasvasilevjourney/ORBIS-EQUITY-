@@ -17,9 +17,9 @@ type Name = {
   temaSide: string | null;
   temaGrade: string | null;
   temaScore: number | null;
-  temaT8: number | null;
-  temaT21: number | null;
-  temaT55: number | null;
+  temaT9: number | null;
+  temaT99: number | null;
+  temaT199: number | null;
   temaStop: number | null;
   temaTp: number | null;
   temaWeightPct: number | null;
@@ -53,6 +53,11 @@ type Data = {
     asOfDate: string | null;
     listed: number;
     synthetic: number;
+    regime: string | null;
+    drawdown: number | null;
+    ddScalar: number | null;
+    maxDrawdown: number | null;
+    activeForecasts: number | null;
   } | null;
   names: Name[];
   temaBook: Name[];
@@ -94,12 +99,13 @@ export default function PerpsPage() {
 
   const s = d?.summary;
   const cfg = d?.config;
+  const regimeColor = s?.regime === "CASH" ? "var(--accent-bear)" : s?.regime === "REDUCE" ? "var(--accent-warning)" : "var(--accent-bull)";
   const cards = [
-    { label: "TEMA SLOTS", value: s?.temaSlots ?? "—", color: "var(--accent-info)" },
-    { label: "CARVER SLOTS", value: s?.carverSlots ?? "—", color: "var(--accent-warning)" },
+    { label: "REGIME", value: s?.regime ?? "—", color: regimeColor },
+    { label: "DD / SCALAR", value: s?.drawdown == null ? "—" : `${(s.drawdown * 100).toFixed(1)}% · ${num(s.ddScalar, 2)}`, color: (s?.drawdown ?? 0) < -0.1 ? "var(--accent-warning)" : "" },
+    { label: "TEMA 9/99/199", value: s?.temaSlots ?? "—", color: "var(--accent-info)" },
+    { label: "CARVER", value: s?.carverSlots ?? "—", color: "var(--accent-warning)" },
     { label: "GROSS LEV", value: s?.grossLeverage == null ? "—" : `${s.grossLeverage.toFixed(2)}x`, color: (s?.grossLeverage ?? 0) > 2.5 ? "var(--accent-bear)" : "var(--accent-bull)" },
-    { label: "VENUE LISTED", value: s ? `${s.listed}/${(s.listed + s.synthetic) || 0}` : "—", color: "" },
-    { label: "AS OF", value: s?.asOfDate ?? "—", color: d?.stale ? "var(--accent-warning)" : "" },
   ];
 
   return (
@@ -109,7 +115,7 @@ export default function PerpsPage() {
           PERPS DESK
         </h1>
         <p className="text-xs text-[var(--text-secondary)]">
-          TEMA + Carver sleeves on listed equities, sized as isolated USDT-M perpetuals · paper only
+          TEMA 9/99/199 swing + Carver EWMAC with drawdown scalar and LIVE/REDUCE/CASH rotation · paper only
         </p>
       </div>
 
@@ -118,8 +124,8 @@ export default function PerpsPage() {
           <span style={{ color: "var(--accent-warning)" }}>QMIE MAP:</span>{" "}
           atanasvasilevjourney/QMIE does not ship engines named TEMA or Carver. It scans crypto USDT perps with
           triple Supertrend + EMA200 + ranked 3L/3S ATR brackets. This desk is a <em>separate</em> KovaView
-          section: TEMA 8/21/55 is the tactical stack (grade B+ on daily equity, 1.5/2.5 ATR); Carver EWMAC 16/64+32/128
-          is the slow vol-targeted sleeve. Do not mix with LOOP / ORB / BIAS.
+          section: TEMA 9/99/199 is the swing book (9 vs 99 trigger, 199 regime — not a 3-line stack, 2.5/4 ATR);
+          Carver EWMAC plus a drawdown scalar and LIVE / REDUCE / CASH rotation. Do not mix with LOOP / ORB / BIAS.
         </p>
         <p>
           Signals from equity EOD. Contract = TICKERUSDT. Venue marks/funding from public Bybit/Binance when the
@@ -145,7 +151,7 @@ export default function PerpsPage() {
         ))}
       </div>
 
-      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">TEMA BOOK · 8/21/55 · B+ · 3L/3S</h2>
+      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">TEMA BOOK · 9/99/199 SWING · B+ · 3L/3S</h2>
       <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
         <table className="w-full text-sm font-terminal">
           <thead>
@@ -192,7 +198,7 @@ export default function PerpsPage() {
         </table>
       </div>
 
-      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">CARVER BOOK · EWMAC 16/64 + 32/128 · VOL TARGET 25%</h2>
+      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">CARVER BOOK · EWMAC + DD SCALAR · ROTATION {s?.regime ?? "—"}</h2>
       <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
         <table className="w-full text-sm font-terminal">
           <thead>
@@ -280,9 +286,8 @@ export default function PerpsPage() {
       </div>
 
       <p className="text-[10px] text-[var(--text-muted)] font-terminal mt-3">
-        Paper harness: $100,000 · TEMA 50% sleeve · Carver target vol 25% · max {String(cfg?.maxLeverage ?? 5)}x isolated ·
-        liq uses 0.5% MMR (not exchange-tiered). Funding haircut is live only when a venue tape exists; otherwise assume
-        ~0.01%/8h (~11% annual) if you hold 24×7. Not investment advice.
+        Paper harness: $100,000 · TEMA 9/99/199 swing (2.5/4 ATR) · Carver DD soft 10% / hard 25% ·
+        rotation LIVE / REDUCE / CASH · max {String(cfg?.maxLeverage ?? 5)}x isolated. Not investment advice.
       </p>
     </div>
   );

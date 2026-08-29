@@ -20,7 +20,7 @@ Systematic equity research terminal — momentum screener, multi-factor fundamen
 8. **Stock Analysis** — technical MA/MACD/RSI/regression plus fundamental composite & F-Score
 9. **Quantropy** — risk, CAPM, Altman Z, Markowitz allocation (port of the Quantropy/Matilda library)
 10. **Daily Bias** — TradingView-style chart, key levels, paper trade ideas (ANALYZE vote + ATR pivots)
-11. **TEMA + Carver Perps** — TEMA 8/21/55 and Carver EWMAC sleeves on listed names, sized as USDT-M perpetuals
+11. **TEMA + Carver Perps** — TEMA 9/99/199 swing and Carver EWMAC with drawdown scalar and LIVE/REDUCE/CASH rotation
 
 ## Setup
 
@@ -200,8 +200,8 @@ Surfaced at `/bias`, ticker **CHART** tab, `GET /api/bias`, and `GET /api/chart/
 
 | Sleeve | Signal | Book | Perp overlay |
 |---|---|---|---|
-| **TEMA** (50% of $100k) | Triple EMA 8/21/55 stack; grade B+ (daily equity; QMIE A is 1h/4h crypto) | Ranked 3 long + 3 short, sector cap 2, 1.5 ATR stop / 2.5 ATR target, 2% of slot at the stop | Isolated USDT-M, cap 5x, liq from 0.5% MMR |
-| **Carver** (50% of $100k) | EWMAC 16/64 + 32/128, scalars 3.75 / 2.65, forecast clip ±20 | Vol-target 25% with IDM 1.2, skip \|forecast\| < 5, gross cap 3x | Same isolated overlay; funding skip at ±0.1%/8h when a venue tape exists |
+| **TEMA** (50% of $100k) | Triple EMA **9/99/199**: 9 vs 99 is the trigger, 199 is the regime. Do **not** require 9>99>199 stacked — TEMA overshoots and inverts a 3-line ribbon on sharp dumps. Grade B+ | Ranked 3 long + 3 short, sector cap 2, 2.5 ATR stop / 4 ATR target. Needs ≥220 EOD bars; TEMA-199 is only fully settled after ~400. | Isolated USDT-M, cap 5x, liq from 0.5% MMR |
+| **Carver** (50% of $100k) | EWMAC 16/64 + 32/128, clip ±20 | Vol-target 25%, IDM 1.2. **Drawdown scalar** 1.0 until 10% EW-universe DD, 0 at 25%. **Rotation:** LIVE (≥3 forecasts and scalar ≥0.7) / REDUCE (half size, top 2) / CASH | Same isolated overlay; funding skip at ±0.1%/8h when a venue tape exists |
 
 Contract = `{TICKER}USDT`. Marks and 8h funding are pulled from public Bybit then Binance when the host can reach them. This environment often cannot (geo-block) — those names stay **synthetic** and still size off equity EOD. Funding, basis, 24×7 liquidation, and USD-M vs coin-M are risks LOOP's 2N cash book does not have.
 

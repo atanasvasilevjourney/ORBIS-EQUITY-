@@ -3,8 +3,8 @@
 Separate from LOOP / ORB / BIAS. Signals from `prices_daily`. Sizing as
 isolated USDT-M perpetuals (leverage, margin, liq). No live orders.
 
-  TEMA sleeve   50% of $100k · 8/21/55 stack · B+ ranked 3L/3S · 1.5/2.5 ATR
-  Carver sleeve 50% of $100k · EWMAC 16/64+32/128 · vol-target 25% · 3x gross cap
+  TEMA sleeve   50% of $100k · 9/99/199 swing stack · B+ ranked 3L/3S · 2.5/4 ATR
+  Carver sleeve 50% of $100k · EWMAC + vol-target + DD scalar · LIVE/REDUCE/CASH
 
 Usage:
     python -m pipeline.compute.perps_desk
@@ -24,6 +24,7 @@ from pipeline.clients.perp_venue import fetch_venue_tape
 from pipeline.compute.perps_math import (
     CARVER_GROSS_LEV_CAP,
     CARVER_MIN_ABS,
+    CARVER_REDUCE_TOP,
     CARVER_SLEEVE_FRAC,
     CARVER_TARGET_VOL,
     EQUITY,
@@ -32,16 +33,26 @@ from pipeline.compute.perps_math import (
     MIN_ATR_PCT,
     MIN_BARS,
     TEMA_CLUSTER_MAX,
+    TEMA_FAST,
+    TEMA_MID,
+    TEMA_SLOW,
     TEMA_SLEEVE_FRAC,
+    TEMA_SL_ATR,
+    TEMA_TP_ATR,
     TEMA_TOP_LONG,
     TEMA_TOP_SHORT,
     annual_vol,
     blended_carver_forecast,
     carver_notional,
+    drawdown_scalar,
+    equal_weight_equity,
     funding_ann,
     funding_blocks,
     grade_ok,
+    peak_drawdown_current,
     perp_contract,
+    rotation_regime,
+    rotation_size_mult,
     round_px,
     scale_gross,
     side_weights,
@@ -144,6 +155,7 @@ def run() -> dict:
             "ewmac_slow": f_slow,
             "inst_vol": inst_vol,
             "skip_reason": skip,
+            "close": close,
         })
 
     if not scanned:
@@ -156,7 +168,19 @@ def run() -> dict:
     tema_equity = EQUITY * TEMA_SLEEVE_FRAC
     carver_equity = EQUITY * CARVER_SLEEVE_FRAC
 
-    # ── TEMA ranked book (QMIE allocator shape) ─────────────────────────
+    # ── Carver drawdown overlay (equal-weight universe equity) ──────────
+    ew = equal_weight_equity([r["close"] for r in scanned])
+    current_dd, max_dd = peak_drawdown_current(ew)
+    dd_s = drawdown_scalar(current_dd)
+    n_active = sum(
+        1 for r in scanned
+        if r["skip_reason"] is None and abs(r["forecast"]) >= CARVER_MIN_ABS
+    )
+    regime = rotation_regime(dd_s, n_active)
+    rot_mult = rotation_size_mult(regime)
+    risk_mult = dd_s * rot_mult
+
+    # ── TEMA ranked swing book ──────────────────────────────────────────
     eligible = [
         r for r in scanned
         if r["skip_reason"] is None
@@ -171,8 +195,16 @@ def run() -> dict:
         [r for r in eligible if r["tema"].side == "SELL"],
         key=lambda r: (-r["tema"].score, r["symbol"]),
     )
-    longs_p = pick_ranked(longs, TEMA_TOP_LONG, TEMA_CLUSTER_MAX, lambda r: r["sector"])
-    shorts_p = pick_ranked(shorts, TEMA_TOP_SHORT, TEMA_CLUSTER_MAX, lambda r: r["sector"])
+    top_l = TEMA_TOP_LONG
+    top_s = TEMA_TOP_SHORT
+    if regime == "REDUCE":
+        top_l = min(top_l, CARVER_REDUCE_TOP)
+        top_s = min(top_s, CARVER_REDUCE_TOP)
+    if regime == "CASH":
+        longs_p, shorts_p = [], []
+    else:
+        longs_p = pick_ranked(longs, top_l, TEMA_CLUSTER_MAX, lambda r: r["sector"])
+        shorts_p = pick_ranked(shorts, top_s, TEMA_CLUSTER_MAX, lambda r: r["sector"])
     long_book = 50.0 if longs_p and shorts_p else (100.0 if longs_p else 0.0)
     short_book = 50.0 if longs_p and shorts_p else (100.0 if shorts_p else 0.0)
     lw = side_weights(len(longs_p), long_book)
@@ -183,14 +215,19 @@ def run() -> dict:
     for i, r in enumerate(shorts_p):
         tema_alloc[r["symbol"]] = {"rank": i + 1, "weight_pct": sw[i], "side": "SELL"}
 
-    # ── Carver vol-target book ──────────────────────────────────────────
+    # ── Carver vol-target book, then rotate ─────────────────────────────
     carver_raw: list[tuple[str, float]] = []
     for r in scanned:
-        if r["skip_reason"] is not None:
+        if r["skip_reason"] is not None or regime == "CASH":
+            carver_raw.append((r["symbol"], 0.0))
             continue
-        ntl = carver_notional(r["forecast"], carver_equity, r["inst_vol"])
+        ntl = carver_notional(r["forecast"], carver_equity, r["inst_vol"], dd_scalar=risk_mult)
         carver_raw.append((r["symbol"], ntl))
-    scaled = scale_gross([n for _, n in carver_raw], carver_equity, CARVER_GROSS_LEV_CAP)
+    if regime == "REDUCE":
+        ranked = sorted(carver_raw, key=lambda x: -abs(x[1]))
+        keep = {sym for sym, ntl in ranked[:CARVER_REDUCE_TOP] if abs(ntl) > 0}
+        carver_raw = [(sym, ntl if sym in keep else 0.0) for sym, ntl in carver_raw]
+    scaled = scale_gross([n for _, n in carver_raw], carver_equity, CARVER_GROSS_LEV_CAP * max(risk_mult, 1e-9))
     carver_ntl = {sym: ntl for (sym, _), ntl in zip(carver_raw, scaled)}
 
     now = datetime.now(timezone.utc).isoformat()
@@ -218,13 +255,13 @@ def run() -> dict:
         tema_ntl = 0.0
         tema_lev = 0.0
         tema_margin = 0.0
-        tema_liq = last
+        tema_liq = None
         if ta and skip is None:
             if funding_blocks(ta["side"], funding):
                 skip = "funding_against"
             else:
                 allocated = tema_equity * (ta["weight_pct"] / 100.0)
-                raw_ntl = tema_notional(allocated, last, r["atr"])
+                raw_ntl = tema_notional(allocated, last, r["atr"]) * risk_mult
                 signed = raw_ntl if ta["side"] == "BUY" else -raw_ntl
                 sized = size_perp(signed, allocated, last, ta["side"])
                 in_tema = abs(sized.notional) > 0
@@ -240,7 +277,7 @@ def run() -> dict:
         cv_ntl = 0.0
         cv_lev = 0.0
         cv_margin = 0.0
-        cv_liq = last
+        cv_liq = None
         cv_side = "FLAT"
         n_carver = sum(1 for v in carver_ntl.values() if abs(v) > 0)
         if skip is None and abs(r["forecast"]) >= CARVER_MIN_ABS:
@@ -264,11 +301,11 @@ def run() -> dict:
 
         bits = []
         if ts.side != "FLAT":
-            bits.append(f"TEMA {ts.side} {ts.grade} ({ts.score:.0f}) stack {ts.strength:.2f} ATR")
+            bits.append(f"TEMA 9/99/199 {ts.side} {ts.grade} ({ts.score:.0f}) fan {ts.strength:.2f} ATR · {ts.warmup}")
         else:
-            bits.append("TEMA flat (8/21/55 not stacked)")
+            bits.append(f"TEMA 9/99/199 flat ({ts.warmup} warmup)")
         bits.append(f"Carver forecast {r['forecast']:+.1f} (16/64 {r['ewmac_fast']:+.1f}, 32/128 {r['ewmac_slow']:+.1f})")
-        bits.append(f"σ {r['inst_vol']*100:.0f}%")
+        bits.append(f"σ {r['inst_vol']*100:.0f}% · regime {regime} · DD {current_dd*100:.1f}% · scalar {dd_s:.2f}")
         if listed:
             bits.append(f"{venue} {contract} listed")
         else:
@@ -292,9 +329,9 @@ def run() -> dict:
             "tema_side": ts.side,
             "tema_grade": ts.grade,
             "tema_score": ts.score,
-            "tema_t8": _px(ts.t8),
-            "tema_t21": _px(ts.t21),
-            "tema_t55": _px(ts.t55),
+            "tema_t8": _px(ts.t_fast),   # TEMA 9
+            "tema_t21": _px(ts.t_mid),   # TEMA 99
+            "tema_t55": _px(ts.t_slow),  # TEMA 199
             "tema_stop": _px(ts.stop),
             "tema_tp": _px(ts.take_profit),
             "tema_weight_pct": tema_weight,
@@ -323,19 +360,20 @@ def run() -> dict:
     gross_lev = gross / EQUITY if EQUITY else 0.0
     listed_n = sum(1 for r in rows if r["venue_listed"])
     headline = (
-        f"{today.isoformat()} · {len(rows)} names · TEMA {tema_slots} slots · "
-        f"Carver {carver_slots} slots · gross {gross_lev:.2f}x · "
+        f"{today.isoformat()} · {len(rows)} names · TEMA 9/99/199 {tema_slots} slots · "
+        f"Carver {carver_slots} slots · {regime} · DD {current_dd*100:.1f}% "
+        f"(scalar {dd_s:.2f}) · gross {gross_lev:.2f}x · "
         f"{listed_n} venue-listed / {len(rows) - listed_n} synthetic"
     )
     config = {
         "equity": EQUITY,
         "temaSleeve": TEMA_SLEEVE_FRAC,
         "carverSleeve": CARVER_SLEEVE_FRAC,
-        "temaFast": 8,
-        "temaMid": 21,
-        "temaSlow": 55,
-        "temaSlAtr": 1.5,
-        "temaTpAtr": 2.5,
+        "temaFast": TEMA_FAST,
+        "temaMid": TEMA_MID,
+        "temaSlow": TEMA_SLOW,
+        "temaSlAtr": TEMA_SL_ATR,
+        "temaTpAtr": TEMA_TP_ATR,
         "temaMinGrade": "B",
         "topLong": TEMA_TOP_LONG,
         "topShort": TEMA_TOP_SHORT,
@@ -345,6 +383,12 @@ def run() -> dict:
         "maxLeverage": MAX_LEVERAGE,
         "minAtrPct": MIN_ATR_PCT,
         "maxAtrPct": MAX_ATR_PCT,
+        "regime": regime,
+        "drawdown": round(current_dd, 4),
+        "maxDrawdown": round(max_dd, 4),
+        "ddScalar": round(dd_s, 4),
+        "riskMult": round(risk_mult, 4),
+        "activeForecasts": n_active,
     }
     sb.table("perp_runs").upsert({
         "run_id": run_id,

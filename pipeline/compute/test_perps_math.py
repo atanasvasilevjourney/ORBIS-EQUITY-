@@ -4,12 +4,17 @@ import numpy as np
 
 from pipeline.compute.perps_math import (
     carver_notional,
+    drawdown_scalar,
     ema,
+    equal_weight_equity,
     ewmac_forecast,
     funding_blocks,
     grade_for,
     grade_ok,
     liquidation_price,
+    peak_drawdown_current,
+    rotation_regime,
+    rotation_size_mult,
     scale_gross,
     side_weights,
     size_perp,
@@ -34,7 +39,7 @@ class EmaTemaTests(unittest.TestCase):
         self.assertLess(abs(t - x[-1]), abs(e - x[-1]))
 
     def test_tema_long_stack_on_uptrend(self):
-        x = 40.0 * (1.012 ** np.arange(220))
+        x = 40.0 * (1.006 ** np.arange(280))
         high = x * 1.004
         low = x * 0.996
         atr = wilder_atr(high, low, x)
@@ -45,9 +50,10 @@ class EmaTemaTests(unittest.TestCase):
         self.assertGreater(sig.take_profit, x[-1])
         self.assertTrue(grade_ok(sig.grade, "B"))
         self.assertGreaterEqual(sig.score, 65.0)
+        self.assertEqual(sig.warmup, "partial")
 
-    def test_tema_short_stack_on_downtrend(self):
-        x = 200.0 * (0.988 ** np.arange(220))
+    def test_tema_short_on_downtrend(self):
+        x = np.concatenate([np.full(250, 100.0), 100.0 * (0.997 ** np.arange(1, 81))])
         high = x * 1.004
         low = x * 0.996
         atr = wilder_atr(high, low, x)
@@ -55,6 +61,11 @@ class EmaTemaTests(unittest.TestCase):
         self.assertIsNotNone(sig)
         self.assertEqual(sig.side, "SELL")
         self.assertGreater(sig.stop, x[-1])
+
+    def test_tema_needs_220_bars(self):
+        x = np.linspace(10, 20, 100)
+        atr = wilder_atr(x * 1.01, x * 0.99, x)
+        self.assertIsNone(tema_signal(x, x * 1.01, x * 0.99, atr))
 
 
 class CarverTests(unittest.TestCase):
@@ -74,6 +85,33 @@ class CarverTests(unittest.TestCase):
         n = carver_notional(10.0, 50_000, 0.25)
         # forecast 10, IDM 1.2, tau=vol → weight 1.2 × 50k
         self.assertAlmostEqual(n, 50_000 * 1.2, delta=1.0)
+        self.assertAlmostEqual(carver_notional(10.0, 50_000, 0.25, dd_scalar=0.5), 30_000, delta=1.0)
+        self.assertEqual(carver_notional(10.0, 50_000, 0.25, dd_scalar=0.0), 0.0)
+
+    def test_drawdown_scalar_taper(self):
+        self.assertEqual(drawdown_scalar(0.0), 1.0)
+        self.assertEqual(drawdown_scalar(-0.10), 1.0)
+        self.assertAlmostEqual(drawdown_scalar(-0.175), 0.5, places=4)
+        self.assertEqual(drawdown_scalar(-0.25), 0.0)
+        self.assertEqual(drawdown_scalar(-0.40), 0.0)
+
+    def test_rotation_levels(self):
+        self.assertEqual(rotation_regime(1.0, 5), "LIVE")
+        self.assertEqual(rotation_regime(0.5, 5), "REDUCE")
+        self.assertEqual(rotation_regime(1.0, 1), "REDUCE")
+        self.assertEqual(rotation_regime(0.0, 5), "CASH")
+        self.assertEqual(rotation_regime(1.0, 0), "CASH")
+        self.assertEqual(rotation_size_mult("CASH"), 0.0)
+        self.assertEqual(rotation_size_mult("REDUCE"), 0.5)
+        self.assertEqual(rotation_size_mult("LIVE"), 1.0)
+
+    def test_equal_weight_drawdown_recovers(self):
+        down = np.linspace(100, 70, 40)
+        up = np.linspace(70, 95, 40)[1:]
+        eq = equal_weight_equity([np.concatenate([down, up])])
+        cur, mx = peak_drawdown_current(eq)
+        self.assertLess(mx, -0.2)
+        self.assertGreater(cur, mx)  # recovered off the trough
 
     def test_scale_gross_caps(self):
         out = scale_gross([100_000, -100_000], 50_000, 3.0)
@@ -106,9 +144,9 @@ class PerpOverlayTests(unittest.TestCase):
         self.assertIsNone(liquidation_price(100.0, "BUY", 1.0))
 
     def test_tema_notional_1p5_atr_stop(self):
-        # 2% of 10k at 1.5 ATR, ATR=2, price=100 → stop dist 3 → notional 6666.67
+        # 2% of 10k at 2.5 ATR, ATR=2, price=100 → stop dist 5 → notional 4000
         n = tema_notional(10_000, 100.0, 2.0)
-        self.assertAlmostEqual(n, 10_000 * 0.02 * 100 / 3.0, places=4)
+        self.assertAlmostEqual(n, 10_000 * 0.02 * 100 / 5.0, places=4)
 
     def test_funding_blocks_buy_when_positive(self):
         self.assertTrue(funding_blocks("BUY", 0.002))
