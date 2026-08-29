@@ -30,6 +30,8 @@ type DashData = {
   quantSharpe: number | null;
   biasLongs: number;
   biasShorts: number;
+  perpsTema: number;
+  perpsCarver: number;
 };
 
 export default function Home() {
@@ -46,7 +48,8 @@ export default function Home() {
       fetch("/api/analysis").then((r) => r.json()).catch(() => null),
       fetch("/api/quantropy").then((r) => r.json()).catch(() => null),
       fetch("/api/bias").then((r) => r.json()).catch(() => null),
-    ]).then(([summary, fund, earnings, skew, orb, analysis, quant, bias]) => {
+      fetch("/api/perps").then((r) => r.json()).catch(() => null),
+    ]).then(([summary, fund, earnings, skew, orb, analysis, quant, bias, perps]) => {
       const rows = fund?.rows ?? [];
       const composites = rows.filter((r: { compositeScore: number | null }) => r.compositeScore != null);
       setD({
@@ -78,6 +81,8 @@ export default function Home() {
         quantSharpe: quant?.summary?.maxSharpe ?? null,
         biasLongs: bias?.summary?.longs ?? 0,
         biasShorts: bias?.summary?.shorts ?? 0,
+        perpsTema: perps?.summary?.temaSlots ?? 0,
+        perpsCarver: perps?.summary?.carverSlots ?? 0,
       });
     }).finally(() => setLoading(false));
   }, []);
@@ -197,6 +202,17 @@ export default function Home() {
         { label: "Long", value: String(d.biasLongs), color: "var(--accent-bull)" },
         { label: "Short", value: String(d.biasShorts), color: "var(--accent-bear)" },
         { label: "Chart", value: "TV", color: "var(--accent-info)" },
+      ] : null,
+    },
+    {
+      href: "/perps",
+      title: "TEMA + CARVER PERPS",
+      badge: "MODULE 11",
+      desc: "TEMA 9/99/199 swing, MACD close, and Carver EWMAC with drawdown scalar and rotation",
+      stats: d ? [
+        { label: "TEMA", value: String(d.perpsTema), color: "var(--accent-info)" },
+        { label: "Carver", value: String(d.perpsCarver), color: "var(--accent-warning)" },
+        { label: "Venue", value: "USDT-M", color: "" },
       ] : null,
     },
   ];

@@ -20,6 +20,7 @@ Systematic equity research terminal — momentum screener, multi-factor fundamen
 8. **Stock Analysis** — technical MA/MACD/RSI/regression plus fundamental composite & F-Score
 9. **Quantropy** — risk, CAPM, Altman Z, Markowitz allocation (port of the Quantropy/Matilda library)
 10. **Daily Bias** — TradingView-style chart, key levels, paper trade ideas (ANALYZE vote + ATR pivots)
+11. **TEMA + Carver Perps** — TEMA 9/99/199 swing with MACD(12,26,9) close, and Carver EWMAC with drawdown scalar and LIVE/REDUCE/CASH rotation
 
 ## Setup
 
@@ -54,6 +55,8 @@ supabase/migrations/009_orb.sql
 supabase/migrations/010_analysis.sql
 supabase/migrations/011_quantropy.sql
 supabase/migrations/012_daily_bias.sql
+supabase/migrations/013_qmie_perps.sql
+supabase/migrations/014_perps_macd.sql
 ```
 
 ### Web
@@ -85,7 +88,7 @@ Optional: `LSE_DATA_API_URL` (defaults to `https://data-api.londonstrategicedge.
 Without these secrets the nightly pipeline will fail immediately with a clear error.
 
 Runs nightly via `.github/workflows/nightly-pipeline.yml`:
-universe → prices → fundamentals → financial reports → trend radar → F-Score → factor scores → portfolio loop → skew map → opening range → stock analysis → Quantropy → daily bias → earnings → news → clinical trials → health signals
+universe → prices → fundamentals → financial reports → trend radar → F-Score → factor scores → portfolio loop → skew map → opening range → stock analysis → Quantropy → daily bias → TEMA/Carver perps → earnings → news → clinical trials → health signals
 
 ## Health Sector (free data, no API key)
 
@@ -191,6 +194,25 @@ python -m pipeline.compute.daily_bias
 ```
 
 Surfaced at `/bias`, ticker **CHART** tab, `GET /api/bias`, and `GET /api/chart/[ticker]`. Paper ideas — not live orders, not investment advice.
+
+## TEMA + Carver perps (levered equity via USDT-M)
+
+[QMIE](https://github.com/atanasvasilevjourney/QMIE) is a **crypto USDT-perp scanner** (manual-entry, no broker). It does **not** implement strategies named TEMA or Carver. This desk is a **separate** KovaView section that maps those two ideas onto listed equities and sizes them as isolated perpetuals:
+
+| Sleeve | Signal | Book | Perp overlay |
+|---|---|---|---|
+| **TEMA** (50% of $100k) | Triple EMA **9/99/199**: 9 vs 99 is the trigger, 199 is the regime. Do **not** require 9>99>199 stacked — TEMA overshoots and inverts a 3-line ribbon on sharp dumps. **MACD(12,26,9)** is the systematic close (line vs signal). Grade B+ and MACD HOLD to stay in the book. | Ranked 3 long + 3 short, sector cap 2, 2.5 ATR hard stop. 4 ATR is informational only. Needs ≥220 EOD bars; TEMA-199 is only fully settled after ~400. | Isolated USDT-M, cap 5x, liq from 0.5% MMR |
+| **Carver** (50% of $100k) | EWMAC 16/64 + 32/128, clip ±20 | Vol-target 25%, IDM 1.2. **Drawdown scalar** 1.0 until 10% EW-universe DD, 0 at 25%. **Rotation:** LIVE (≥3 forecasts and scalar ≥0.7) / REDUCE (half size, top 2) / CASH | Same isolated overlay; funding skip at ±0.1%/8h when a venue tape exists |
+
+Contract = `{TICKER}USDT`. Marks and 8h funding are pulled from public Bybit then Binance when the host can reach them. This environment often cannot (geo-block) — those names stay **synthetic** and still size off equity EOD. Funding, basis, 24×7 liquidation, and USD-M vs coin-M are risks LOOP's 2N cash book does not have.
+
+Do **not** vendor QMIE (no license on that repo). Do **not** mix this book into LOOP / ORB / BIAS.
+
+```bash
+python -m pipeline.compute.perps_desk
+```
+
+Surfaced at `/perps` and `GET /api/perps`. Paper harness only — no live exchange orders. Not investment advice.
 
 ## Factor Scores
 

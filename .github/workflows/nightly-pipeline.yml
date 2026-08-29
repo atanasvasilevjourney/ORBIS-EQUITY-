@@ -294,6 +294,12 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
+      - name: Run TEMA + MACD close + Carver equity-perp paper desk
+        run: python -m pipeline.compute.perps_desk
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
   # ---------------------------------------------------------------------------
   # 6. Ingest Earnings + News — runs every weekday
   # ---------------------------------------------------------------------------
