@@ -118,7 +118,7 @@ export default function PerpsPage() {
           <span style={{ color: "var(--accent-warning)" }}>QMIE MAP:</span>{" "}
           atanasvasilevjourney/QMIE does not ship engines named TEMA or Carver. It scans crypto USDT perps with
           triple Supertrend + EMA200 + ranked 3L/3S ATR brackets. This desk is a <em>separate</em> KovaView
-          section: TEMA 8/21/55 is the tactical stack (QMIE-style grade + 1.5/2.5 ATR); Carver EWMAC 16/64+32/128
+          section: TEMA 8/21/55 is the tactical stack (grade B+ on daily equity, 1.5/2.5 ATR); Carver EWMAC 16/64+32/128
           is the slow vol-targeted sleeve. Do not mix with LOOP / ORB / BIAS.
         </p>
         <p>
@@ -145,7 +145,7 @@ export default function PerpsPage() {
         ))}
       </div>
 
-      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">TEMA BOOK · 8/21/55 · A/A+ · 3L/3S</h2>
+      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">TEMA BOOK · 8/21/55 · B+ · 3L/3S</h2>
       <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
         <table className="w-full text-sm font-terminal">
           <thead>

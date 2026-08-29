@@ -4,7 +4,7 @@ QMIE (atanasvasilevjourney/QMIE) does not ship strategies named TEMA or
 Carver. This module is the KovaView mapping:
 
   TEMA    Triple EMA stack (8/21/55) — tactical trend, QMIE-style
-          1.5 ATR stop / 2.5 ATR target, ranked A/A+ book.
+          1.5 ATR stop / 2.5 ATR target, ranked B+ book.
   Carver  Robert Carver *Systematic Trading* EWMAC forecasts
           (16/64 + 32/128), clipped ±20, volatility-targeted notional.
 
@@ -24,7 +24,7 @@ TEMA_MID = 21
 TEMA_SLOW = 55
 TEMA_SL_ATR = 1.5
 TEMA_TP_ATR = 2.5
-TEMA_MIN_GRADE = "A"
+TEMA_MIN_GRADE = "B"  # daily equity; QMIE's A is calibrated to 1h/4h crypto
 TEMA_TOP_LONG = 3
 TEMA_TOP_SHORT = 3
 TEMA_CLUSTER_MAX = 2
@@ -165,22 +165,23 @@ def tema_signal(close: np.ndarray, high: np.ndarray, low: np.ndarray, atr: float
     atr_pct = (atr / last) * 100.0
     vol_bonus = 5.0 if MIN_ATR_PCT <= atr_pct <= MAX_ATR_PCT else 0.0
 
-    g1 = (t8 - t21) / atr
-    g2 = (t21 - t55) / atr
-    stacked_up = t8 > t21 > t55 and last > t8
-    stacked_dn = t8 < t21 < t55 and last < t8
+    stacked_up = t8 > t21 > t55 and last > t21
+    stacked_dn = t8 < t21 < t55 and last < t21
+    # Fan width in ATR — T8 vs T55, not the tight T8/T21 pair (that stays
+    # near zero on a slow grind and would REJECT every daily equity).
+    fan = abs(t8 - t55) / atr
     if stacked_up:
         side = "BUY"
-        strength = float(min(g1, g2, (last - t8) / atr))
+        strength = float(fan)
     elif stacked_dn:
         side = "SELL"
-        strength = float(min(-g1, -g2, (t8 - last) / atr))
+        strength = float(fan)
     else:
         side = "FLAT"
         strength = 0.0
 
     strength = max(0.0, strength)
-    score = min(100.0, (strength / 2.0) * 95.0 + vol_bonus)
+    score = 0.0 if side == "FLAT" else min(100.0, 60.0 + min(35.0, strength * 8.0) + vol_bonus)
     grade = grade_for(score, side)
     if side == "BUY":
         stop = last - TEMA_SL_ATR * atr
@@ -202,19 +203,22 @@ class PerpSize:
     notional: float
     leverage: float
     margin: float
-    liq: float
+    liq: float | None
     capped: bool
 
 
-def liquidation_price(entry: float, side: str, leverage: float, mmr: float = MAINT_MARGIN) -> float:
-    """Isolated USDT-M approximation. Not exchange-exact (tiers, fees, funding)."""
-    if entry <= 0 or leverage <= 0:
-        return entry
+def liquidation_price(entry: float, side: str, leverage: float, mmr: float = MAINT_MARGIN) -> float | None:
+    """Isolated USDT-M approximation. Not exchange-exact (tiers, fees, funding).
+
+    Leverage ≤ 1 is fully funded cash-like: no liquidation engine.
+    """
+    if entry <= 0 or leverage <= 1.0:
+        return None
     if side in ("BUY", "LONG"):
         return entry * (1.0 - 1.0 / leverage + mmr)
     if side in ("SELL", "SHORT"):
         return entry * (1.0 + 1.0 / leverage - mmr)
-    return entry
+    return None
 
 
 def size_perp(notional: float, allocated: float, entry: float, side: str,
@@ -225,7 +229,7 @@ def size_perp(notional: float, allocated: float, entry: float, side: str,
     the contract. Sub-1x stays fully funded (leverage 1).
     """
     if allocated <= 0 or entry <= 0 or notional == 0 or side in ("FLAT", "NEUTRAL", ""):
-        return PerpSize(0.0, 0.0, 0.0, entry, False)
+        return PerpSize(0.0, 0.0, 0.0, None, False)
     signed = float(notional)
     abs_n = abs(signed)
     natural = abs_n / allocated

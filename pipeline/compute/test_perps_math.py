@@ -43,6 +43,8 @@ class EmaTemaTests(unittest.TestCase):
         self.assertEqual(sig.side, "BUY")
         self.assertLess(sig.stop, x[-1])
         self.assertGreater(sig.take_profit, x[-1])
+        self.assertTrue(grade_ok(sig.grade, "B"))
+        self.assertGreaterEqual(sig.score, 65.0)
 
     def test_tema_short_stack_on_downtrend(self):
         x = 200.0 * (0.988 ** np.arange(220))
@@ -98,6 +100,10 @@ class PerpOverlayTests(unittest.TestCase):
         sized = size_perp(4_000, 10_000, 50.0, "BUY")
         self.assertEqual(sized.leverage, 1.0)
         self.assertAlmostEqual(sized.margin, 4_000)
+        self.assertIsNone(sized.liq)
+
+    def test_liq_1x_is_none(self):
+        self.assertIsNone(liquidation_price(100.0, "BUY", 1.0))
 
     def test_tema_notional_1p5_atr_stop(self):
         # 2% of 10k at 1.5 ATR, ATR=2, price=100 → stop dist 3 → notional 6666.67
@@ -121,7 +127,9 @@ class PerpOverlayTests(unittest.TestCase):
         self.assertEqual(grade_for(80, "SELL"), "A")
         self.assertEqual(grade_for(50, "FLAT"), "REJECT")
         self.assertTrue(grade_ok("A"))
-        self.assertFalse(grade_ok("B"))
+        self.assertTrue(grade_ok("B"))
+        self.assertFalse(grade_ok("C"))
+        self.assertFalse(grade_ok("B", "A"))
 
 
 if __name__ == "__main__":

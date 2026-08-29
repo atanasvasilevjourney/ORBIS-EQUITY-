@@ -3,7 +3,7 @@
 Separate from LOOP / ORB / BIAS. Signals from `prices_daily`. Sizing as
 isolated USDT-M perpetuals (leverage, margin, liq). No live orders.
 
-  TEMA sleeve   50% of $100k · 8/21/55 stack · A/A+ ranked 3L/3S · 1.5/2.5 ATR
+  TEMA sleeve   50% of $100k · 8/21/55 stack · B+ ranked 3L/3S · 1.5/2.5 ATR
   Carver sleeve 50% of $100k · EWMAC 16/64+32/128 · vol-target 25% · 3x gross cap
 
 Usage:
@@ -336,7 +336,7 @@ def run() -> dict:
         "temaSlow": 55,
         "temaSlAtr": 1.5,
         "temaTpAtr": 2.5,
-        "temaMinGrade": "A",
+        "temaMinGrade": "B",
         "topLong": TEMA_TOP_LONG,
         "topShort": TEMA_TOP_SHORT,
         "clusterMax": TEMA_CLUSTER_MAX,
