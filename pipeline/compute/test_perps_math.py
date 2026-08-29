@@ -1,3 +1,4 @@
+import math
 import unittest
 
 import numpy as np
@@ -12,6 +13,8 @@ from pipeline.compute.perps_math import (
     grade_for,
     grade_ok,
     liquidation_price,
+    macd,
+    macd_close_action,
     peak_drawdown_current,
     rotation_regime,
     rotation_size_mult,
@@ -19,6 +22,7 @@ from pipeline.compute.perps_math import (
     side_weights,
     size_perp,
     tema,
+    tema_book_eligible,
     tema_notional,
     tema_signal,
     wilder_atr,
@@ -66,6 +70,50 @@ class EmaTemaTests(unittest.TestCase):
         x = np.linspace(10, 20, 100)
         atr = wilder_atr(x * 1.01, x * 0.99, x)
         self.assertIsNone(tema_signal(x, x * 1.01, x * 0.99, atr))
+
+    def test_uptrend_macd_holds(self):
+        x = 40.0 * (1.006 ** np.arange(280))
+        high = x * 1.004
+        low = x * 0.996
+        atr = wilder_atr(high, low, x)
+        sig = tema_signal(x, high, low, atr)
+        self.assertIsNotNone(sig)
+        self.assertEqual(sig.side, "BUY")
+        self.assertTrue(math.isfinite(sig.macd))
+        self.assertTrue(math.isfinite(sig.macd_signal))
+        self.assertGreater(sig.macd, sig.macd_signal)
+        self.assertEqual(sig.macd_action, "HOLD")
+        self.assertTrue(tema_book_eligible(sig))
+
+    def test_uptrend_then_fade_macd_closes(self):
+        # Two flat prints after a strong ramp: TEMA 9 still > 99 (setup holds)
+        # but MACD line drops through its signal — systematic close.
+        up = 40.0 * (1.006 ** np.arange(270))
+        x = np.concatenate([up, np.full(2, up[-1])])
+        high = x * 1.004
+        low = x * 0.996
+        atr = wilder_atr(high, low, x)
+        sig = tema_signal(x, high, low, atr)
+        self.assertIsNotNone(sig)
+        self.assertEqual(sig.side, "BUY")
+        self.assertTrue(grade_ok(sig.grade))
+        self.assertLessEqual(sig.macd, sig.macd_signal)
+        self.assertEqual(sig.macd_action, "CLOSE")
+        self.assertFalse(tema_book_eligible(sig))
+        self.assertFalse(tema_book_eligible(sig, skip_reason="atr_chaos"))
+
+    def test_macd_close_keeps_carver_eligible(self):
+        """MACD CLOSE only drops the TEMA book; skip_reason stays none at scan."""
+        self.assertEqual(macd_close_action("BUY", 0.1, 0.2), "CLOSE")
+        self.assertEqual(macd_close_action("SELL", -0.1, -0.2), "CLOSE")
+        self.assertEqual(macd_close_action("BUY", 0.3, 0.1), "HOLD")
+        self.assertEqual(macd_close_action("SELL", -0.3, -0.1), "HOLD")
+        self.assertEqual(macd_close_action("FLAT", 1.0, -1.0), "HOLD")
+        self.assertEqual(macd_close_action("BUY", float("nan"), 0.0), "HOLD")
+        line, sig, hist = macd(40.0 * (1.006 ** np.arange(80)))
+        self.assertEqual(line.size, 80)
+        self.assertTrue(np.isfinite(line[-1]))
+        self.assertAlmostEqual(hist[-1], line[-1] - sig[-1], places=9)
 
 
 class CarverTests(unittest.TestCase):

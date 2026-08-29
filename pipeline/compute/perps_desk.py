@@ -3,7 +3,7 @@
 Separate from LOOP / ORB / BIAS. Signals from `prices_daily`. Sizing as
 isolated USDT-M perpetuals (leverage, margin, liq). No live orders.
 
-  TEMA sleeve   50% of $100k · 9/99/199 swing stack · B+ ranked 3L/3S · 2.5/4 ATR
+  TEMA sleeve   50% of $100k · 9/99/199 swing · MACD(12,26,9) close · B+ 3L/3S · 2.5 ATR stop
   Carver sleeve 50% of $100k · EWMAC + vol-target + DD scalar · LIVE/REDUCE/CASH
 
 Usage:
@@ -36,6 +36,9 @@ from pipeline.compute.perps_math import (
     TEMA_FAST,
     TEMA_MID,
     TEMA_SLOW,
+    MACD_FAST,
+    MACD_SIGNAL,
+    MACD_SLOW,
     TEMA_SLEEVE_FRAC,
     TEMA_SL_ATR,
     TEMA_TP_ATR,
@@ -48,7 +51,6 @@ from pipeline.compute.perps_math import (
     equal_weight_equity,
     funding_ann,
     funding_blocks,
-    grade_ok,
     peak_drawdown_current,
     perp_contract,
     rotation_regime,
@@ -57,6 +59,7 @@ from pipeline.compute.perps_math import (
     scale_gross,
     side_weights,
     size_perp,
+    tema_book_eligible,
     tema_notional,
     tema_signal,
     pick_ranked,
@@ -183,9 +186,7 @@ def run() -> dict:
     # ── TEMA ranked swing book ──────────────────────────────────────────
     eligible = [
         r for r in scanned
-        if r["skip_reason"] is None
-        and r["tema"].side in ("BUY", "SELL")
-        and grade_ok(r["tema"].grade)
+        if tema_book_eligible(r["tema"], r["skip_reason"])
     ]
     longs = sorted(
         [r for r in eligible if r["tema"].side == "BUY"],
@@ -299,11 +300,17 @@ def run() -> dict:
         gross += abs(tema_ntl) + abs(cv_ntl)
         margin_sum += tema_margin + cv_margin
 
+        if skip is None and ts.side in ("BUY", "SELL") and ts.macd_action == "CLOSE" and not in_tema:
+            skip = "macd_close"
+
         bits = []
         if ts.side != "FLAT":
             bits.append(f"TEMA 9/99/199 {ts.side} {ts.grade} ({ts.score:.0f}) fan {ts.strength:.2f} ATR · {ts.warmup}")
         else:
             bits.append(f"TEMA 9/99/199 flat ({ts.warmup} warmup)")
+        bits.append(
+            f"MACD 12/26/9 {ts.macd:+.3f}/{ts.macd_signal:+.3f} hist {ts.macd_hist:+.3f} → {ts.macd_action}"
+        )
         bits.append(f"Carver forecast {r['forecast']:+.1f} (16/64 {r['ewmac_fast']:+.1f}, 32/128 {r['ewmac_slow']:+.1f})")
         bits.append(f"σ {r['inst_vol']*100:.0f}% · regime {regime} · DD {current_dd*100:.1f}% · scalar {dd_s:.2f}")
         if listed:
@@ -334,6 +341,10 @@ def run() -> dict:
             "tema_t55": _px(ts.t_slow),  # TEMA 199
             "tema_stop": _px(ts.stop),
             "tema_tp": _px(ts.take_profit),
+            "macd": round(ts.macd, 6),
+            "macd_signal": round(ts.macd_signal, 6),
+            "macd_hist": round(ts.macd_hist, 6),
+            "macd_action": ts.macd_action,
             "tema_weight_pct": tema_weight,
             "tema_notional": round(tema_ntl, 2),
             "tema_leverage": tema_lev,
@@ -360,7 +371,7 @@ def run() -> dict:
     gross_lev = gross / EQUITY if EQUITY else 0.0
     listed_n = sum(1 for r in rows if r["venue_listed"])
     headline = (
-        f"{today.isoformat()} · {len(rows)} names · TEMA 9/99/199 {tema_slots} slots · "
+        f"{today.isoformat()} · {len(rows)} names · TEMA 9/99/199 + MACD close {tema_slots} slots · "
         f"Carver {carver_slots} slots · {regime} · DD {current_dd*100:.1f}% "
         f"(scalar {dd_s:.2f}) · gross {gross_lev:.2f}x · "
         f"{listed_n} venue-listed / {len(rows) - listed_n} synthetic"
@@ -374,6 +385,9 @@ def run() -> dict:
         "temaSlow": TEMA_SLOW,
         "temaSlAtr": TEMA_SL_ATR,
         "temaTpAtr": TEMA_TP_ATR,
+        "macdFast": MACD_FAST,
+        "macdSlow": MACD_SLOW,
+        "macdSignal": MACD_SIGNAL,
         "temaMinGrade": "B",
         "topLong": TEMA_TOP_LONG,
         "topShort": TEMA_TOP_SHORT,

@@ -22,6 +22,10 @@ type Name = {
   temaT199: number | null;
   temaStop: number | null;
   temaTp: number | null;
+  macd: number | null;
+  macdSignal: number | null;
+  macdHist: number | null;
+  macdAction: string | null;
   temaWeightPct: number | null;
   temaNotional: number | null;
   temaLeverage: number | null;
@@ -61,6 +65,7 @@ type Data = {
   } | null;
   names: Name[];
   temaBook: Name[];
+  macdClosed: Name[];
   carverBook: Name[];
   headline: string | null;
   config: Record<string, number | string> | null;
@@ -82,6 +87,12 @@ function sideColor(s: string | null) {
 function gradeColor(g: string | null) {
   if (g === "A+" || g === "A") return "var(--accent-bull)";
   if (g === "B") return "var(--accent-warning)";
+  return "var(--text-muted)";
+}
+
+function macdColor(a: string | null) {
+  if (a === "HOLD") return "var(--accent-bull)";
+  if (a === "CLOSE") return "var(--accent-bear)";
   return "var(--text-muted)";
 }
 
@@ -115,7 +126,7 @@ export default function PerpsPage() {
           PERPS DESK
         </h1>
         <p className="text-xs text-[var(--text-secondary)]">
-          TEMA 9/99/199 swing + Carver EWMAC with drawdown scalar and LIVE/REDUCE/CASH rotation · paper only
+          TEMA 9/99/199 swing · MACD(12,26,9) close · Carver EWMAC with drawdown scalar and LIVE/REDUCE/CASH rotation · paper only
         </p>
       </div>
 
@@ -124,8 +135,10 @@ export default function PerpsPage() {
           <span style={{ color: "var(--accent-warning)" }}>QMIE MAP:</span>{" "}
           atanasvasilevjourney/QMIE does not ship engines named TEMA or Carver. It scans crypto USDT perps with
           triple Supertrend + EMA200 + ranked 3L/3S ATR brackets. This desk is a <em>separate</em> KovaView
-          section: TEMA 9/99/199 is the swing book (9 vs 99 trigger, 199 regime — not a 3-line stack, 2.5/4 ATR);
-          Carver EWMAC plus a drawdown scalar and LIVE / REDUCE / CASH rotation. Do not mix with LOOP / ORB / BIAS.
+          section: TEMA 9/99/199 is the swing book (9 vs 99 trigger, 199 regime — not a 3-line stack).
+          MACD(12,26,9) is the systematic close (line vs signal). 2.5 ATR is the hard stop; 4 ATR is
+          informational. Carver EWMAC plus a drawdown scalar and LIVE / REDUCE / CASH rotation. Do not
+          mix with LOOP / ORB / BIAS.
         </p>
         <p>
           Signals from equity EOD. Contract = TICKERUSDT. Venue marks/funding from public Bybit/Binance when the
@@ -151,7 +164,7 @@ export default function PerpsPage() {
         ))}
       </div>
 
-      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">TEMA BOOK · 9/99/199 SWING · B+ · 3L/3S</h2>
+      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">TEMA BOOK · 9/99/199 SWING · MACD HOLD · B+ · 3L/3S</h2>
       <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
         <table className="w-full text-sm font-terminal">
           <thead>
@@ -160,6 +173,7 @@ export default function PerpsPage() {
               <th className="text-left px-3 py-2">PERP</th>
               <th className="text-left px-3 py-2">SIDE</th>
               <th className="text-left px-3 py-2">GRADE</th>
+              <th className="text-left px-3 py-2">MACD</th>
               <th className="text-right px-3 py-2">WGT</th>
               <th className="text-right px-3 py-2">NOTIONAL</th>
               <th className="text-right px-3 py-2">LEV</th>
@@ -171,9 +185,9 @@ export default function PerpsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={11} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
+              <tr><td colSpan={12} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
             ) : !d?.temaBook?.length ? (
-              <tr><td colSpan={11} className="px-3 py-8 text-center text-[var(--text-muted)]">No TEMA slots. Run: python -m pipeline.compute.perps_desk</td></tr>
+              <tr><td colSpan={12} className="px-3 py-8 text-center text-[var(--text-muted)]">No TEMA slots. Run: python -m pipeline.compute.perps_desk</td></tr>
             ) : (
               d.temaBook.map((r) => (
                 <tr key={`t-${r.ticker}`} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">
@@ -184,6 +198,10 @@ export default function PerpsPage() {
                   <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{r.perpSymbol}</td>
                   <td className="px-3 py-2 font-bold" style={{ color: sideColor(r.temaSide) }}>{r.temaSide}</td>
                   <td className="px-3 py-2 font-bold" style={{ color: gradeColor(r.temaGrade) }}>{r.temaGrade} {num(r.temaScore, 0)}</td>
+                  <td className="px-3 py-2 font-bold" style={{ color: macdColor(r.macdAction) }}>
+                    {r.macdAction ?? "—"}
+                    <span className="text-[var(--text-muted)] font-normal ml-2 text-xs">{num(r.macd, 3)}</span>
+                  </td>
                   <td className="px-3 py-2 text-right">{r.temaWeightPct == null ? "—" : `${r.temaWeightPct.toFixed(1)}%`}</td>
                   <td className="px-3 py-2 text-right">{usd(r.temaNotional, 0)}</td>
                   <td className="px-3 py-2 text-right">{r.temaLeverage ? `${r.temaLeverage.toFixed(2)}x` : "—"}</td>
@@ -191,6 +209,46 @@ export default function PerpsPage() {
                   <td className="px-3 py-2 text-right" style={{ color: "var(--accent-bear)" }}>{px(r.temaStop)}</td>
                   <td className="px-3 py-2 text-right" style={{ color: "var(--accent-bull)" }}>{px(r.temaTp)}</td>
                   <td className="px-3 py-2 text-right">{px(r.temaLiq)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">MACD CLOSE · TEMA SETUP, LINE CROSSED SIGNAL · NOT IN BOOK</h2>
+      <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
+        <table className="w-full text-sm font-terminal">
+          <thead>
+            <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
+              <th className="text-left px-3 py-2">TICKER</th>
+              <th className="text-left px-3 py-2">SIDE</th>
+              <th className="text-left px-3 py-2">GRADE</th>
+              <th className="text-right px-3 py-2">MACD</th>
+              <th className="text-right px-3 py-2">SIGNAL</th>
+              <th className="text-right px-3 py-2">HIST</th>
+              <th className="text-right px-3 py-2">STOP</th>
+              <th className="text-left px-3 py-2">NOTE</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
+            ) : !d?.macdClosed?.length ? (
+              <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">No TEMA names sitting on a MACD close.</td></tr>
+            ) : (
+              d.macdClosed.map((r) => (
+                <tr key={`m-${r.ticker}`} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">
+                  <td className="px-3 py-2">
+                    <Link href={`/ticker/${r.ticker}`} className="font-bold hover:text-[var(--accent-info)]">{r.ticker}</Link>
+                  </td>
+                  <td className="px-3 py-2 font-bold" style={{ color: sideColor(r.temaSide) }}>{r.temaSide}</td>
+                  <td className="px-3 py-2 font-bold" style={{ color: gradeColor(r.temaGrade) }}>{r.temaGrade} {num(r.temaScore, 0)}</td>
+                  <td className="px-3 py-2 text-right">{num(r.macd, 3)}</td>
+                  <td className="px-3 py-2 text-right">{num(r.macdSignal, 3)}</td>
+                  <td className="px-3 py-2 text-right" style={{ color: (r.macdHist ?? 0) < 0 ? "var(--accent-bear)" : "var(--accent-bull)" }}>{num(r.macdHist, 3)}</td>
+                  <td className="px-3 py-2 text-right" style={{ color: "var(--accent-bear)" }}>{px(r.temaStop)}</td>
+                  <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{r.skipReason ?? "macd_close"}</td>
                 </tr>
               ))
             )}
@@ -255,6 +313,7 @@ export default function PerpsPage() {
               <th className="text-right px-3 py-2">MARK</th>
               <th className="text-right px-3 py-2">FUND 8H</th>
               <th className="text-left px-3 py-2">TEMA</th>
+              <th className="text-left px-3 py-2">MACD</th>
               <th className="text-right px-3 py-2">FCAST</th>
               <th className="text-left px-3 py-2">NOTE</th>
             </tr>
@@ -274,19 +333,20 @@ export default function PerpsPage() {
                 <td className="px-3 py-2 text-right">{px(r.mark)}</td>
                 <td className="px-3 py-2 text-right">{r.funding8h == null ? "—" : `${(r.funding8h * 100).toFixed(3)}%`}</td>
                 <td className="px-3 py-2 text-xs" style={{ color: gradeColor(r.temaGrade) }}>{r.temaSide} {r.temaGrade}</td>
+                <td className="px-3 py-2 text-xs font-bold" style={{ color: macdColor(r.macdAction) }}>{r.macdAction ?? "—"}</td>
                 <td className="px-3 py-2 text-right" style={{ color: sideColor(r.carverSide) }}>{num(r.carverForecast, 1)}</td>
                 <td className="px-3 py-2 text-xs text-[var(--text-muted)] truncate max-w-[280px]">{r.skipReason ?? r.rationale}</td>
               </tr>
             ))}
             {!loading && !d?.names?.length && (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">Empty. Run the perps compute.</td></tr>
+              <tr><td colSpan={9} className="px-3 py-8 text-center text-[var(--text-muted)]">Empty. Run the perps compute.</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
       <p className="text-[10px] text-[var(--text-muted)] font-terminal mt-3">
-        Paper harness: $100,000 · TEMA 9/99/199 swing (2.5/4 ATR) · Carver DD soft 10% / hard 25% ·
+        Paper harness: $100,000 · TEMA 9/99/199 swing · MACD(12,26,9) close · 2.5 ATR hard stop · Carver DD soft 10% / hard 25% ·
         rotation LIVE / REDUCE / CASH · max {String(cfg?.maxLeverage ?? 5)}x isolated. Not investment advice.
       </p>
     </div>

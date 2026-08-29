@@ -99,6 +99,11 @@ if psql_su "$DBNAME" -tAc "SELECT to_regclass('public.universe_members')" | grep
     psql_su "$DBNAME" -f supabase/migrations/013_qmie_perps.sql >/dev/null
     psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
   fi
+  if ! psql_su "$DBNAME" -tAc "SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='perp_names' AND column_name='macd'" | grep -q 1; then
+    echo "   applying supabase/migrations/014_perps_macd.sql"
+    psql_su "$DBNAME" -f supabase/migrations/014_perps_macd.sql >/dev/null
+    psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
+  fi
 else
   for f in supabase/migrations/*.sql; do
     echo "   applying $f"

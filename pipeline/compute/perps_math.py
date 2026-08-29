@@ -4,7 +4,9 @@ QMIE (atanasvasilevjourney/QMIE) does not ship strategies named TEMA or
 Carver. This module is the KovaView mapping:
 
   TEMA    Triple EMA swing stack (9/99/199) — 9 is the trigger,
-          99 the swing, 199 the regime. 2.5 ATR stop / 4 ATR target.
+          99 the swing, 199 the regime. MACD(12,26,9) is the
+          systematic close. 2.5 ATR is the hard stop; 4 ATR is
+          informational only.
   Carver  EWMAC 16/64 + 32/128, vol-target, drawdown scalar, and
           LIVE / REDUCE / CASH rotation from forecast breadth.
 
@@ -34,6 +36,13 @@ TEMA_TOP_SHORT = 3
 TEMA_CLUSTER_MAX = 2
 TEMA_RISK_PCT = 0.02  # of allocated slot capital at the 2.5 ATR stop
 TEMA_WARMUP_FULL = 400
+
+# ── MACD close (TEMA sleeve only) ───────────────────────────────────────
+# TEMA enters. MACD line vs its signal is the final close. Do not reuse
+# ANALYZE `tech_signals.MACD` — that helper seeds EMA differently.
+MACD_FAST = 12
+MACD_SLOW = 26
+MACD_SIGNAL = 9
 
 # ── Carver ──────────────────────────────────────────────────────────────
 EWMAC_FAST_PAIR = (16, 64, 3.75)   # Lfast, Lslow, forecast scalar
@@ -83,6 +92,39 @@ def tema(series: np.ndarray, span: int) -> np.ndarray:
     e2 = ema(e1, span)
     e3 = ema(e2, span)
     return 3.0 * e1 - 3.0 * e2 + e3
+
+
+def macd(
+    closes: np.ndarray,
+    fast: int = MACD_FAST,
+    slow: int = MACD_SLOW,
+    signal: int = MACD_SIGNAL,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Standard MACD: line = EMA(fast) − EMA(slow); signal = EMA(line, 9)."""
+    x = np.asarray(closes, dtype=float)
+    n = int(x.size)
+    if n == 0:
+        empty = np.array([], dtype=float)
+        return empty, empty, empty
+    line = ema(x, fast) - ema(x, slow)
+    sig = ema(line, signal)
+    return line, sig, line - sig
+
+
+def macd_close_action(side: str, macd_line: float, macd_signal: float) -> str:
+    """TEMA enters; MACD is the systematic *close*.
+
+    Long HOLD while the MACD line stays above its signal; CLOSE on a
+    bearish cross (line ≤ signal). Short is the inverse. FLAT / non-finite
+    → HOLD so MACD never invents a trade.
+    """
+    if side not in {"BUY", "SELL"}:
+        return "HOLD"
+    if not math.isfinite(macd_line) or not math.isfinite(macd_signal):
+        return "HOLD"
+    if side == "BUY":
+        return "HOLD" if macd_line > macd_signal else "CLOSE"
+    return "HOLD" if macd_line < macd_signal else "CLOSE"
 
 
 def wilder_atr(high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int = 14) -> float:
@@ -163,6 +205,10 @@ class TemaSignal:
     stop: float
     take_profit: float
     warmup: str  # full | partial
+    macd: float = 0.0
+    macd_signal: float = 0.0
+    macd_hist: float = 0.0
+    macd_action: str = "HOLD"  # HOLD | CLOSE — CLOSE is the systematic exit
 
 
 def tema_signal(close: np.ndarray, high: np.ndarray, low: np.ndarray, atr: float) -> TemaSignal | None:
@@ -204,10 +250,33 @@ def tema_signal(close: np.ndarray, high: np.ndarray, low: np.ndarray, atr: float
         tp = last - TEMA_TP_ATR * atr
     else:
         stop = tp = last
+    line, sig, hist = macd(close)
+    macd_v = float(line[-1])
+    macd_sig_v = float(sig[-1])
+    macd_hist_v = float(hist[-1])
+    if not math.isfinite(macd_v):
+        macd_v = 0.0
+    if not math.isfinite(macd_sig_v):
+        macd_sig_v = 0.0
+    if not math.isfinite(macd_hist_v):
+        macd_hist_v = 0.0
+    action = macd_close_action(side, macd_v, macd_sig_v)
     return TemaSignal(
         side=side, grade=grade, score=round(score, 1),
         t_fast=t_fast, t_mid=t_mid, t_slow=t_slow, strength=round(strength, 3),
         stop=stop, take_profit=tp, warmup=warmup,
+        macd=macd_v, macd_signal=macd_sig_v, macd_hist=macd_hist_v,
+        macd_action=action,
+    )
+
+
+def tema_book_eligible(sig: TemaSignal, skip_reason: str | None = None) -> bool:
+    """TEMA book: grade B+, a side, and MACD still HOLD. CLOSE is the exit."""
+    return (
+        skip_reason is None
+        and sig.side in ("BUY", "SELL")
+        and grade_ok(sig.grade)
+        and sig.macd_action == "HOLD"
     )
 
 

@@ -208,7 +208,7 @@ export default function Home() {
       href: "/perps",
       title: "TEMA + CARVER PERPS",
       badge: "MODULE 11",
-      desc: "TEMA 9/99/199 swing and Carver EWMAC with drawdown scalar and rotation",
+      desc: "TEMA 9/99/199 swing, MACD close, and Carver EWMAC with drawdown scalar and rotation",
       stats: d ? [
         { label: "TEMA", value: String(d.perpsTema), color: "var(--accent-info)" },
         { label: "Carver", value: String(d.perpsCarver), color: "var(--accent-warning)" },

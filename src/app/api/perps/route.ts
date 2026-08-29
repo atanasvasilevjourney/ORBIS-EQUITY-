@@ -37,6 +37,10 @@ type NameRow = {
   tema_t55: number | null;
   tema_stop: number | null;
   tema_tp: number | null;
+  macd: number | null;
+  macd_signal: number | null;
+  macd_hist: number | null;
+  macd_action: string | null;
   tema_weight_pct: number | null;
   tema_notional: number | null;
   tema_leverage: number | null;
@@ -82,6 +86,10 @@ function mapName(r: NameRow) {
     temaT55: r.tema_t55,
     temaStop: r.tema_stop,
     temaTp: r.tema_tp,
+    macd: r.macd,
+    macdSignal: r.macd_signal,
+    macdHist: r.macd_hist,
+    macdAction: r.macd_action,
     temaWeightPct: r.tema_weight_pct,
     temaNotional: r.tema_notional,
     temaLeverage: r.tema_leverage,
@@ -120,6 +128,7 @@ export async function GET() {
         summary: null,
         names: [],
         temaBook: [],
+        macdClosed: [],
         carverBook: [],
         headline: null,
         config: null,
@@ -130,6 +139,9 @@ export async function GET() {
     const names = rows.filter((r) => r.run_id === latest.run_id).map(mapName);
     const temaBook = names
       .filter((n) => n.inTemaBook)
+      .sort((a, b) => (b.temaScore ?? 0) - (a.temaScore ?? 0));
+    const macdClosed = names
+      .filter((n) => n.macdAction === "CLOSE" && (n.temaSide === "BUY" || n.temaSide === "SELL"))
       .sort((a, b) => (b.temaScore ?? 0) - (a.temaScore ?? 0));
     const carverBook = names
       .filter((n) => n.inCarverBook)
@@ -160,6 +172,7 @@ export async function GET() {
       },
       names: names.sort((a, b) => a.ticker.localeCompare(b.ticker)),
       temaBook,
+      macdClosed,
       carverBook,
       headline: latest.headline,
       config: latest.config,
