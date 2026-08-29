@@ -94,6 +94,11 @@ if psql_su "$DBNAME" -tAc "SELECT to_regclass('public.universe_members')" | grep
     psql_su "$DBNAME" -f supabase/migrations/012_daily_bias.sql >/dev/null
     psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
   fi
+  if ! psql_su "$DBNAME" -tAc "SELECT to_regclass('public.perp_names')" | grep -q perp_names; then
+    echo "   applying supabase/migrations/013_qmie_perps.sql"
+    psql_su "$DBNAME" -f supabase/migrations/013_qmie_perps.sql >/dev/null
+    psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
+  fi
 else
   for f in supabase/migrations/*.sql; do
     echo "   applying $f"
@@ -230,6 +235,10 @@ fi
 BIAS_COUNT="$(psql_su "$DBNAME" -tAc 'SELECT count(*) FROM bias_names' | tr -d '[:space:]')"
 if [ "${BIAS_COUNT:-0}" = "0" ]; then
   "$REPO_DIR/.venv/bin/python" -m pipeline.compute.daily_bias || true
+fi
+PERP_COUNT="$(psql_su "$DBNAME" -tAc 'SELECT count(*) FROM perp_names' | tr -d '[:space:]')"
+if [ "${PERP_COUNT:-0}" = "0" ]; then
+  "$REPO_DIR/.venv/bin/python" -m pipeline.compute.perps_desk || true
 fi
 
 echo "Install complete."
