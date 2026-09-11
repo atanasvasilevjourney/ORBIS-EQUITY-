@@ -104,6 +104,11 @@ if psql_su "$DBNAME" -tAc "SELECT to_regclass('public.universe_members')" | grep
     psql_su "$DBNAME" -f supabase/migrations/014_perps_macd.sql >/dev/null
     psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
   fi
+  if ! psql_su "$DBNAME" -tAc "SELECT to_regclass('public.sector_rotation_groups')" | grep -q sector_rotation_groups; then
+    echo "   applying supabase/migrations/015_sector_rotation.sql"
+    psql_su "$DBNAME" -f supabase/migrations/015_sector_rotation.sql >/dev/null
+    psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
+  fi
 else
   for f in supabase/migrations/*.sql; do
     echo "   applying $f"
@@ -244,6 +249,10 @@ fi
 PERP_COUNT="$(psql_su "$DBNAME" -tAc 'SELECT count(*) FROM perp_names' | tr -d '[:space:]')"
 if [ "${PERP_COUNT:-0}" = "0" ]; then
   "$REPO_DIR/.venv/bin/python" -m pipeline.compute.perps_desk || true
+fi
+ROT_COUNT="$(psql_su "$DBNAME" -tAc 'SELECT count(*) FROM sector_rotation_groups' | tr -d '[:space:]')"
+if [ "${ROT_COUNT:-0}" = "0" ]; then
+  "$REPO_DIR/.venv/bin/python" -m pipeline.compute.sector_rotation || true
 fi
 
 echo "Install complete."

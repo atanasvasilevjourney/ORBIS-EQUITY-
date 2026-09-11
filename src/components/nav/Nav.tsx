@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { href: "/analysis", label: "ANALYZE" },
   { href: "/bias", label: "BIAS" },
   { href: "/perps", label: "PERPS" },
+  { href: "/rotate", label: "ROTATE" },
   { href: "/quantropy", label: "QUANT" },
   { href: "/fundamentals", label: "FUNDAMENTALS" },
   { href: "/health", label: "HEALTH" },
