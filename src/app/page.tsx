@@ -32,6 +32,8 @@ type DashData = {
   biasShorts: number;
   perpsTema: number;
   perpsCarver: number;
+  rotateRegime: string | null;
+  rotateLeading: number;
 };
 
 export default function Home() {
@@ -49,7 +51,8 @@ export default function Home() {
       fetch("/api/quantropy").then((r) => r.json()).catch(() => null),
       fetch("/api/bias").then((r) => r.json()).catch(() => null),
       fetch("/api/perps").then((r) => r.json()).catch(() => null),
-    ]).then(([summary, fund, earnings, skew, orb, analysis, quant, bias, perps]) => {
+      fetch("/api/rotate").then((r) => r.json()).catch(() => null),
+    ]).then(([summary, fund, earnings, skew, orb, analysis, quant, bias, perps, rotate]) => {
       const rows = fund?.rows ?? [];
       const composites = rows.filter((r: { compositeScore: number | null }) => r.compositeScore != null);
       setD({
@@ -83,6 +86,8 @@ export default function Home() {
         biasShorts: bias?.summary?.shorts ?? 0,
         perpsTema: perps?.summary?.temaSlots ?? 0,
         perpsCarver: perps?.summary?.carverSlots ?? 0,
+        rotateRegime: rotate?.summary?.regime ?? null,
+        rotateLeading: rotate?.summary?.leading ?? 0,
       });
     }).finally(() => setLoading(false));
   }, []);
@@ -213,6 +218,17 @@ export default function Home() {
         { label: "TEMA", value: String(d.perpsTema), color: "var(--accent-info)" },
         { label: "Carver", value: String(d.perpsCarver), color: "var(--accent-warning)" },
         { label: "Venue", value: "USDT-M", color: "" },
+      ] : null,
+    },
+    {
+      href: "/rotate",
+      title: "BETA ROTATION",
+      badge: "MODULE 12",
+      desc: "Which sectors and industries are trending — breadth, impulse, 60-day beta, 8-week heatmap",
+      stats: d ? [
+        { label: "Regime", value: d.rotateRegime ?? "—", color: d.rotateRegime === "RISK-ON" ? "var(--accent-bull)" : d.rotateRegime === "RISK-OFF" ? "var(--accent-bear)" : "var(--accent-warning)" },
+        { label: "Leading", value: String(d.rotateLeading), color: "var(--accent-bull)" },
+        { label: "Tape", value: "GICS", color: "var(--accent-info)" },
       ] : null,
     },
   ];

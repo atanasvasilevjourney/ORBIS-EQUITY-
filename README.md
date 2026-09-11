@@ -21,6 +21,7 @@ Systematic equity research terminal — momentum screener, multi-factor fundamen
 9. **Quantropy** — risk, CAPM, Altman Z, Markowitz allocation (port of the Quantropy/Matilda library)
 10. **Daily Bias** — TradingView-style chart, key levels, paper trade ideas (ANALYZE vote + ATR pivots)
 11. **TEMA + Carver Perps** — TEMA 9/99/199 swing with MACD(12,26,9) close, and Carver EWMAC with drawdown scalar and LIVE/REDUCE/CASH rotation
+12. **Beta Rotation** — which GICS sectors and industries are trending (breadth, impulse, 60-day beta, 8-week heatmap)
 
 ## Setup
 
@@ -57,6 +58,7 @@ supabase/migrations/011_quantropy.sql
 supabase/migrations/012_daily_bias.sql
 supabase/migrations/013_qmie_perps.sql
 supabase/migrations/014_perps_macd.sql
+supabase/migrations/015_sector_rotation.sql
 ```
 
 ### Web
@@ -88,7 +90,7 @@ Optional: `LSE_DATA_API_URL` (defaults to `https://data-api.londonstrategicedge.
 Without these secrets the nightly pipeline will fail immediately with a clear error.
 
 Runs nightly via `.github/workflows/nightly-pipeline.yml`:
-universe → prices → fundamentals → financial reports → trend radar → F-Score → factor scores → portfolio loop → skew map → opening range → stock analysis → Quantropy → daily bias → TEMA/Carver perps → earnings → news → clinical trials → health signals
+universe → prices → fundamentals → financial reports → trend radar → F-Score → factor scores → portfolio loop → skew map → opening range → stock analysis → Quantropy → daily bias → TEMA/Carver perps → beta rotation → earnings → news → clinical trials → health signals
 
 ## Health Sector (free data, no API key)
 
@@ -213,6 +215,28 @@ python -m pipeline.compute.perps_desk
 ```
 
 Surfaced at `/perps` and `GET /api/perps`. Paper harness only — no live exchange orders. Not investment advice.
+
+## Beta rotation (which sectors are trending)
+
+Inspired by [Caltropia's 2026 sector and industry outlook](https://caltropia.substack.com/p/2026-stock-market-sector-and-industry) **structure**, not their published numbers. For every GICS sector and industry in the universe we compute:
+
+| Field | Meaning |
+|---|---|
+| Current breadth | share of names with a positive 20d return |
+| Momentum breadth | share with a positive 60d return |
+| Value / low-vol breadth | value-score ≥ 50; 20d σ below the universe median |
+| Impulse | this week's 5d return minus last week's |
+| Stretch | share with 20d return z-score > 2 |
+| β 60 | OLS beta of equal-weight group vs equal-weight universe |
+| 8W heatmap | weekly equal-weight returns, oldest → newest |
+| Label | LEAD / ACCEL / FADE / REPAIR / LAG |
+| Regime | RISK-ON if cyclicals lead on 4-week RS, RISK-OFF if defensives do |
+
+```bash
+python -m pipeline.compute.sector_rotation
+```
+
+Surfaced at `/rotate` and `GET /api/rotate`. Paper diagnostic. Not investment advice.
 
 ## Factor Scores
 
