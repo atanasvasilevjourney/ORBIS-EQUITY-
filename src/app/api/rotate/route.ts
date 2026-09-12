@@ -42,6 +42,7 @@ type GroupRow = {
   heatmap: (number | null)[] | null;
   leaders: string[] | null;
   aligned: boolean | null;
+  parent_sector: string | null;
 };
 
 type CanaryRow = {
@@ -93,6 +94,7 @@ function mapGroup(r: GroupRow) {
     heatmap: Array.isArray(r.heatmap) ? r.heatmap : [],
     leaders: r.leaders ?? [],
     aligned: Boolean(r.aligned),
+    parentSector: r.parent_sector ?? null,
   };
 }
 

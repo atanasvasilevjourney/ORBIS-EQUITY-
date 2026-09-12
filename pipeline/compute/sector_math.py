@@ -62,6 +62,7 @@ class GroupTape:
     leaders: list[str]
     score: float
     bucket: str  # cyclical | defensive | mixed
+    parent_sector: str | None = None  # GICS sector for industry / sub-sector rows
 
 
 def period_return(close: np.ndarray, days: int) -> float:
@@ -192,6 +193,19 @@ def score_group(current_breadth: float, mom_breadth: float, rs_4w: float | None,
     return 40.0 * cb + 25.0 * mb + 20.0 * (rs + 1.0) / 2.0 + 15.0 * (imp + 1.0) / 2.0
 
 
+def nest_by_parent(groups: list[GroupTape]) -> dict[str, list[GroupTape]]:
+    """Map parent GICS sector → industry / sub-sector tapes (Energy → Solar, Nuclear, …)."""
+    out: dict[str, list[GroupTape]] = {}
+    for g in groups:
+        if g.group_type != "industry":
+            continue
+        key = g.parent_sector or "Other"
+        out.setdefault(key, []).append(g)
+    for kids in out.values():
+        kids.sort(key=lambda t: (-t.score, t.name))
+    return out
+
+
 def build_group_tape(
     *,
     group_type: str,
@@ -202,6 +216,7 @@ def build_group_tape(
     market_r4: float,
     vol_median: float,
     value_ok: dict[str, bool | None],
+    parent_sector: str | None = None,
 ) -> GroupTape | None:
     if not members:
         return None
@@ -274,4 +289,5 @@ def build_group_tape(
         leaders=leaders,
         score=score,
         bucket=bucket_of(sector_for_bucket),
+        parent_sector=None if group_type == "sector" else (parent_sector or sector_for_bucket),
     )

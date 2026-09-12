@@ -1,8 +1,8 @@
 """MODULE 12 — Macro canaries → sector rotation → TEMA ensemble.
 
   1. Macro context   canary votes (basket proxies for QQQ/SPY, XLY/XLP, …)
-  2. Rotation        GICS sector / industry trend tape
-  3. TEMA ensemble   Fast/Slow TEMA-MACD grid inside aligned groups
+  2. Rotation        GICS sector → nested sub-sectors (Energy → Solar / Nuclear / …)
+  3. TEMA ensemble   Fast/Slow TEMA-MACD grid inside the selected sleeve
 
 9/99/199 swing stays a separate column. Paper only.
 
@@ -80,6 +80,7 @@ def _tape_row(run_id: str, t: GroupTape, now: str, aligned: bool) -> dict:
         "heatmap": heat,
         "leaders": t.leaders,
         "aligned": aligned,
+        "parent_sector": t.parent_sector,
         "computed_at": now,
     }
 
@@ -177,10 +178,12 @@ def run() -> dict:
         if t:
             tapes.append(t)
     for industry, members in ind_members.items():
+        parent = ind_sector.get(industry, "Other")
         t = build_group_tape(
             group_type="industry",
             name=industry,
-            sector_for_bucket=ind_sector.get(industry, "Other"),
+            sector_for_bucket=parent,
+            parent_sector=parent,
             members=members,
             market_rets=market_rets,
             market_r4=market_r4,
@@ -265,7 +268,7 @@ def run() -> dict:
     bits.append(f"TEMA ensemble {n_hit} aligned longs / {len(trigger_rows)} hits")
     headline = (
         f"{today.isoformat()} · {' · '.join(bits)} · "
-        f"{len(sectors)} sectors / {sum(1 for t in tapes if t.group_type == 'industry')} industries"
+        f"{len(sectors)} sectors / {sum(1 for t in tapes if t.group_type == 'industry')} sub-sectors"
     )
 
     rows = [_tape_row(run_id, t, now, aligned_map.get(id(t), False)) for t in tapes]
