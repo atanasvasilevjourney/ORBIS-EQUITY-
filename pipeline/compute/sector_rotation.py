@@ -3,6 +3,8 @@
   1. Macro context   canary votes (basket proxies for QQQ/SPY, XLY/XLP, …)
   2. Rotation        GICS sector → nested sub-sectors (Energy → Solar / Nuclear / …)
   3. TEMA ensemble   Fast/Slow TEMA-MACD grid inside the selected sleeve
+  4. Carver DCA      discrete D-rungs on the bigger trend, rotated into
+                     the leading sub-sector / names (isolated from PERPS)
 
 9/99/199 swing stays a separate column. Paper only.
 
@@ -26,6 +28,8 @@ from pipeline.compute.canary_math import (
     group_aligned,
     tema_ensemble,
 )
+from pipeline.compute.perps_math import drawdown_scalar, peak_drawdown_current
+from pipeline.compute.rotate_carver import NameInput, build_carver_book
 from pipeline.compute.sector_math import (
     GroupTape,
     LOOKBACK_CURRENT,
@@ -220,6 +224,31 @@ def run() -> dict:
     sector_of = {t.name: t for t in tapes if t.group_type == "sector"}
     industry_of = {t.name: t for t in tapes if t.group_type == "industry"}
 
+    univ_eq = equity_from_closes(list(closes.values()))
+    dd_now, _dd_max = peak_drawdown_current(univ_eq)
+    dd_s = drawdown_scalar(dd_now)
+    sector_eq = {sec: equity_from_closes(list(mem.values())) for sec, mem in by_sector.items()}
+    sleeve_eq = {ind: equity_from_closes(list(mem.values())) for ind, mem in ind_members.items()}
+    carver_inputs = []
+    for sym, close in closes.items():
+        info = meta.get(sym) or {}
+        sector = info.get("sector") or "Other"
+        industry = info.get("industry") or "Other"
+        st = sector_of.get(sector)
+        carver_inputs.append(NameInput(
+            ticker=sym,
+            sector=sector,
+            industry=industry,
+            close=close,
+            aligned=bool(st and aligned_map.get(id(st))),
+        ))
+    carver_book = build_carver_book(
+        carver_inputs,
+        sector_closes=sector_eq,
+        sleeve_closes=sleeve_eq,
+        dd_scalar=dd_s,
+    )
+
     trigger_rows = []
     for sym, close in closes.items():
         info = meta.get(sym) or {}
@@ -266,6 +295,9 @@ def run() -> dict:
     if lead:
         bits.append(f"{lead.name} {lead.label}")
     bits.append(f"TEMA ensemble {n_hit} aligned longs / {len(trigger_rows)} hits")
+    n_carver = sum(1 for r in carver_book if r.rungs > 0)
+    n_add = sum(1 for r in carver_book if r.action == "ADD")
+    bits.append(f"Carver {n_add} ADD / {n_carver} live D-rungs")
     headline = (
         f"{today.isoformat()} · {' · '.join(bits)} · "
         f"{len(sectors)} sectors / {sum(1 for t in tapes if t.group_type == 'industry')} sub-sectors"
@@ -307,6 +339,8 @@ def run() -> dict:
         "canary_on": canaries.n_on,
         "canary_off": canaries.n_off,
         "n_triggers": len(trigger_rows),
+        "n_carver": n_carver,
+        "carver_rungs": sum(r.rungs for r in carver_book),
         "headline": headline,
         "config": config,
         "computed_at": now,
@@ -328,9 +362,31 @@ def run() -> dict:
                 q = q.eq(k, r[k])
             q.execute()
 
+    carver_rows = [{
+        "symbol": r.ticker,
+        "run_id": run_id,
+        "sector": r.sector,
+        "industry": r.industry,
+        "forecast": _round(r.forecast, 2),
+        "parent_forecast": _round(r.parent_forecast, 2),
+        "sleeve_forecast": _round(r.sleeve_forecast, 2),
+        "xs_score": _round(r.xs_score, 5),
+        "xs_rank": r.xs_rank,
+        "sleeve_rank": r.sleeve_rank,
+        "unlocked": r.unlocked,
+        "rungs": r.rungs,
+        "weight": _round(r.weight, 4),
+        "notional": _round(r.notional, 0),
+        "side": r.side,
+        "action": r.action,
+        "aligned": r.aligned,
+        "computed_at": now,
+    } for r in carver_book]
+
     _sync("sector_rotation_groups", rows, ["group_type", "name"])
     _sync("sector_rotation_canaries", canary_rows, ["name"])
     _sync("sector_rotation_triggers", trigger_rows, ["symbol"])
+    _sync("sector_rotation_carver", carver_rows, ["symbol"])
 
     logger.info("Sector rotation wrote %d groups · %s", len(rows), headline)
     return {
@@ -340,6 +396,7 @@ def run() -> dict:
         "regime": regime,
         "n_sectors": len(sectors),
         "n_triggers": len(trigger_rows),
+        "n_carver": n_carver,
         "canary_score": canaries.score,
     }
 
