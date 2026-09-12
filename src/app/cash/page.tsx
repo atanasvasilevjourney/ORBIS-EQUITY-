@@ -108,14 +108,15 @@ export default function CashPage() {
           CASH BOOK · TEMA + CARVER
         </h1>
         <p className="text-xs text-[var(--text-secondary)]">
-          Listed close from prices_daily · fully funded shares · no USDT-M leverage, funding, or liquidation · paper only
+          Listed close from prices_daily (Yahoo → Stooq cash EOD) · fully funded shares · no USDT-M leverage, funding, or liquidation · paper only
         </p>
       </div>
 
       <div className="px-4 py-3 mb-4 rounded border border-[var(--border)] bg-[var(--badge-bg)] text-xs text-[var(--text-secondary)] font-terminal space-y-1">
         <p>
           <span style={{ color: "var(--accent-info)" }}>CASH:</span>{" "}
-          Same TEMA 9/99/199 swing and Carver EWMAC as before, sized on the actual stock close.
+          Same TEMA 9/99/199 swing and Carver EWMAC as before, sized on the actual stock close
+          from the cash EOD ingest (Yahoo chart API, Stooq fallback — QMIE-shaped, not perp klines).
           A slot is shares × cash price, capped at the allocated sleeve cash. Longs are paper long stock.
           Shorts are paper shorts of the listed name — no borrow / locate model. Isolated from LOOP / ORB / BIAS / ROTATE.
         </p>

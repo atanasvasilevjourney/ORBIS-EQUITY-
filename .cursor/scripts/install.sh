@@ -129,6 +129,11 @@ if psql_su "$DBNAME" -tAc "SELECT to_regclass('public.universe_members')" | grep
     psql_su "$DBNAME" -f supabase/migrations/019_cash_book.sql >/dev/null
     psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
   fi
+  if ! psql_su "$DBNAME" -tAc "SELECT to_regclass('public.ingest_runs')" | grep -q ingest_runs; then
+    echo "   applying supabase/migrations/020_ingest_runs.sql"
+    psql_su "$DBNAME" -f supabase/migrations/020_ingest_runs.sql >/dev/null
+    psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
+  fi
 else
   for f in supabase/migrations/*.sql; do
     echo "   applying $f"
@@ -226,6 +231,12 @@ ensure_nginx
 UNIVERSE_COUNT="$(psql_su "$DBNAME" -tAc 'SELECT count(*) FROM universe_members' | tr -d '[:space:]')"
 if [ "${UNIVERSE_COUNT:-0}" = "0" ]; then
   "$REPO_DIR/.venv/bin/python" -m scripts.seed_demo
+fi
+# Best-effort cash EOD (Yahoo → Stooq). Replaces seed_demo tape when the
+# public REST path is reachable. Safe to skip — compute still has synthetic.
+REAL_PX="$(psql_su "$DBNAME" -tAc "SELECT count(*) FROM prices_daily WHERE source IN ('yahoo','stooq','yfinance','lse')" | tr -d '[:space:]')"
+if [ "${REAL_PX:-0}" = "0" ]; then
+  "$REPO_DIR/.venv/bin/python" -m pipeline.ingest.cash_eod || true
 fi
 RADAR_COUNT="$(psql_su "$DBNAME" -tAc 'SELECT count(*) FROM trend_radar' | tr -d '[:space:]')"
 if [ "${RADAR_COUNT:-0}" = "0" ]; then
