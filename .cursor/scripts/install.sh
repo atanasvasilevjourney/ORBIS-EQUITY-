@@ -109,6 +109,11 @@ if psql_su "$DBNAME" -tAc "SELECT to_regclass('public.universe_members')" | grep
     psql_su "$DBNAME" -f supabase/migrations/015_sector_rotation.sql >/dev/null
     psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
   fi
+  if ! psql_su "$DBNAME" -tAc "SELECT to_regclass('public.sector_rotation_canaries')" | grep -q sector_rotation_canaries; then
+    echo "   applying supabase/migrations/016_macro_canaries.sql"
+    psql_su "$DBNAME" -f supabase/migrations/016_macro_canaries.sql >/dev/null
+    psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
+  fi
 else
   for f in supabase/migrations/*.sql; do
     echo "   applying $f"

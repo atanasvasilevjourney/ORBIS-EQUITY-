@@ -21,7 +21,7 @@ Systematic equity research terminal — momentum screener, multi-factor fundamen
 9. **Quantropy** — risk, CAPM, Altman Z, Markowitz allocation (port of the Quantropy/Matilda library)
 10. **Daily Bias** — TradingView-style chart, key levels, paper trade ideas (ANALYZE vote + ATR pivots)
 11. **TEMA + Carver Perps** — TEMA 9/99/199 swing with MACD(12,26,9) close, and Carver EWMAC with drawdown scalar and LIVE/REDUCE/CASH rotation
-12. **Beta Rotation** — which GICS sectors and industries are trending (breadth, impulse, 60-day beta, 8-week heatmap)
+12. **Beta Rotation** — macro canaries → GICS sector/industry trend → TEMA-MACD ensemble in aligned sub-sectors
 
 ## Setup
 
@@ -59,6 +59,7 @@ supabase/migrations/012_daily_bias.sql
 supabase/migrations/013_qmie_perps.sql
 supabase/migrations/014_perps_macd.sql
 supabase/migrations/015_sector_rotation.sql
+supabase/migrations/016_macro_canaries.sql
 ```
 
 ### Web
@@ -218,7 +219,13 @@ Surfaced at `/perps` and `GET /api/perps`. Paper harness only — no live exchan
 
 ## Beta rotation (which sectors are trending)
 
-Inspired by [Caltropia's 2026 sector and industry outlook](https://caltropia.substack.com/p/2026-stock-market-sector-and-industry) **structure**, not their published numbers. For every GICS sector and industry in the universe we compute:
+Inspired by [Caltropia's 2026 sector and industry outlook](https://caltropia.substack.com/p/2026-stock-market-sector-and-industry) **structure** and the canary → TEMA-MACD ensemble flow from the Crypto Allocation notebook. Not their published numbers.
+
+**Flow:** macro canary votes → which sectors are trending → where a TEMA-MACD ensemble is triggered in that sub-sector or name.
+
+Canaries are equal-weight **basket proxies** (QQQ/SPY ≈ Tech/Universe, XLY/XLP ≈ Discretionary/Staples, XLU/SPY inverted defensives, XLE/SPY, HYG/LQD ≈ Financials/Staples, universe vs 200-SMA). Each print is a 126-day z-score, 10-day causal smooth, then +1/0/−1. TEMA ensemble is a compact Fast/Slow TEMA-MACD grid (hist &gt; 0 = long). The 9/99/199 swing stays a separate column.
+
+For every GICS sector and industry in the universe we also compute:
 
 | Field | Meaning |
 |---|---|

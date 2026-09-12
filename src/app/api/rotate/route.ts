@@ -12,6 +12,10 @@ type RunRow = {
   n_sectors: number | null;
   n_industries: number | null;
   regime: string | null;
+  canary_score: number | null;
+  canary_on: number | null;
+  canary_off: number | null;
+  n_triggers: number | null;
   headline: string | null;
   config: Record<string, unknown> | null;
   computed_at: string | null;
@@ -37,6 +41,35 @@ type GroupRow = {
   bucket: string | null;
   heatmap: (number | null)[] | null;
   leaders: string[] | null;
+  aligned: boolean | null;
+};
+
+type CanaryRow = {
+  name: string;
+  pair: string | null;
+  z: number | null;
+  smooth: number | null;
+  vote: number | null;
+  implication: string | null;
+  proxy: boolean | null;
+  run_id: string | null;
+};
+
+type TriggerRow = {
+  symbol: string;
+  sector: string | null;
+  industry: string | null;
+  ensemble: number | null;
+  n_long: number | null;
+  n_short: number | null;
+  n_cfg: number | null;
+  triggered: string | null;
+  tema_side: string | null;
+  tema_grade: string | null;
+  macd_action: string | null;
+  aligned: boolean | null;
+  group_label: string | null;
+  run_id: string | null;
 };
 
 function mapGroup(r: GroupRow) {
@@ -59,6 +92,7 @@ function mapGroup(r: GroupRow) {
     bucket: r.bucket,
     heatmap: Array.isArray(r.heatmap) ? r.heatmap : [],
     leaders: r.leaders ?? [],
+    aligned: Boolean(r.aligned),
   };
 }
 
@@ -68,7 +102,7 @@ export async function GET() {
     const runs = await fetchAll<RunRow>(
       sb,
       "sector_rotation_runs",
-      "run_id, asof_date, names, n_sectors, n_industries, regime, headline, config, computed_at",
+      "run_id, asof_date, names, n_sectors, n_industries, regime, canary_score, canary_on, canary_off, n_triggers, headline, config, computed_at",
       (q) => q.order("computed_at", { ascending: false })
     );
     const latest = runs[0] ?? null;
@@ -77,19 +111,54 @@ export async function GET() {
         summary: null,
         sectors: [],
         industries: [],
+        canaries: [],
+        triggers: [],
         headline: null,
         config: null,
         stale: true,
       });
     }
-    const rows = await fetchAll<GroupRow>(sb, "sector_rotation_groups", "*");
+    const [rows, canaryRows, triggerRows] = await Promise.all([
+      fetchAll<GroupRow>(sb, "sector_rotation_groups", "*"),
+      fetchAll<CanaryRow>(sb, "sector_rotation_canaries", "*").catch(() => []),
+      fetchAll<TriggerRow>(sb, "sector_rotation_triggers", "*").catch(() => []),
+    ]);
     const groups = rows.filter((r) => r.run_id === latest.run_id).map(mapGroup);
     const sectors = groups
       .filter((g) => g.groupType === "sector")
-      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      .sort((a, b) => Number(b.aligned) - Number(a.aligned) || (b.score ?? 0) - (a.score ?? 0));
     const industries = groups
       .filter((g) => g.groupType === "industry")
-      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      .sort((a, b) => Number(b.aligned) - Number(a.aligned) || (b.score ?? 0) - (a.score ?? 0));
+    const canaries = canaryRows
+      .filter((r) => r.run_id === latest.run_id)
+      .map((r) => ({
+        name: r.name,
+        pair: r.pair ?? "",
+        z: r.z,
+        smooth: r.smooth,
+        vote: r.vote ?? 0,
+        implication: r.implication ?? "",
+        proxy: Boolean(r.proxy),
+      }));
+    const triggers = triggerRows
+      .filter((r) => r.run_id === latest.run_id)
+      .map((r) => ({
+        ticker: r.symbol,
+        sector: r.sector ?? "",
+        industry: r.industry ?? "",
+        ensemble: r.ensemble,
+        nLong: r.n_long,
+        nShort: r.n_short,
+        nCfg: r.n_cfg,
+        triggered: r.triggered,
+        temaSide: r.tema_side,
+        temaGrade: r.tema_grade,
+        macdAction: r.macd_action,
+        aligned: Boolean(r.aligned),
+        groupLabel: r.group_label,
+      }))
+      .sort((a, b) => Number(b.aligned) - Number(a.aligned) || (b.ensemble ?? 0) - (a.ensemble ?? 0));
 
     let stale = false;
     if (latest.asof_date) {
@@ -103,6 +172,10 @@ export async function GET() {
         nSectors: latest.n_sectors,
         nIndustries: latest.n_industries,
         regime: latest.regime,
+        canaryScore: latest.canary_score,
+        canaryOn: latest.canary_on,
+        canaryOff: latest.canary_off,
+        nTriggers: latest.n_triggers,
         asOfDate: latest.asof_date,
         leading,
         fading,
@@ -110,6 +183,8 @@ export async function GET() {
       },
       sectors,
       industries,
+      canaries,
+      triggers,
       headline: latest.headline,
       config: latest.config,
       stale,

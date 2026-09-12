@@ -22,6 +22,32 @@ type Group = {
   bucket: string | null;
   heatmap: (number | null)[];
   leaders: string[];
+  aligned: boolean;
+};
+
+type Canary = {
+  name: string;
+  pair: string;
+  z: number | null;
+  smooth: number | null;
+  vote: number;
+  implication: string;
+  proxy: boolean;
+};
+
+type Trigger = {
+  ticker: string;
+  sector: string;
+  industry: string;
+  ensemble: number | null;
+  nLong: number | null;
+  nCfg: number | null;
+  triggered: string | null;
+  temaSide: string | null;
+  temaGrade: string | null;
+  macdAction: string | null;
+  aligned: boolean;
+  groupLabel: string | null;
 };
 
 type Data = {
@@ -33,9 +59,15 @@ type Data = {
     asOfDate: string | null;
     leading: number;
     fading: number;
+    canaryScore: number | null;
+    canaryOn: number | null;
+    canaryOff: number | null;
+    nTriggers: number | null;
   } | null;
   sectors: Group[];
   industries: Group[];
+  canaries: Canary[];
+  triggers: Trigger[];
   headline: string | null;
   stale: boolean;
 };
@@ -52,9 +84,15 @@ function labelColor(l: string | null) {
 }
 
 function regimeColor(r: string | null) {
-  if (r === "RISK-ON") return "var(--accent-bull)";
-  if (r === "RISK-OFF") return "var(--accent-bear)";
+  if (r?.includes("RISK-ON")) return "var(--accent-bull)";
+  if (r?.includes("RISK-OFF")) return "var(--accent-bear)";
   return "var(--accent-warning)";
+}
+
+function voteColor(v: number) {
+  if (v > 0) return "var(--accent-bull)";
+  if (v < 0) return "var(--accent-bear)";
+  return "var(--text-muted)";
 }
 
 function heatColor(v: number | null) {
@@ -107,6 +145,7 @@ function GroupTable({ rows, kind }: { rows: Group[]; kind: string }) {
               <td className="px-3 py-2">
                 <span className="font-bold">{r.name}</span>
                 <span className="text-[var(--text-muted)] ml-2 text-xs">{r.nNames}n · {r.bucket}</span>
+                {r.aligned && <span className="ml-2 text-[10px] font-bold" style={{ color: "var(--accent-bull)" }}>ALIGNED</span>}
               </td>
               <td className="px-3 py-2 font-bold" style={{ color: labelColor(r.label) }}>{r.label}</td>
               <td className="px-3 py-2 text-right">{pct(r.currentBreadth, 0)}</td>
@@ -146,35 +185,34 @@ export default function RotatePage() {
   const s = d?.summary;
   const cards = [
     { label: "REGIME", value: s?.regime ?? "—", color: regimeColor(s?.regime ?? null) },
+    { label: "CANARIES", value: s?.canaryOn == null ? "—" : `${s.canaryOn}↑ ${s.canaryOff ?? 0}↓`, color: "var(--accent-info)" },
+    { label: "ALIGNED TEMA", value: (d?.triggers ?? []).filter((t) => t.aligned && t.triggered === "LONG").length, color: "var(--accent-bull)" },
     { label: "LEADING", value: s?.leading ?? "—", color: "var(--accent-bull)" },
     { label: "FADING", value: s?.fading ?? "—", color: "var(--accent-bear)" },
-    { label: "SECTORS", value: s?.nSectors ?? "—", color: "var(--accent-info)" },
-    { label: "INDUSTRIES", value: s?.nIndustries ?? "—", color: "var(--accent-warning)" },
   ];
 
   return (
     <div className="px-4 py-6">
       <div className="mb-4">
         <h1 className="text-lg font-terminal font-bold tracking-wider" style={{ color: "var(--accent-info)" }}>
-          BETA ROTATION
+          MACRO → ROTATE → TEMA
         </h1>
         <p className="text-xs text-[var(--text-secondary)]">
-          Which sectors and industries are trending — breadth, impulse, 60-day beta, 8-week heatmap · paper only
+          Canary votes set the regime, then sector trend, then TEMA-MACD ensemble inside aligned sub-sectors · paper only
         </p>
       </div>
 
       <div className="px-4 py-3 mb-4 rounded border border-[var(--border)] bg-[var(--badge-bg)] text-xs text-[var(--text-secondary)] font-terminal space-y-1">
         <p>
-          <span style={{ color: "var(--accent-info)" }}>CALTROPIA MAP:</span>{" "}
-          Structure follows the Caltropia 2026 sector &amp; industry outlook (current / momentum / value / low-vol
-          breadth, weekly impulse, upside stretch) plus a 60-day OLS beta vs the equal-weight universe. RISK-ON when
-          cyclicals lead on 4-week relative strength; RISK-OFF when defensives do. Computed on this universe — we do
-          not ingest their published numbers.
+          <span style={{ color: "var(--accent-info)" }}>FLOW:</span>{" "}
+          Macro canaries (QQQ/SPY, XLY/XLP, XLE/SPY, XLU/SPY inverted, HYG/LQD credit proxy, universe vs 200-SMA) vote
+          +1/0/−1 from a 126-day z-score and 10-day causal smooth. That regime filters which GICS groups are
+          <em> aligned</em>. TEMA ensemble is a compact Fast/Slow TEMA-MACD grid (hist &gt; 0 = long). 9/99/199 swing
+          and MACD close stay separate. Baskets are equal-weight proxies — no live ETF tape on this host.
         </p>
         <p>
-          LEAD = breadth ≥ 65% and impulse not falling. FADE = strong breadth losing speed. REPAIR = weak breadth
-          turning up. ACCEL = improving but not yet leadership. 8W is oldest → newest weekly equal-weight return.
-          Not investment advice.
+          ALIGNED = group trend matches the canary regime (cyclicals on RISK-ON, defensives on RISK-OFF). Not
+          investment advice.
         </p>
       </div>
 
@@ -195,7 +233,41 @@ export default function RotatePage() {
         ))}
       </div>
 
-      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">SECTORS · RANKED BY TREND SCORE</h2>
+      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">1 · MACRO CONTEXT · CANARY VOTES</h2>
+      <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
+        <table className="w-full text-sm font-terminal">
+          <thead>
+            <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
+              <th className="text-left px-3 py-2">CANARY</th>
+              <th className="text-left px-3 py-2">PROXY</th>
+              <th className="text-center px-3 py-2">VOTE</th>
+              <th className="text-right px-3 py-2">Z</th>
+              <th className="text-right px-3 py-2">SMOOTH</th>
+              <th className="text-left px-3 py-2">IMPLICATION</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
+            ) : !d?.canaries?.length ? (
+              <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--text-muted)]">No canaries. Re-run sector_rotation after migration 016.</td></tr>
+            ) : (
+              d.canaries.map((c) => (
+                <tr key={c.name} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">
+                  <td className="px-3 py-2 font-bold">{c.name}</td>
+                  <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{c.pair}{c.proxy ? " · proxy" : ""}</td>
+                  <td className="px-3 py-2 text-center font-bold" style={{ color: voteColor(c.vote) }}>{c.vote > 0 ? "+1" : c.vote < 0 ? "−1" : "0"}</td>
+                  <td className="px-3 py-2 text-right">{num(c.z, 2)}</td>
+                  <td className="px-3 py-2 text-right">{num(c.smooth, 2)}</td>
+                  <td className="px-3 py-2 text-xs text-[var(--text-secondary)]">{c.implication}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">2 · ROTATION · SECTORS ALIGNED TO THE CANARIES</h2>
       {loading ? (
         <p className="text-[var(--text-muted)] font-terminal px-3 py-8 text-center">Loading…</p>
       ) : !d?.sectors?.length ? (
@@ -204,12 +276,53 @@ export default function RotatePage() {
         <GroupTable rows={d.sectors} kind="SECTOR" />
       )}
 
-      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">INDUSTRIES · WHERE THE SECTOR TAPE HIDES</h2>
+      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">2b · INDUSTRIES · WHERE THE SECTOR TAPE HIDES</h2>
       {loading ? null : !d?.industries?.length ? (
         <p className="text-[var(--text-muted)] font-terminal px-3 py-8 text-center">No industries.</p>
       ) : (
         <GroupTable rows={d.industries} kind="INDUSTRY" />
       )}
+
+      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">3 · TEMA ENSEMBLE · TRIGGERED IN ALIGNED SUB-SECTORS</h2>
+      <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
+        <table className="w-full text-sm font-terminal">
+          <thead>
+            <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
+              <th className="text-left px-3 py-2">TICKER</th>
+              <th className="text-left px-3 py-2">SECTOR</th>
+              <th className="text-left px-3 py-2">INDUSTRY</th>
+              <th className="text-left px-3 py-2">ENSEMBLE</th>
+              <th className="text-right px-3 py-2">GRID</th>
+              <th className="text-left px-3 py-2">TEMA 9/99/199</th>
+              <th className="text-left px-3 py-2">MACD CLOSE</th>
+              <th className="text-left px-3 py-2">GROUP</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
+            ) : !d?.triggers?.length ? (
+              <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">No TEMA-MACD ensemble hits.</td></tr>
+            ) : (
+              d.triggers.map((t) => (
+                <tr key={t.ticker} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">
+                  <td className="px-3 py-2">
+                    <Link href={`/ticker/${t.ticker}`} className="font-bold hover:text-[var(--accent-info)]">{t.ticker}</Link>
+                    {t.aligned && <span className="ml-2 text-[10px] font-bold" style={{ color: "var(--accent-bull)" }}>ALIGNED</span>}
+                  </td>
+                  <td className="px-3 py-2 text-xs">{t.sector}</td>
+                  <td className="px-3 py-2 text-xs">{t.industry}</td>
+                  <td className="px-3 py-2 font-bold" style={{ color: t.triggered === "LONG" ? "var(--accent-bull)" : "var(--accent-bear)" }}>{t.triggered} {pct(t.ensemble, 0)}</td>
+                  <td className="px-3 py-2 text-right text-xs">{t.nLong ?? 0}/{t.nCfg ?? 0}</td>
+                  <td className="px-3 py-2" style={{ color: t.temaSide === "BUY" ? "var(--accent-bull)" : t.temaSide === "SELL" ? "var(--accent-bear)" : "var(--text-muted)" }}>{t.temaSide} {t.temaGrade}</td>
+                  <td className="px-3 py-2" style={{ color: t.macdAction === "CLOSE" ? "var(--accent-bear)" : "var(--accent-bull)" }}>{t.macdAction}</td>
+                  <td className="px-3 py-2 text-xs" style={{ color: labelColor(t.groupLabel) }}>{t.groupLabel ?? "—"}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
       <p className="text-[10px] text-[var(--text-muted)] font-terminal mt-3">
         Current = 20d up-name share · Momentum = 60d · Value = value-score ≥ 50 · Low-vol = 20d σ below universe median ·
