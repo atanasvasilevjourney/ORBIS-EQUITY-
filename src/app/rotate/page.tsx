@@ -272,13 +272,17 @@ function GroupTable({
 export default function RotatePage() {
   const [d, setD] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
-  const [sector, setSector] = useState<string | null>("Energy");
+  const [sector, setSector] = useState<string | null>(null);
   const [industry, setIndustry] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/rotate")
       .then((r) => r.json())
-      .then(setD)
+      .then((data: Data) => {
+        setD(data);
+        const add = (data.carver ?? []).find((c) => c.action === "ADD");
+        if (add) setSector(add.sector);
+      })
       .catch(() => setD(null))
       .finally(() => setLoading(false));
   }, []);
@@ -527,7 +531,7 @@ export default function RotatePage() {
         </table>
       </div>
 
-      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">
+      <h2 id="carver" className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">
         4 · CARVER DCA · {path.toUpperCase()} · D-RUNGS ON THE BIGGER TREND
       </h2>
       <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
