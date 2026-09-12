@@ -29,7 +29,7 @@ async function yahoo5m(ticker: string): Promise<Candle[]> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=5m&range=5d&includePrePost=false`;
   try {
     const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 KovaView-Terminal" },
+      headers: { "User-Agent": "Mozilla/5.0 OrbisEquity-Terminal" },
       cache: "no-store",
       signal: AbortSignal.timeout(8000),
     });
