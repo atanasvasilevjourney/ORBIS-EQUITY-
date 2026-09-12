@@ -5,6 +5,9 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { BiasChip } from "@/components/scoreboard/BiasChip";
 import { AgreementDots } from "@/components/scoreboard/AgreementDots";
+import { PriceChart } from "@/components/charts/PriceChart";
+import { ModulePanel } from "@/components/ui/ModulePanel";
+import { recordRecentTicker } from "@/components/command/CommandPalette";
 
 type TickerData = {
   radar: any;
@@ -229,6 +232,7 @@ export default function TickerPage() {
   const ticker = params.ticker as string;
   const [data, setData] = useState<TickerData | null>(null);
   const [tab, setTab] = useState<"swing" | "fundamentals" | "earnings" | "insider">("swing");
+  const [priceBars, setPriceBars] = useState<{ time: string; open: number; high: number; low: number; close: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [pharmaCount, setPharmaCount] = useState(0);
   const [upcomingEarnings, setUpcomingEarnings] = useState(0);
@@ -236,9 +240,17 @@ export default function TickerPage() {
   useEffect(() => {
     fetch(`/api/ticker/${ticker}`)
       .then((r) => r.json())
-      .then(setData)
+      .then((d) => {
+        setData(d);
+        if (d && !d.error) recordRecentTicker(ticker);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
+
+    fetch(`/api/ticker/${ticker}/prices?days=180`)
+      .then((r) => r.json())
+      .then((d) => setPriceBars(Array.isArray(d?.bars) ? d.bars : []))
+      .catch(() => setPriceBars([]));
 
     // Cross-module enrichment
     fetch(`/api/pharma?ticker=${ticker}&limit=100`)
@@ -331,6 +343,10 @@ export default function TickerPage() {
 
       {/* Tab content */}
       {tab === "swing" && r && (
+        <div className="space-y-4">
+        <ModulePanel title="PRICE" badge="EOD" accent="var(--module-1)" source="DELAYED · DAILY">
+          <PriceChart bars={priceBars} height={280} />
+        </ModulePanel>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {[
             { label: "QUALITY RANK", value: r.quality_rank, color: r.quality_rank >= 70 ? "var(--accent-bull)" : r.quality_rank <= 30 ? "var(--accent-bear)" : "" },
@@ -349,6 +365,7 @@ export default function TickerPage() {
             {r.volume_confirmed && <span className="text-xs px-2 py-1 rounded bg-[var(--badge-bg)] text-[var(--accent-bull)] font-terminal">VOL CONFIRMED</span>}
             {r.state_changed_at && <span className="text-xs text-[var(--text-muted)] font-terminal">State changed: {r.state_changed_at}</span>}
           </div>
+        </div>
         </div>
       )}
 
@@ -436,11 +453,11 @@ export default function TickerPage() {
           Fundamentals
         </Link>
         {pharmaCount > 0 && (
-          <Link href={`/pharma?ticker=${ticker}`} className="text-xs font-terminal text-[var(--accent-info)] hover:underline">
+          <Link href={`/pharma?ticker=${encodeURIComponent(ticker)}`} className="text-xs font-terminal text-[var(--accent-info)] hover:underline">
             Pharma ({pharmaCount})
           </Link>
         )}
-        <Link href={`/earnings-news?ticker=${ticker}`} className="text-xs font-terminal text-[var(--accent-info)] hover:underline">
+        <Link href={`/earnings-news?ticker=${encodeURIComponent(ticker)}`} className="text-xs font-terminal text-[var(--accent-info)] hover:underline">
           Earnings & News
         </Link>
       </div>

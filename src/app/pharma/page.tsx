@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
+
+import {useEffect, useState, useMemo, Suspense} from "react";
 import Link from "next/link";
+import { ModuleHeader } from "@/components/ui/ModuleHeader";
 
 type PharmaSignal = {
   id: number;
@@ -88,12 +91,14 @@ function EventTypeBadge({ type }: { type: string }) {
   );
 }
 
-export default function PharmaPage() {
+function PharmaPageInner() {
   const [data, setData] = useState<PharmaSignal[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Filters
+  const searchParams = useSearchParams();
+  const tickerParam = (searchParams.get("ticker") || "").toUpperCase();
   const [dirFilter, setDirFilter] = useState<"" | "LONG" | "SHORT" | "WATCH">("");
   const [phaseFilter, setPhaseFilter] = useState<"" | "PHASE2" | "PHASE3">("");
   const [eventFilter, setEventFilter] = useState("");
@@ -104,7 +109,7 @@ export default function PharmaPage() {
     if (phaseFilter) params.set("phase", phaseFilter);
     params.set("limit", "500");
 
-    fetch(`/api/pharma?${params}`)
+    fetch(`/api/pharma?${tickerParam ? `ticker=${encodeURIComponent(tickerParam)}&` : ""}${params}`)
       .then((r) => r.json())
       .then((d) => {
         setData(d.rows ?? []);
@@ -112,7 +117,7 @@ export default function PharmaPage() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [dirFilter, phaseFilter]);
+  }, [dirFilter, phaseFilter, tickerParam]);
 
   const filtered = useMemo(() => {
     let rows = [...data];
@@ -132,10 +137,13 @@ export default function PharmaPage() {
 
   return (
     <div className="px-4 py-6">
-      <h1 className="text-xl font-terminal font-bold mb-1">PHARMA CATALYST CALENDAR</h1>
-      <p className="text-xs text-[var(--text-muted)] mb-4 font-terminal">
-        Clinical trial events, PDUFA dates, FDA decisions — Phase 2/3 focus — ClinicalTrials.gov
-      </p>
+<ModuleHeader
+        module="MODULE 3"
+        title="PHARMA PIPELINE"
+        description="Clinical trial catalysts and Phase 2/3 signals — ClinicalTrials.gov"
+        source="CLINICALTRIALS.GOV"
+        accent="var(--module-3)"
+      />
 
       {/* Summary Cards */}
       {summary && (
@@ -286,5 +294,20 @@ export default function PharmaPage() {
         Showing {filtered.length} signals. Data from ClinicalTrials.gov v2 API.
       </p>
     </div>
+  );
+}
+
+
+export default function PharmaPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="px-4 py-12 text-center text-[var(--text-muted)] font-terminal">
+          Loading…
+        </div>
+      }
+    >
+      <PharmaPageInner />
+    </Suspense>
   );
 }

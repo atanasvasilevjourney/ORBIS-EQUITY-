@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
+import { ModuleHeader } from "@/components/ui/ModuleHeader";
 import { BiasChip } from "@/components/scoreboard/BiasChip";
 
 type FundRow = {
@@ -166,10 +167,13 @@ export default function FundamentalsPage() {
 
   return (
     <div className="px-4 py-6">
-      <h1 className="text-xl font-terminal font-bold mb-1">FUNDAMENTALS & VALUATION</h1>
-      <p className="text-xs text-[var(--text-muted)] mb-4 font-terminal">
-        {data.length} stocks — 50+ metrics from LSE Screener — Piotroski F-Score
-      </p>
+<ModuleHeader
+        module="MODULE 2"
+        title="FUNDAMENTALS & VALUATION"
+        description="Ratios, Piotroski F-Score, and valuation metrics across the universe"
+        source="FUNDAMENTALS · EOD"
+        accent="var(--module-2)"
+      />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">

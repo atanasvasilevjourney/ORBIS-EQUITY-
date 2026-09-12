@@ -51,8 +51,7 @@ export function ScoreboardRow({ row }: { row: ScreenerRow }) {
     row.volumeConfirmed,
   ];
 
-  // Sector breadth placeholder (will be computed from full data)
-  const sectorCtx = `${row.convergence}/5`;
+  const sectorLabel = row.sector || "—";
   const flip = isRecentFlip(row.stateChangedAt);
 
   return (
@@ -69,7 +68,7 @@ export function ScoreboardRow({ row }: { row: ScreenerRow }) {
       <td className="px-3 py-2.5">
         <AgreementDots signals={signals} />
       </td>
-      <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">{sectorCtx}</td>
+      <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs truncate max-w-[9rem]" title={row.sector}>{sectorLabel}</td>
       <td className="px-3 py-2.5 text-right font-terminal text-xs">{formatPrice(row.price)}</td>
       <td className="px-3 py-2.5 text-right text-xs text-[var(--text-muted)]">{formatMktCap(row.marketCap)}</td>
       <td className="px-3 py-2.5">

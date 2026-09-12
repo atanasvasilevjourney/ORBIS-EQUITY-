@@ -58,6 +58,16 @@ export function Nav() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {/* Command palette affordance */}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event("kovaview:open-palette"))}
+            className="hidden sm:flex items-center gap-2 px-2 py-1 text-[10px] font-terminal rounded border border-[var(--panel-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent-info)] transition-colors"
+            title="Open command palette"
+          >
+            <span>JUMP</span>
+            <kbd className="px-1 rounded bg-[var(--surface-alt)] border border-[var(--panel-border)]">⌘K</kbd>
+          </button>
           {/* Ticker search */}
           <form onSubmit={handleSearch} className="hidden sm:flex">
             <input

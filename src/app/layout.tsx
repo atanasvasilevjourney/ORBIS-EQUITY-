@@ -3,6 +3,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/lib/theme/ThemeProvider";
 import { DataHonestyBar } from "@/components/cards/DataHonestyBar";
 import { Nav } from "@/components/nav/Nav";
+import { CommandPalette } from "@/components/command/CommandPalette";
 
 export const metadata: Metadata = {
   title: "KovaView Terminal",
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Nav />
           <DataHonestyBar />
           <main className="mx-auto max-w-[1600px]">{children}</main>
+          <CommandPalette />
         </ThemeProvider>
       </body>
     </html>

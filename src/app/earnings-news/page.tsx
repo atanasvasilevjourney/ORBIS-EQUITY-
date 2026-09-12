@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+
+import {useEffect, useState, Suspense} from "react";
 import Link from "next/link";
+import { ModuleHeader } from "@/components/ui/ModuleHeader";
 
 type EarningsRow = {
   ticker: string;
@@ -52,7 +55,9 @@ function timeAgo(dateStr: string): string {
   return `${diffD}d ago`;
 }
 
-export default function EarningsNewsPage() {
+function EarningsNewsPageInner() {
+  const searchParams = useSearchParams();
+  const tickerParam = (searchParams.get("ticker") || "").toUpperCase();
   const [earnings, setEarnings] = useState<EarningsRow[]>([]);
   const [news, setNews] = useState<NewsRow[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -64,7 +69,7 @@ export default function EarningsNewsPage() {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/earnings-news?view=${view}&days=${days}&limit=200`)
+    fetch(`/api/earnings-news?view=${view}&days=${days}&limit=200${tickerParam ? `&ticker=${encodeURIComponent(tickerParam)}` : ""}`)
       .then((r) => r.json())
       .then((d) => {
         setEarnings(d.earnings ?? []);
@@ -73,7 +78,7 @@ export default function EarningsNewsPage() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [view, days]);
+  }, [view, days, tickerParam]);
 
   if (loading) {
     return (
@@ -85,10 +90,13 @@ export default function EarningsNewsPage() {
 
   return (
     <div className="px-4 py-6">
-      <h1 className="text-xl font-terminal font-bold mb-1">EARNINGS & NEWS</h1>
-      <p className="text-xs text-[var(--text-muted)] mb-4 font-terminal">
-        Earnings calendar with surprise tracking — GDELT news feed with tone scores
-      </p>
+<ModuleHeader
+        module="MODULE 4"
+        title="EARNINGS & NEWS"
+        description="Earnings calendar with surprise tracking — GDELT news with tone scores"
+        source="LSE · GDELT · EOD"
+        accent="var(--module-4)"
+      />
 
       {/* Summary Cards */}
       {summary && (
@@ -256,5 +264,20 @@ export default function EarningsNewsPage() {
         Earnings: LSE Company Calendar. News: GDELT DOC API (tone = sentiment score).
       </p>
     </div>
+  );
+}
+
+
+export default function EarningsNewsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="px-4 py-12 text-center text-[var(--text-muted)] font-terminal">
+          Loading…
+        </div>
+      }
+    >
+      <EarningsNewsPageInner />
+    </Suspense>
   );
 }
