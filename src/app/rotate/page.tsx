@@ -374,7 +374,7 @@ export default function RotatePage() {
           <span style={{ color: "var(--accent-info)" }}>FLOW:</span>{" "}
           Click a sector to open its sub-sectors, then a sleeve. TEMA-MACD is the WHEN. Carver D1–D4 are discrete
           partials unlocked by the parent-sector EWMAC (|f| 5 / 10 / 15 / 20). Those rungs rotate into the leading
-          sub-sector and its top names (Strategy 19-lite). Isolated from the PERPS Carver book.
+          sub-sector and its top names (Strategy 19-lite). Isolated from the CASH TEMA/Carver book.
         </p>
         <p>
           ADD = DCA onto the bigger trend. ROTATE = the same rungs belong to a hotter sleeve. ALIGNED = group trend
@@ -581,7 +581,7 @@ export default function RotatePage() {
 
       <p className="text-[10px] text-[var(--text-muted)] font-terminal mt-3">
         Current = 20d up-name share · Momentum = 60d · Carver D-rungs = parent EWMAC 5/10/15/20 ·
-        XS = 60d return minus sleeve mean. Demo tape is synthetic. Isolated from PERPS. Not investment advice.
+        XS = 60d return minus sleeve mean. Demo tape is synthetic. Isolated from the CASH book. Not investment advice.
       </p>
     </div>
   );

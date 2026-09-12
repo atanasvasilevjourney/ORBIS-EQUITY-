@@ -20,6 +20,7 @@ from pipeline.compute.perps_math import (
     rotation_size_mult,
     scale_gross,
     side_weights,
+    size_cash,
     size_perp,
     tema,
     tema_book_eligible,
@@ -201,6 +202,24 @@ class PerpOverlayTests(unittest.TestCase):
         self.assertFalse(funding_blocks("BUY", 0.0005))
         self.assertFalse(funding_blocks("BUY", None))
         self.assertTrue(funding_blocks("SELL", -0.002))
+
+    def test_cash_caps_at_allocated(self):
+        sized = size_cash(1_000_000, 10_000, 50.0, "BUY")
+        self.assertTrue(sized.capped)
+        self.assertAlmostEqual(sized.cash, 10_000)
+        self.assertAlmostEqual(sized.shares, 200.0)
+        self.assertAlmostEqual(sized.notional, 10_000)
+
+    def test_cash_shares_from_close(self):
+        sized = size_cash(4_000, 10_000, 50.0, "BUY")
+        self.assertFalse(sized.capped)
+        self.assertAlmostEqual(sized.shares, 80.0)
+        self.assertAlmostEqual(sized.cash, 4_000)
+
+    def test_cash_short_is_negative_notional(self):
+        sized = size_cash(-8_000, 10_000, 40.0, "SELL")
+        self.assertAlmostEqual(sized.notional, -8_000)
+        self.assertAlmostEqual(sized.shares, 200.0)
 
     def test_side_weights_sum(self):
         w = side_weights(3, 50.0)

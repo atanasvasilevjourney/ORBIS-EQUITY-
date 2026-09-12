@@ -1,4 +1,4 @@
-"""TEMA + Carver math for the leveraged equity-perp paper desk.
+"""TEMA + Carver math for the cash-equity paper desk.
 
 QMIE (atanasvasilevjourney/QMIE) does not ship strategies named TEMA or
 Carver. This module is the KovaView mapping:
@@ -10,8 +10,9 @@ Carver. This module is the KovaView mapping:
   Carver  EWMAC 16/64 + 32/128, vol-target, drawdown scalar, and
           LIVE / REDUCE / CASH rotation from forecast breadth.
 
-Signals run on listed-equity daily bars. Sizing is as a USDT-M perpetual:
-leverage, isolated margin, liquidation. No live exchange orders.
+Signals and size run on listed-equity daily closes (`prices_daily`).
+Fully funded cash shares — no USDT-M leverage, funding, or liquidation.
+No live broker orders.
 """
 from __future__ import annotations
 
@@ -53,7 +54,8 @@ CARVER_VOL_WINDOW = 20
 CARVER_PRICE_SIGMA_WINDOW = 25
 CARVER_TARGET_VOL = 0.25          # levered CTA sleeve
 CARVER_IDM = 1.2
-CARVER_GROSS_LEV_CAP = 3.0
+CARVER_GROSS_LEV_CAP = 1.0        # cash book: fully funded, no leverage
+CASH_GROSS_CAP = 1.0
 CARVER_DD_SOFT = 0.10             # start tapering risk
 CARVER_DD_HARD = 0.25             # CASH (Carver-style max-DD overlay)
 CARVER_LIVE_MIN = 3               # forecasts |f|>=min to stay LIVE
@@ -289,6 +291,14 @@ class PerpSize:
     capped: bool
 
 
+@dataclass
+class CashSize:
+    notional: float
+    shares: float
+    cash: float
+    capped: bool
+
+
 def liquidation_price(entry: float, side: str, leverage: float, mmr: float = MAINT_MARGIN) -> float | None:
     """Isolated USDT-M approximation. Not exchange-exact (tiers, fees, funding).
 
@@ -329,6 +339,28 @@ def size_perp(notional: float, allocated: float, entry: float, side: str,
         margin = allocated
     liq = liquidation_price(entry, side, lev)
     return PerpSize(notional=signed, leverage=round(lev, 2), margin=margin, liq=liq, capped=capped)
+
+
+def size_cash(notional: float, allocated: float, price: float, side: str) -> CashSize:
+    """Fully funded cash shares at the cash close. Never more than allocated.
+
+    Shorts are paper shorts of the listed name (no borrow / locate model).
+    """
+    if allocated <= 0 or price <= 0 or notional == 0 or side in ("FLAT", "NEUTRAL", ""):
+        return CashSize(0.0, 0.0, 0.0, False)
+    signed = float(notional)
+    abs_n = abs(signed)
+    capped = False
+    if abs_n > allocated:
+        abs_n = allocated
+        signed = math.copysign(abs_n, signed)
+        capped = True
+    return CashSize(
+        notional=signed,
+        shares=round(abs_n / price, 4),
+        cash=abs_n,
+        capped=capped,
+    )
 
 
 def tema_notional(allocated: float, price: float, atr: float) -> float:

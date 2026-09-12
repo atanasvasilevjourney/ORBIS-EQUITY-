@@ -46,6 +46,7 @@ type NameRow = {
   tema_leverage: number | null;
   tema_margin: number | null;
   tema_liq: number | null;
+  tema_shares: number | null;
   carver_forecast: number | null;
   carver_ewmac_fast: number | null;
   carver_ewmac_slow: number | null;
@@ -55,6 +56,7 @@ type NameRow = {
   carver_leverage: number | null;
   carver_margin: number | null;
   carver_liq: number | null;
+  carver_shares: number | null;
   atr: number | null;
   atr_pct: number | null;
   in_tema_book: boolean | null;
@@ -95,6 +97,7 @@ function mapName(r: NameRow) {
     temaLeverage: r.tema_leverage,
     temaMargin: r.tema_margin,
     temaLiq: r.tema_liq,
+    temaShares: r.tema_shares,
     carverForecast: r.carver_forecast,
     carverEwmacFast: r.carver_ewmac_fast,
     carverEwmacSlow: r.carver_ewmac_slow,
@@ -104,6 +107,7 @@ function mapName(r: NameRow) {
     carverLeverage: r.carver_leverage,
     carverMargin: r.carver_margin,
     carverLiq: r.carver_liq,
+    carverShares: r.carver_shares,
     atr: r.atr,
     atrPct: r.atr_pct,
     inTemaBook: Boolean(r.in_tema_book),
@@ -159,6 +163,8 @@ export async function GET() {
         temaSlots: latest.tema_slots,
         carverSlots: latest.carver_slots,
         grossLeverage: latest.gross_leverage,
+        deployed: typeof cfg.deployed === "number" ? cfg.deployed : null,
+        book: typeof cfg.book === "string" ? cfg.book : "cash",
         asOfDate: latest.asof_date,
         runId: latest.run_id,
         lastRunAt: latest.computed_at,
