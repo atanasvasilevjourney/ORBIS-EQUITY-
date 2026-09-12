@@ -12,3 +12,6 @@ build/
 .vercel/
 data/cold/*.parquet
 *.tsbuildinfo
+test-results/
+playwright-report/
+.pytest_cache/

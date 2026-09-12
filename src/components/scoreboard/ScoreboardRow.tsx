@@ -56,7 +56,7 @@ export function ScoreboardRow({ row }: { row: ScreenerRow }) {
     (row.adx ?? 0) >= 20,
   ];
 
-const sectorLabel = row.sector || "—";
+  const sectorLabel = row.sector || "—";
   const flip = isRecentFlip(row.stateChangedAt);
 
   return (
