@@ -196,6 +196,19 @@ def main() -> None:
         "=== Universe Sync Complete: %d/%d upserted ===", upserted, len(rows)
     )
 
+    # Deactivate symbols no longer in screener
+    current_symbols = {r["symbol"] for r in rows}
+    try:
+        all_members = sb.table("universe_members").select("symbol").execute()
+        stale = [r["symbol"] for r in (all_members.data or []) if r["symbol"] not in current_symbols]
+        if stale:
+            for i in range(0, len(stale), batch_size):
+                batch_syms = stale[i : i + batch_size]
+                sb.table("universe_members").update({"is_active": False}).in_("symbol", batch_syms).execute()
+            logger.info("Deactivated %d stale universe members", len(stale))
+    except Exception:
+        logger.exception("Failed to deactivate stale universe members")
+
 
 if __name__ == "__main__":
     main()

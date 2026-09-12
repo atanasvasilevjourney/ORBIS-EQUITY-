@@ -122,8 +122,9 @@ def compute_f_score(
 
     # 3. Delta ROA > 0 (improved from prior year)
     prior_ni = income_pri.get("netIncome")
-    prior_ta = balance_pri.get("totalAssets")
-    prior_roa = _safe_div(prior_ni, prior_ta)
+    # Beginning-of-prior-year assets = two years back (balance[2] if available)
+    prior_ta_beg = balance_pri.get("totalAssets")  # fallback: prior year-end
+    prior_roa = _safe_div(prior_ni, prior_ta_beg)
     if roa is not None and prior_roa is not None and roa > prior_roa:
         score += 1
 
@@ -165,7 +166,7 @@ def compute_f_score(
 
     # 9. Delta asset turnover improved (revenue / beginning-of-year assets)
     at_cur = _safe_div(income_cur.get("revenue"), total_assets_beg)
-    at_pri = _safe_div(income_pri.get("revenue"), prior_ta)
+    at_pri = _safe_div(income_pri.get("revenue"), prior_ta_beg)
     if at_cur is not None and at_pri is not None and at_cur > at_pri:
         score += 1
 
@@ -183,8 +184,10 @@ def main() -> None:
     sb = _get_supabase_client()
 
     # Get all symbols that have fundamentals
-    resp = sb.table("fundamentals_snapshot").select("symbol").execute()
-    symbols = {r["symbol"] for r in (resp.data or [])}
+    from pipeline.utils.supabase import fetch_all
+
+    symbol_rows = fetch_all(sb, "fundamentals_snapshot", "symbol")
+    symbols = {r["symbol"] for r in symbol_rows}
     logger.info("Computing F-Score for %d symbols", len(symbols))
 
     # Pre-fetch ALL financial reports in bulk (3 queries instead of 6N)

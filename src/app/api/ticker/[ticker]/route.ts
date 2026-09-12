@@ -9,7 +9,8 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: { ticker: string } }
 ) {
-  const { ticker } = params;
+  const { ticker: rawTicker } = params;
+  const ticker = rawTicker.toUpperCase();
   if (!/^[A-Z0-9.\-]{1,20}$/i.test(ticker)) {
     return NextResponse.json({ error: "Invalid ticker format" }, { status: 400 });
   }

@@ -1,10 +1,15 @@
-"""ClinicalTrials.gov v2 API client.
+"""ClinicalTrials.gov Data API v2 client — free, no API key required.
 
-Fetches Phase 2/3 interventional drug trials for publicly traded
-pharmaceutical and biotech companies.
+The NIH/NLM registry exposes a public, unauthenticated REST API returning
+JSON. This is the health-sector catalyst source for KovaView (clinical-trial
+readouts / status changes that move biotech & pharma equities).
 
-API docs: https://clinicaltrials.gov/data-api/about-api/study-data-structure
+API docs : https://clinicaltrials.gov/data-api/api
+Base URL : https://clinicaltrials.gov/api/v2
+Notes    : cursor pagination via `pageToken`; nested `protocolSection` schema.
 """
+from __future__ import annotations
+
 import logging
 import time
 from typing import Any
@@ -14,126 +19,119 @@ import requests
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://clinicaltrials.gov/api/v2/studies"
-PAGE_SIZE = 100
+REQUEST_DELAY = 0.5  # polite delay between requests
+
+# Phases reported by the registry, ordered so we can pick the most advanced.
+_PHASE_ORDER = {
+    "EARLY_PHASE1": 0,
+    "PHASE1": 1,
+    "PHASE1_PHASE2": 2,
+    "PHASE2": 3,
+    "PHASE2_PHASE3": 4,
+    "PHASE3": 5,
+    "PHASE4": 6,
+}
 
 
-def _extract_trial(study: dict) -> dict | None:
-    """Extract relevant fields from a ClinicalTrials.gov v2 study object."""
-    proto = study.get("protocolSection", {})
-    ident = proto.get("identificationModule", {})
-    status = proto.get("statusModule", {})
-    sponsor = proto.get("sponsorCollaboratorsModule", {})
-    design = proto.get("designModule", {})
-    conditions = proto.get("conditionsModule", {})
-    arms = proto.get("armsInterventionsModule", {})
+def _pick_phase(phases: list[str]) -> str | None:
+    if not phases:
+        return None
+    return max(phases, key=lambda p: _PHASE_ORDER.get(p, -1))
+
+
+def _struct_date(node: dict[str, Any] | None) -> str | None:
+    """ClinicalTrials date structs look like {"date": "2026-08", "type": ...}.
+
+    Normalizes YYYY / YYYY-MM to a full ISO date so Postgres DATE accepts it.
+    """
+    if not node:
+        return None
+    raw = node.get("date")
+    if not raw:
+        return None
+    parts = raw.split("-")
+    if len(parts) == 1:
+        return f"{parts[0]}-01-01"
+    if len(parts) == 2:
+        return f"{parts[0]}-{parts[1]}-01"
+    return raw
+
+
+def _parse_study(study: dict[str, Any]) -> dict[str, Any] | None:
+    ps = study.get("protocolSection") or {}
+    ident = ps.get("identificationModule") or {}
+    status = ps.get("statusModule") or {}
+    sponsor = (ps.get("sponsorCollaboratorsModule") or {}).get("leadSponsor") or {}
+    conditions = (ps.get("conditionsModule") or {}).get("conditions") or []
+    design = ps.get("designModule") or {}
+    interventions = (ps.get("armsInterventionsModule") or {}).get("interventions") or []
 
     nct_id = ident.get("nctId")
     if not nct_id:
         return None
 
-    # Extract drug name from interventions
-    drug_name = None
-    interventions = arms.get("interventions", [])
-    for interv in interventions:
-        if interv.get("type") in ("DRUG", "BIOLOGICAL"):
-            drug_name = interv.get("name")
+    drug = None
+    for iv in interventions:
+        if (iv.get("type") or "").upper() == "DRUG":
+            drug = iv.get("name")
             break
-    if not drug_name:
-        drug_name = ident.get("briefTitle", "")[:100]
+    if not drug and interventions:
+        drug = interventions[0].get("name")
+    if not drug:
+        drug = ident.get("briefTitle")
 
-    # Extract phase
-    phases = design.get("phases", [])
-    phase = phases[0] if phases else None
-
-    # Extract dates
-    start = status.get("startDateStruct", {}).get("date")
-    completion = status.get("completionDateStruct", {}).get("date")
-    primary_completion = status.get("primaryCompletionDateStruct", {}).get("date")
-
-    # Check if results posted
-    results_posted = status.get("resultsFirstPostDateStruct") is not None
+    has_results = bool(study.get("hasResults"))
 
     return {
         "nct_id": nct_id,
-        "drug_name": drug_name,
-        "condition": ", ".join(conditions.get("conditions", []))[:200],
-        "phase": phase,
+        "drug_name": (drug or "")[:200] or None,
+        "condition": (conditions[0] if conditions else None),
+        "phase": _pick_phase(design.get("phases") or []),
         "overall_status": status.get("overallStatus"),
-        "lead_sponsor": sponsor.get("leadSponsor", {}).get("name"),
-        "start_date": start,
-        "completion_date": completion or primary_completion,
-        "results_posted": results_posted,
-        "brief_title": ident.get("briefTitle", "")[:200],
+        "lead_sponsor": sponsor.get("name"),
+        "start_date": _struct_date(status.get("startDateStruct")),
+        "completion_date": _struct_date(
+            status.get("primaryCompletionDateStruct") or status.get("completionDateStruct")
+        ),
+        "results_posted": has_results,
+        "last_status_change": _struct_date(status.get("lastUpdatePostDateStruct")),
     }
 
 
 def fetch_trials_for_sponsor(
-    sponsor_name: str,
-    phases: list[str] | None = None,
-    statuses: list[str] | None = None,
-    max_results: int = 200,
-) -> list[dict]:
-    """Fetch trials from ClinicalTrials.gov for a given sponsor.
+    sponsor: str,
+    max_records: int = 25,
+    interventional_only: bool = True,
+) -> list[dict[str, Any]]:
+    """Fetch recent trials led by `sponsor` from ClinicalTrials.gov.
 
-    Args:
-        sponsor_name: Company name (e.g., "Pfizer", "AstraZeneca")
-        phases: Filter phases (e.g., ["PHASE2", "PHASE3"])
-        statuses: Filter statuses (e.g., ["COMPLETED", "RECRUITING"])
-        max_results: Maximum number of results to fetch
-
-    Returns:
-        List of extracted trial dicts
+    Returns a list of normalized trial dicts ready to upsert into
+    `pharma_trials` (minus the `ticker` tag, which the ingest step adds).
     """
-    if phases is None:
-        phases = ["PHASE2", "PHASE3"]
-    if statuses is None:
-        statuses = [
-            "RECRUITING",
-            "ACTIVE_NOT_RECRUITING",
-            "COMPLETED",
-            "TERMINATED",
-            "SUSPENDED",
-            "WITHDRAWN",
-        ]
+    params: dict[str, str] = {
+        "query.lead": sponsor,
+        "pageSize": str(min(max_records, 100)),
+        "sort": "LastUpdatePostDate:desc",
+        "format": "json",
+    }
+    if interventional_only:
+        # v2 has no `filter.studyType`; use the advanced AREA[] filter instead.
+        params["filter.advanced"] = "AREA[StudyType]INTERVENTIONAL"
 
-    # Build filter
-    phase_filter = " OR ".join(f"AREA[Phase]{p}" for p in phases)
-    status_filter = " OR ".join(f"AREA[OverallStatus]{s}" for s in statuses)
-    advanced_filter = f"({phase_filter}) AND ({status_filter}) AND AREA[StudyType]INTERVENTIONAL"
+    try:
+        resp = requests.get(BASE_URL, params=params, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        logger.exception("ClinicalTrials.gov fetch failed for sponsor %s", sponsor)
+        return []
 
-    all_trials: list[dict] = []
-    next_token: str | None = None
+    studies = data.get("studies", []) or []
+    results: list[dict[str, Any]] = []
+    for study in studies[:max_records]:
+        parsed = _parse_study(study)
+        if parsed:
+            results.append(parsed)
 
-    while len(all_trials) < max_results:
-        params: dict[str, str] = {
-            "query.spons": sponsor_name,
-            "filter.advanced": advanced_filter,
-            "pageSize": str(min(PAGE_SIZE, max_results - len(all_trials))),
-        }
-        if next_token:
-            params["pageToken"] = next_token
-
-        try:
-            resp = requests.get(BASE_URL, params=params, timeout=30)
-            resp.raise_for_status()
-            data = resp.json()
-        except Exception:
-            logger.exception("Failed to fetch trials for %s", sponsor_name)
-            break
-
-        studies = data.get("studies", [])
-        if not studies:
-            break
-
-        for study in studies:
-            trial = _extract_trial(study)
-            if trial:
-                all_trials.append(trial)
-
-        next_token = data.get("nextPageToken")
-        if not next_token:
-            break
-
-        time.sleep(0.3)  # Rate limiting
-
-    return all_trials
+    time.sleep(REQUEST_DELAY)
+    return results

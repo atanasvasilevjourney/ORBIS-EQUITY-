@@ -1,12 +1,16 @@
-"""Pharma trials ingest: ClinicalTrials.gov → Supabase.
+"""Health-sector catalyst ingest: ClinicalTrials.gov -> pharma_trials.
 
-Fetches Phase 2/3 interventional drug trials for all mapped sponsors
-in our universe, seeds the sponsor_ticker_map, and upserts trials
-into pharma_trials.
+For every active Health Care universe member, pulls that company's recent
+interventional clinical trials (lead-sponsor search) from the free
+ClinicalTrials.gov Data API v2 and upserts them into `pharma_trials`,
+tagged with the ticker. These trial readouts are the raw catalysts the
+`pharma_signals` compute step turns into tradable signals.
 
 Usage:
     python -m pipeline.ingest.pharma_trials
 """
+from __future__ import annotations
+
 import logging
 import os
 from datetime import datetime, timezone
@@ -14,13 +18,34 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
-from pipeline.config.settings import SupabaseConfig
 from pipeline.clients.clinicaltrials import fetch_trials_for_sponsor
-from pipeline.data.sponsor_map import SPONSOR_TICKER_MAP
+from pipeline.config.settings import SupabaseConfig
+from pipeline.utils.supabase import fetch_all
 
 load_dotenv()
+load_dotenv(".env.local")
 
 logger = logging.getLogger(__name__)
+
+HEALTH_SECTORS = {"Health Care", "Healthcare", "Health"}
+TRIALS_PER_SPONSOR = 25
+
+# Registered ClinicalTrials.gov lead-sponsor names differ from company names
+# (e.g. J&J files under "Janssen"). Fall back to company_name when unmapped.
+SPONSOR_MAP: dict[str, str] = {
+    "MRNA": "ModernaTX",
+    "PFE": "Pfizer",
+    "MRK": "Merck Sharp",
+    "JNJ": "Janssen",
+    "AZN": "AstraZeneca",
+    "NVS": "Novartis",
+    "LLY": "Eli Lilly",
+    "ABBV": "AbbVie",
+    "BMY": "Bristol-Myers Squibb",
+    "GILD": "Gilead Sciences",
+    "AMGN": "Amgen",
+    "BNTX": "BioNTech",
+}
 
 
 def _get_supabase_client() -> Client:
@@ -30,123 +55,56 @@ def _get_supabase_client() -> Client:
     return create_client(cfg.url, cfg.service_key)
 
 
-def _seed_sponsor_map(sb: Client) -> dict[str, str]:
-    """Seed sponsor_ticker_map and return sponsor_name → ticker lookup."""
-    logger.info("Seeding sponsor_ticker_map (%d entries)...", len(SPONSOR_TICKER_MAP))
-
-    rows = []
-    for entry in SPONSOR_TICKER_MAP:
-        rows.append({
-            "sponsor_name": entry["sponsor_name"],
-            "ticker": entry["ticker"],
-            "exchange": entry["exchange"],
-            "aliases": entry.get("aliases", []),
-            "verified": True,
-        })
-
-    try:
-        sb.table("sponsor_ticker_map").upsert(
-            rows, on_conflict="sponsor_name"
-        ).execute()
-    except Exception:
-        logger.exception("Failed to seed sponsor_ticker_map")
-
-    # Also load existing DB entries
-    resp = sb.table("sponsor_ticker_map").select("sponsor_name, ticker, aliases").execute()
-    lookup: dict[str, str] = {}
-    for row in resp.data or []:
-        lookup[row["sponsor_name"].lower()] = row["ticker"]
-        for alias in row.get("aliases") or []:
-            lookup[alias.lower()] = row["ticker"]
-
-    return lookup
-
-
-def _resolve_ticker(sponsor_name: str, lookup: dict[str, str]) -> str | None:
-    """Resolve a ClinicalTrials.gov sponsor name to a ticker."""
-    if not sponsor_name:
-        return None
-    key = sponsor_name.lower().strip()
-    if key in lookup:
-        return lookup[key]
-    # Fuzzy: check if any known name is a substring (min length 5 to avoid false matches)
-    for known, ticker in lookup.items():
-        if len(known) >= 5 and (known in key or key in known):
-            return ticker
-    return None
+def _health_members(sb: Client) -> list[dict]:
+    rows = fetch_all(
+        sb,
+        "universe_members",
+        "symbol, company_name, sector",
+        filters=lambda q: q.eq("is_active", True),
+    )
+    return [r for r in rows if (r.get("sector") or "") in HEALTH_SECTORS]
 
 
 def main() -> None:
-    """Fetch clinical trials for all mapped sponsors and upsert into Supabase."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
-    logger.info("=== Pharma Trials Ingest Start ===")
+    logger.info("=== Pharma Trials Ingest Start (ClinicalTrials.gov) ===")
 
     sb = _get_supabase_client()
-    lookup = _seed_sponsor_map(sb)
-    logger.info("Sponsor lookup has %d entries", len(lookup))
+    members = _health_members(sb)
+    logger.info("Found %d Health Care universe members", len(members))
 
-    # Get unique sponsors to query
-    sponsors_to_query: list[dict] = []
-    seen_tickers: set[str] = set()
-    for entry in SPONSOR_TICKER_MAP:
-        if entry["ticker"] not in seen_tickers:
-            sponsors_to_query.append(entry)
-            seen_tickers.add(entry["ticker"])
-
-    total_trials = 0
-    total_upserted = 0
     now = datetime.now(timezone.utc).isoformat()
+    total = 0
 
-    for entry in sponsors_to_query:
-        sponsor = entry["sponsor_name"]
-        ticker = entry["ticker"]
-        logger.info("Fetching trials for %s (%s)...", sponsor, ticker)
-
-        try:
-            trials = fetch_trials_for_sponsor(sponsor, max_results=100)
-        except Exception:
-            logger.exception("Failed to fetch trials for %s", sponsor)
+    for m in members:
+        ticker = m["symbol"]
+        sponsor = SPONSOR_MAP.get(ticker) or (m.get("company_name") or "").split(",")[0]
+        if not sponsor:
             continue
 
-        logger.info("  %s: %d trials found", ticker, len(trials))
-        total_trials += len(trials)
-
+        trials = fetch_trials_for_sponsor(sponsor, max_records=TRIALS_PER_SPONSOR)
         if not trials:
+            logger.info("  %s (%s): no trials", ticker, sponsor)
             continue
 
         rows = []
-        for trial in trials:
-            resolved_ticker = _resolve_ticker(trial["lead_sponsor"], lookup) or ticker
-            rows.append({
-                "nct_id": trial["nct_id"],
-                "ticker": resolved_ticker,
-                "drug_name": trial["drug_name"],
-                "condition": trial["condition"],
-                "phase": trial["phase"],
-                "overall_status": trial["overall_status"],
-                "lead_sponsor": trial["lead_sponsor"],
-                "start_date": trial["start_date"],
-                "completion_date": trial["completion_date"],
-                "results_posted": trial["results_posted"],
-                "updated_at": now,
-            })
+        for t in trials:
+            row = dict(t)
+            row["ticker"] = ticker
+            row["updated_at"] = now
+            rows.append(row)
 
         try:
-            sb.table("pharma_trials").upsert(
-                rows, on_conflict="nct_id"
-            ).execute()
-            total_upserted += len(rows)
-            logger.info("  %s: %d trials upserted", ticker, len(rows))
+            sb.table("pharma_trials").upsert(rows, on_conflict="nct_id").execute()
+            total += len(rows)
+            logger.info("  %s (%s): %d trials upserted", ticker, sponsor, len(rows))
         except Exception:
             logger.exception("Failed to upsert trials for %s", ticker)
 
-    logger.info(
-        "=== Pharma Trials Ingest Complete: %d found, %d upserted ===",
-        total_trials, total_upserted,
-    )
+    logger.info("=== Pharma Trials Ingest Complete: %d trials for %d sponsors ===", total, len(members))
 
 
 if __name__ == "__main__":

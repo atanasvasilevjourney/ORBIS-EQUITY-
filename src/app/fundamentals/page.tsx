@@ -18,41 +18,38 @@ type FundRow = {
   marketCap: number | null;
   pe: number | null;
   pb: number | null;
-  ps: number | null;
-  pFcf: number | null;
   evEbitda: number | null;
-  earningsYield: number | null;
-  fcfYield: number | null;
-  divYield: number | null;
-  grossMargin: number | null;
-  opMargin: number | null;
-  netMargin: number | null;
   roe: number | null;
-  roa: number | null;
-  roic: number | null;
-  currentRatio: number | null;
+  netMargin: number | null;
   debtToEquity: number | null;
   revGrowth1y: number | null;
-  revGrowth3y: number | null;
-  niGrowth1y: number | null;
   epsGrowth1y: number | null;
+  divYield: number | null;
   fScore: number | null;
+  valueScore: number | null;
+  qualityScore: number | null;
+  growthScore: number | null;
+  earningsQualityScore: number | null;
+  leverageScore: number | null;
+  compositeScore: number | null;
+  sectorValuePctile: number | null;
+  sectorQualityPctile: number | null;
 };
 
 type SortKey = keyof FundRow;
 
-const COLUMNS: { key: SortKey; label: string; fmt?: "pct" | "ratio" | "money" | "score" | "cap" }[] = [
+const COLUMNS: { key: SortKey; label: string; fmt?: "pct" | "ratio" | "score" | "cap" | "factor" }[] = [
   { key: "symbol", label: "TICKER" },
+  { key: "compositeScore", label: "COMP", fmt: "factor" },
+  { key: "valueScore", label: "VAL", fmt: "factor" },
+  { key: "qualityScore", label: "QLT", fmt: "factor" },
+  { key: "growthScore", label: "GRW", fmt: "factor" },
+  { key: "earningsQualityScore", label: "EQ", fmt: "factor" },
+  { key: "leverageScore", label: "LEV", fmt: "factor" },
+  { key: "fScore", label: "F-SCR", fmt: "score" },
   { key: "pe", label: "P/E", fmt: "ratio" },
-  { key: "pb", label: "P/B", fmt: "ratio" },
-  { key: "evEbitda", label: "EV/EBITDA", fmt: "ratio" },
   { key: "roe", label: "ROE", fmt: "pct" },
-  { key: "netMargin", label: "NET MGN", fmt: "pct" },
-  { key: "debtToEquity", label: "D/E", fmt: "ratio" },
   { key: "revGrowth1y", label: "REV 1Y", fmt: "pct" },
-  { key: "epsGrowth1y", label: "EPS 1Y", fmt: "pct" },
-  { key: "divYield", label: "DIV%", fmt: "pct" },
-  { key: "fScore", label: "F-SCORE", fmt: "score" },
   { key: "marketCap", label: "MKTCAP", fmt: "cap" },
 ];
 
@@ -66,6 +63,7 @@ function fmtVal(v: number | null, fmt?: string): string {
     return v.toLocaleString();
   }
   if (fmt === "score") return `${v}/9`;
+  if (fmt === "factor") return String(v);
   return v.toFixed(2);
 }
 
@@ -73,6 +71,7 @@ function valColor(v: number | null, fmt?: string): string {
   if (v == null) return "";
   if (fmt === "pct") return v > 0 ? "var(--accent-bull)" : v < 0 ? "var(--accent-bear)" : "";
   if (fmt === "score") return v >= 7 ? "var(--accent-bull)" : v <= 3 ? "var(--accent-bear)" : "";
+  if (fmt === "factor") return v >= 70 ? "var(--accent-bull)" : v <= 30 ? "var(--accent-bear)" : "";
   return "";
 }
 
@@ -80,19 +79,17 @@ export default function FundamentalsPage() {
   const [data, setData] = useState<FundRow[]>([]);
   const [sectors, setSectors] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Filters
   const [sector, setSector] = useState("");
   const [minF, setMinF] = useState(0);
-  const [valTier, setValTier] = useState<"" | "value" | "growth" | "quality">("");
-
-  // Sort
-  const [sortKey, setSortKey] = useState<SortKey>("marketCap");
+  const [minComposite, setMinComposite] = useState(0);
+  const [valTier, setValTier] = useState<"" | "value" | "growth" | "quality" | "multifactor">("");
+  const [sortKey, setSortKey] = useState<SortKey>("compositeScore");
   const [sortAsc, setSortAsc] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams();
     if (minF > 0) params.set("min_f", String(minF));
+    if (minComposite > 0) params.set("min_composite", String(minComposite));
     params.set("limit", "500");
 
     fetch(`/api/fundamentals?${params}`)
@@ -103,25 +100,15 @@ export default function FundamentalsPage() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [minF]);
+  }, [minF, minComposite]);
 
-  // Client-side sort + filter
   const filtered = useMemo(() => {
     let rows = [...data];
-
-    if (sector) {
-      rows = rows.filter((r) => r.sector === sector);
-    }
-
-    if (valTier === "value") {
-      rows = rows.filter((r) => r.pe != null && r.pe > 0 && r.pe < 15);
-    } else if (valTier === "growth") {
-      rows = rows.filter((r) => r.revGrowth1y != null && r.revGrowth1y > 0.15);
-    } else if (valTier === "quality") {
-      rows = rows.filter(
-        (r) => r.roe != null && r.roe > 0.15 && r.fScore != null && r.fScore >= 6
-      );
-    }
+    if (sector) rows = rows.filter((r) => r.sector === sector);
+    if (valTier === "value") rows = rows.filter((r) => (r.valueScore ?? 0) >= 70);
+    else if (valTier === "growth") rows = rows.filter((r) => (r.growthScore ?? 0) >= 70);
+    else if (valTier === "quality") rows = rows.filter((r) => (r.qualityScore ?? 0) >= 70 && (r.fScore ?? 0) >= 6);
+    else if (valTier === "multifactor") rows = rows.filter((r) => (r.compositeScore ?? 0) >= 65);
 
     rows.sort((a, b) => {
       const av = a[sortKey];
@@ -129,187 +116,131 @@ export default function FundamentalsPage() {
       if (av == null && bv == null) return 0;
       if (av == null) return 1;
       if (bv == null) return -1;
-      if (typeof av === "string" && typeof bv === "string")
-        return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+      if (typeof av === "string" && typeof bv === "string") return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
       return sortAsc ? (av as number) - (bv as number) : (bv as number) - (av as number);
     });
-
     return rows;
   }, [data, sector, valTier, sortKey, sortAsc]);
 
   const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortAsc(!sortAsc);
-    } else {
-      setSortKey(key);
-      setSortAsc(false);
-    }
+    if (sortKey === key) setSortAsc(!sortAsc);
+    else { setSortKey(key); setSortAsc(false); }
   };
 
-  // Summary stats (guarded against division by zero)
-  const peCount = filtered.filter((r) => r.pe && r.pe > 0).length;
-  const avgPE = peCount > 0
-    ? filtered.reduce((s, r) => s + (r.pe && r.pe > 0 ? r.pe : 0), 0) / peCount
+  const highComposite = filtered.filter((r) => (r.compositeScore ?? 0) >= 70).length;
+  const avgComposite = filtered.length > 0
+    ? Math.round(filtered.reduce((s, r) => s + (r.compositeScore ?? 0), 0) / filtered.length)
     : 0;
-  const fCount = filtered.filter((r) => r.fScore != null).length;
-  const avgFScore = fCount > 0
-    ? filtered.reduce((s, r) => s + (r.fScore ?? 0), 0) / fCount
-    : 0;
-  const highF = filtered.filter((r) => r.fScore != null && r.fScore >= 7).length;
 
   if (loading) {
-    return (
-      <div className="px-4 py-12 text-center text-[var(--text-muted)] font-terminal">
-        Loading fundamentals...
-      </div>
-    );
+    return <div className="px-4 py-12 text-center text-[var(--text-muted)] font-terminal">Loading fundamentals...</div>;
   }
 
   return (
     <div className="px-4 py-6">
-<ModuleHeader
+      <ModuleHeader
         module="MODULE 2"
-        title="FUNDAMENTALS & VALUATION"
-        description="Ratios, Piotroski F-Score, and valuation metrics across the universe"
+        title="QUANT FUNDAMENTALS"
+        description="Multi-factor scores (0-100) — value, quality, growth, earnings quality, leverage — for systematic equity screening"
         source="FUNDAMENTALS · EOD"
         accent="var(--module-2)"
       />
 
-      {/* Summary Cards */}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         {[
-          { label: "SHOWING", value: String(filtered.length), color: "" },
-          { label: "AVG P/E", value: avgPE > 0 ? avgPE.toFixed(1) : "—", color: "" },
-          { label: "AVG F-SCORE", value: avgFScore > 0 ? avgFScore.toFixed(1) + "/9" : "—", color: avgFScore >= 6 ? "var(--accent-bull)" : "" },
-          { label: "F-SCORE 7+", value: String(highF), color: "var(--accent-bull)" },
+          { label: "SHOWING", value: String(filtered.length) },
+          { label: "COMPOSITE 70+", value: String(highComposite), color: "var(--accent-bull)" },
+          { label: "AVG COMPOSITE", value: avgComposite > 0 ? String(avgComposite) : "—" },
+          { label: "UNIVERSE", value: String(data.length) },
         ].map((c) => (
           <div key={c.label} className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
             <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">{c.label}</div>
-            <div className="text-lg font-terminal font-bold mt-0.5" style={{ color: c.color || undefined }}>{c.value}</div>
+            <div className="text-lg font-terminal font-bold mt-0.5" style={{ color: (c as { color?: string }).color }}>{c.value}</div>
           </div>
         ))}
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-4">
-        {/* Sector */}
-        <select
-          value={sector}
-          onChange={(e) => setSector(e.target.value)}
-          className="px-2 py-1.5 text-xs font-terminal rounded border border-[var(--border)] bg-[var(--card-bg)] text-[var(--text-primary)]"
-        >
+        <select value={sector} onChange={(e) => setSector(e.target.value)}
+          className="px-2 py-1.5 text-xs font-terminal rounded border border-[var(--border)] bg-[var(--card-bg)] text-[var(--text-primary)]">
           <option value="">All Sectors</option>
-          {sectors.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
+          {sectors.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
 
-        {/* Valuation tier */}
-        {(["", "value", "growth", "quality"] as const).map((v) => (
-          <button
-            key={v || "all"}
-            onClick={() => setValTier(v)}
+        {([
+          ["", "ALL"],
+          ["multifactor", "MULTI-FACTOR"],
+          ["value", "VALUE"],
+          ["growth", "GROWTH"],
+          ["quality", "QUALITY"],
+        ] as const).map(([v, label]) => (
+          <button key={v || "all"} onClick={() => setValTier(v)}
             className={`px-3 py-1.5 text-xs font-terminal rounded border transition-colors ${
-              valTier === v
-                ? "border-[var(--accent-info)] text-[var(--accent-info)] bg-[var(--badge-bg)]"
+              valTier === v ? "border-[var(--accent-info)] text-[var(--accent-info)] bg-[var(--badge-bg)]"
                 : "border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            }`}
-          >
-            {v === "" ? "ALL" : v === "value" ? "VALUE (P/E<15)" : v === "growth" ? "GROWTH (Rev>15%)" : "QUALITY (ROE>15%)"}
-          </button>
+            }`}>{label}</button>
         ))}
 
-        {/* F-Score filter */}
-        {([0, 5, 6, 7, 8] as const).map((f) => (
-          <button
-            key={`f${f}`}
-            onClick={() => setMinF(f)}
+        {([0, 60, 70, 80] as const).map((c) => (
+          <button key={c} onClick={() => setMinComposite(c)}
             className={`px-3 py-1.5 text-xs font-terminal rounded border transition-colors ${
-              minF === f
-                ? "border-[var(--accent-info)] text-[var(--accent-info)] bg-[var(--badge-bg)]"
-                : "border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            }`}
-          >
-            {f === 0 ? "F: Any" : `F >= ${f}`}
-          </button>
+              minComposite === c ? "border-[var(--accent-info)] text-[var(--accent-info)] bg-[var(--badge-bg)]"
+                : "border-[var(--border)] text-[var(--text-muted)]"
+            }`}>{c === 0 ? "Comp: Any" : `Comp >= ${c}`}</button>
+        ))}
+
+        {([0, 5, 6, 7] as const).map((f) => (
+          <button key={f} onClick={() => setMinF(f)}
+            className={`px-3 py-1.5 text-xs font-terminal rounded border transition-colors ${
+              minF === f ? "border-[var(--accent-info)] text-[var(--accent-info)] bg-[var(--badge-bg)]"
+                : "border-[var(--border)] text-[var(--text-muted)]"
+            }`}>{f === 0 ? "F: Any" : `F >= ${f}`}</button>
         ))}
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto rounded border border-[var(--border)]">
         <table className="w-full text-sm font-terminal">
           <thead>
             <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
               {COLUMNS.map((col) => (
-                <th
-                  key={col.key}
-                  onClick={() => handleSort(col.key)}
-                  className={`text-left px-3 py-2 cursor-pointer hover:text-[var(--text-primary)] select-none ${
-                    col.key === "symbol" ? "" : "text-right"
-                  }`}
-                >
-                  {col.label}
-                  {sortKey === col.key && (
-                    <span className="ml-1">{sortAsc ? "\u25B2" : "\u25BC"}</span>
-                  )}
+                <th key={col.key} onClick={() => handleSort(col.key)}
+                  className={`text-left px-3 py-2 cursor-pointer hover:text-[var(--text-primary)] select-none ${col.key === "symbol" ? "" : "text-right"}`}>
+                  {col.label}{sortKey === col.key && <span className="ml-1">{sortAsc ? "\u25B2" : "\u25BC"}</span>}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr>
-                <td colSpan={COLUMNS.length} className="px-3 py-8 text-center text-[var(--text-muted)]">
-                  No stocks match filters
-                </td>
-              </tr>
-            ) : (
-              filtered.map((r) => (
-                <tr
-                  key={r.symbol}
-                  className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)] transition-colors"
-                >
-                  {COLUMNS.map((col) => {
-                    if (col.key === "symbol") {
-                      return (
-                        <td key={col.key} className="px-3 py-2.5">
-                          <Link
-                            href={`/ticker/${r.symbol}`}
-                            className="font-semibold text-[var(--accent-info)] hover:underline"
-                          >
-                            {r.symbol}
-                          </Link>
-                          <span className="ml-2 text-[10px] text-[var(--text-muted)]">
-                            {r.companyName.length > 20 ? r.companyName.slice(0, 20) + "..." : r.companyName}
-                          </span>
-                          {r.state != null && (
-                            <span className="ml-1">
-                              <BiasChip state={r.state as 0 | 1 | -1} rank={r.rank ?? 0} />
-                            </span>
-                          )}
-                        </td>
-                      );
-                    }
-                    const v = r[col.key] as number | null;
+              <tr><td colSpan={COLUMNS.length} className="px-3 py-8 text-center text-[var(--text-muted)]">No stocks match filters</td></tr>
+            ) : filtered.map((r) => (
+              <tr key={r.symbol} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)] transition-colors">
+                {COLUMNS.map((col) => {
+                  if (col.key === "symbol") {
                     return (
-                      <td
-                        key={col.key}
-                        className="px-3 py-2.5 text-right"
-                        style={{ color: valColor(v, col.fmt) || undefined }}
-                      >
-                        {fmtVal(v, col.fmt)}
+                      <td key={col.key} className="px-3 py-2.5">
+                        <Link href={`/ticker/${r.symbol}`} className="font-semibold text-[var(--accent-info)] hover:underline">{r.symbol}</Link>
+                        <span className="ml-2 text-[10px] text-[var(--text-muted)]">{r.sector}</span>
+                        {r.state != null && <span className="ml-1"><BiasChip state={r.state as 0 | 1 | -1} rank={r.rank ?? 0} /></span>}
                       </td>
                     );
-                  })}
-                </tr>
-              ))
-            )}
+                  }
+                  const v = r[col.key] as number | null;
+                  return (
+                    <td key={col.key} className="px-3 py-2.5 text-right" style={{ color: valColor(v, col.fmt) || undefined }}>
+                      {fmtVal(v, col.fmt)}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
 
       <p className="text-xs text-[var(--text-muted)] mt-3 font-terminal">
-        Showing {filtered.length} of {data.length} stocks. Click column headers to sort.
+        Factor scores are cross-sectional percentile ranks (0-100). Composite = 25% value + 25% quality + 20% growth + 15% earnings quality + 15% leverage.
       </p>
     </div>
   );

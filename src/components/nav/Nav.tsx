@@ -7,8 +7,18 @@ import { ThemeToggle } from "@/components/cards/ThemeToggle";
 
 const NAV_LINKS = [
   { href: "/screener", label: "SCREENER" },
+  { href: "/loop", label: "LOOP" },
+  { href: "/orb", label: "ORB" },
+  { href: "/skew", label: "SKEW" },
+  { href: "/analysis", label: "ANALYZE" },
+  { href: "/bias", label: "BIAS" },
+  { href: "/cash", label: "CASH" },
+  { href: "/rotate", label: "ROTATE" },
+  { href: "/quantropy", label: "QUANT" },
   { href: "/fundamentals", label: "FUNDAMENTALS" },
+  { href: "/health", label: "HEALTH" },
   { href: "/pharma", label: "PHARMA" },
+  { href: "/perps", label: "PERPS" },
   { href: "/earnings-news", label: "EARNINGS" },
 ];
 

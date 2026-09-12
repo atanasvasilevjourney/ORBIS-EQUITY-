@@ -19,6 +19,8 @@ type DashData = {
   regionBreadth: Record<string, number>;
   fundCount: number;
   highFScore: number;
+  highComposite: number;
+  avgComposite: number;
   pharmaLong: number;
   pharmaShort: number;
   pharmaWatch: number;
@@ -26,6 +28,21 @@ type DashData = {
   earningsMisses: number;
   earningsUpcoming: number;
   newsCount: number;
+  skewNames: number;
+  skewAtm: number | null;
+  skewWeekend: string | null;
+  orbGappers: number;
+  orbBreakouts: number;
+  analysisBuys: number;
+  analysisSells: number;
+  quantNames: number;
+  quantSharpe: number | null;
+  biasLongs: number;
+  biasShorts: number;
+  perpsTema: number;
+  perpsCarver: number;
+  rotateRegime: string | null;
+  rotateLeading: number;
 };
 
 export default function Home() {
@@ -35,12 +52,25 @@ export default function Home() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/summary").then((r) => r.json()),
-      fetch("/api/fundamentals").then((r) => r.json()),
-      fetch("/api/pharma").then((r) => r.json()),
-      fetch("/api/earnings-news?days=30").then((r) => r.json()),
+      fetch("/api/summary").then((r) => r.json()).catch(() => null),
+      fetch("/api/fundamentals?limit=1000").then((r) => r.json()).catch(() => null),
+      fetch("/api/pharma").then((r) => r.json()).catch(() => null),
+      fetch("/api/earnings-news?days=30").then((r) => r.json()).catch(() => null),
+      fetch("/api/skew").then((r) => r.json()).catch(() => null),
+      fetch("/api/orb").then((r) => r.json()).catch(() => null),
+      fetch("/api/analysis").then((r) => r.json()).catch(() => null),
+      fetch("/api/quantropy").then((r) => r.json()).catch(() => null),
+      fetch("/api/bias").then((r) => r.json()).catch(() => null),
+      fetch("/api/perps").then((r) => r.json()).catch(() => null),
+      fetch("/api/rotate").then((r) => r.json()).catch(() => null),
     ])
-      .then(([summary, fund, pharma, earnings]) => {
+      .then(([summary, fund, pharma, earnings, skew, orb, analysis, quant, bias, perps, rotate]) => {
+        if (!summary && !fund) {
+          setError(true);
+          return;
+        }
+        const rows = fund?.rows ?? [];
+        const composites = rows.filter((r: { compositeScore: number | null }) => r.compositeScore != null);
         setD({
           posture: summary?.posture ?? null,
           postureLabel: summary?.postureLabel ?? null,
@@ -51,8 +81,12 @@ export default function Home() {
           worstSector: summary?.worstSector ?? null,
           asOfDate: summary?.asOfDate ?? null,
           regionBreadth: summary?.regionBreadth ?? {},
-          fundCount: fund?.rows?.length ?? 0,
-          highFScore: (fund?.rows ?? []).filter((r: { fScore?: number }) => (r.fScore ?? 0) >= 7).length,
+          fundCount: rows.length,
+          highFScore: rows.filter((r: { fScore?: number }) => (r.fScore ?? 0) >= 7).length,
+          highComposite: composites.filter((r: { compositeScore: number }) => r.compositeScore >= 70).length,
+          avgComposite: composites.length > 0
+            ? Math.round(composites.reduce((s: number, r: { compositeScore: number }) => s + r.compositeScore, 0) / composites.length)
+            : 0,
           pharmaLong: pharma?.summary?.long ?? 0,
           pharmaShort: pharma?.summary?.short ?? 0,
           pharmaWatch: pharma?.summary?.watch ?? 0,
@@ -60,6 +94,21 @@ export default function Home() {
           earningsMisses: earnings?.summary?.misses ?? 0,
           earningsUpcoming: earnings?.summary?.upcoming ?? 0,
           newsCount: earnings?.summary?.totalNews ?? 0,
+          skewNames: skew?.summary?.names ?? 0,
+          skewAtm: skew?.summary?.avgAtmIv ?? null,
+          skewWeekend: skew?.summary?.weekendRichest ?? null,
+          orbGappers: orb?.summary?.names ?? 0,
+          orbBreakouts: orb?.summary?.breakouts ?? 0,
+          analysisBuys: analysis?.summary?.buys ?? 0,
+          analysisSells: analysis?.summary?.sells ?? 0,
+          quantNames: quant?.summary?.names ?? 0,
+          quantSharpe: quant?.summary?.maxSharpe ?? null,
+          biasLongs: bias?.summary?.longs ?? 0,
+          biasShorts: bias?.summary?.shorts ?? 0,
+          perpsTema: perps?.summary?.temaSlots ?? 0,
+          perpsCarver: perps?.summary?.carverSlots ?? 0,
+          rotateRegime: rotate?.summary?.regime ?? null,
+          rotateLeading: rotate?.summary?.leading ?? 0,
         });
       })
       .catch(() => setError(true))
@@ -255,107 +304,158 @@ export default function Home() {
         </ModulePanel>
       )}
 
-      {/* Four module entry panels */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <Link href="/screener" className="block group">
-          <ModulePanel
-            title="SWING SCREENER"
-            badge="MODULE 1"
-            subtitle="Momentum & technical bias board"
-            accent="var(--module-1)"
-            source="TREND RADAR"
-            className="h-full transition-opacity group-hover:opacity-95"
-          >
-            <div className="grid grid-cols-3 gap-2">
-              <MetricCard label="POSTURE" value={d?.posture ?? "—"} color={postureColor} />
-              <MetricCard
-                label="GREEN"
-                value={d?.breadth ? `${d.breadth.pctGreen}%` : "—"}
-                color="var(--accent-bull)"
-              />
-              <MetricCard label="BEST" value={d?.bestSector ?? "—"} />
-            </div>
-          </ModulePanel>
-        </Link>
-
-        <Link href="/fundamentals" className="block group">
-          <ModulePanel
-            title="FUNDAMENTALS"
-            badge="MODULE 2"
-            subtitle="Ratios, F-Score, valuation"
-            accent="var(--module-2)"
-            source="FUNDAMENTALS"
-            className="h-full transition-opacity group-hover:opacity-95"
-          >
-            <div className="grid grid-cols-3 gap-2">
-              <MetricCard label="STOCKS" value={loading ? "…" : d?.fundCount ?? 0} />
-              <MetricCard
-                label="F-SCORE 7+"
-                value={loading ? "…" : d?.highFScore ?? 0}
-                color="var(--accent-bull)"
-              />
-              <MetricCard label="AVG RANK" value={d?.avgRank ?? "—"} />
-            </div>
-          </ModulePanel>
-        </Link>
-
-        <Link href="/pharma" className="block group">
-          <ModulePanel
-            title="PHARMA PIPELINE"
-            badge="MODULE 3"
-            subtitle="Clinical trial catalysts"
-            accent="var(--module-3)"
-            source="CLINICALTRIALS.GOV"
-            className="h-full transition-opacity group-hover:opacity-95"
-          >
-            <div className="grid grid-cols-3 gap-2">
-              <MetricCard
-                label="LONG"
-                value={loading ? "…" : d?.pharmaLong ?? 0}
-                color="var(--accent-bull)"
-              />
-              <MetricCard
-                label="SHORT"
-                value={loading ? "…" : d?.pharmaShort ?? 0}
-                color="var(--accent-bear)"
-              />
-              <MetricCard
-                label="WATCH"
-                value={loading ? "…" : d?.pharmaWatch ?? 0}
-                color="var(--accent-warning)"
-              />
-            </div>
-          </ModulePanel>
-        </Link>
-
-        <Link href="/earnings-news" className="block group">
-          <ModulePanel
-            title="EARNINGS & NEWS"
-            badge="MODULE 4"
-            subtitle="Calendar + GDELT sentiment"
-            accent="var(--module-4)"
-            source="LSE · GDELT"
-            className="h-full transition-opacity group-hover:opacity-95"
-          >
-            <div className="grid grid-cols-3 gap-2">
-              <MetricCard
-                label="BEATS"
-                value={loading ? "…" : d?.earningsBeats ?? 0}
-                color="var(--accent-bull)"
-              />
-              <MetricCard
-                label="MISSES"
-                value={loading ? "…" : d?.earningsMisses ?? 0}
-                color="var(--accent-bear)"
-              />
-              <MetricCard
-                label="UPCOMING"
-                value={loading ? "…" : d?.earningsUpcoming ?? 0}
-                color="var(--accent-info)"
-              />
-            </div>
-          </ModulePanel>
-        </Link>
+      {/* Module entry panels — Orbis cockpit + cloud desk stack */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {([
+          {
+            href: "/screener", title: "SWING SCREENER", badge: "MODULE 1",
+            subtitle: "Momentum & technical bias board", accent: "var(--module-1)", source: "TREND RADAR",
+            metrics: [
+              { label: "POSTURE", value: d?.posture ?? "—", color: postureColor },
+              { label: "GREEN", value: d?.breadth ? `${d.breadth.pctGreen}%` : "—", color: "var(--accent-bull)" },
+              { label: "BEST", value: d?.bestSector ?? "—" },
+            ],
+          },
+          {
+            href: "/fundamentals", title: "QUANT FUNDAMENTALS", badge: "MODULE 2",
+            subtitle: "Multi-factor scores & F-Score", accent: "var(--module-2)", source: "FUNDAMENTALS",
+            metrics: [
+              { label: "STOCKS", value: loading ? "…" : d?.fundCount ?? 0 },
+              { label: "COMP 70+", value: loading ? "…" : d?.highComposite ?? 0, color: "var(--accent-bull)" },
+              { label: "F-SCORE 7+", value: loading ? "…" : d?.highFScore ?? 0, color: "var(--accent-bull)" },
+            ],
+          },
+          {
+            href: "/pharma", title: "PHARMA PIPELINE", badge: "MODULE 3",
+            subtitle: "Clinical trial catalysts", accent: "var(--module-3)", source: "CLINICALTRIALS.GOV",
+            metrics: [
+              { label: "LONG", value: loading ? "…" : d?.pharmaLong ?? 0, color: "var(--accent-bull)" },
+              { label: "SHORT", value: loading ? "…" : d?.pharmaShort ?? 0, color: "var(--accent-bear)" },
+              { label: "WATCH", value: loading ? "…" : d?.pharmaWatch ?? 0, color: "var(--accent-warning)" },
+            ],
+          },
+          {
+            href: "/loop", title: "LOOP TERMINAL", badge: "MODULE 4",
+            subtitle: "Breakout portfolio harness", accent: "var(--module-1)", source: "PAPER BOOK",
+            metrics: [
+              { label: "POSTURE", value: d?.posture ?? "—", color: postureColor },
+              { label: "GREEN", value: d?.breadth ? `${d.breadth.pctGreen}%` : "—", color: "var(--accent-bull)" },
+              { label: "BEST", value: d?.bestSector ?? "—" },
+            ],
+          },
+          {
+            href: "/earnings-news", title: "EARNINGS & NEWS", badge: "MODULE 5",
+            subtitle: "Calendar + GDELT sentiment", accent: "var(--module-4)", source: "LSE · GDELT",
+            metrics: [
+              { label: "BEATS", value: loading ? "…" : d?.earningsBeats ?? 0, color: "var(--accent-bull)" },
+              { label: "MISSES", value: loading ? "…" : d?.earningsMisses ?? 0, color: "var(--accent-bear)" },
+              { label: "UPCOMING", value: loading ? "…" : d?.earningsUpcoming ?? 0, color: "var(--accent-info)" },
+            ],
+          },
+          {
+            href: "/skew", title: "SKEW MAP", badge: "MODULE 6",
+            subtitle: "Listed IV surface", accent: "var(--module-2)", source: "OPTIONS",
+            metrics: [
+              { label: "NAMES", value: d?.skewNames ? String(d.skewNames) : "—" },
+              { label: "AVG ATM", value: d?.skewAtm == null ? "—" : `${(d.skewAtm * 100).toFixed(0)}%`, color: "var(--accent-info)" },
+              { label: "WKND", value: d?.skewWeekend ?? "—", color: "var(--accent-warning)" },
+            ],
+          },
+          {
+            href: "/orb", title: "OPENING RANGE", badge: "MODULE 7",
+            subtitle: "Gapper screen + OR breakout", accent: "var(--module-3)", source: "15M OR",
+            metrics: [
+              { label: "GAPPERS", value: d?.orbGappers ? String(d.orbGappers) : "—", color: "var(--accent-info)" },
+              { label: "LONGS", value: String(d?.orbBreakouts ?? 0), color: "var(--accent-bull)" },
+              { label: "OR", value: "15m" },
+            ],
+          },
+          {
+            href: "/analysis", title: "STOCK ANALYSIS", badge: "MODULE 8",
+            subtitle: "Tech + fundamental stack", accent: "var(--module-1)", source: "ANALYZE",
+            metrics: [
+              { label: "BUY", value: String(d?.analysisBuys ?? 0), color: "var(--accent-bull)" },
+              { label: "SELL", value: String(d?.analysisSells ?? 0), color: "var(--accent-bear)" },
+              { label: "STACK", value: "6" },
+            ],
+          },
+          {
+            href: "/quantropy", title: "QUANTROPY", badge: "MODULE 9",
+            subtitle: "Risk, CAPM, Markowitz", accent: "var(--module-4)", source: "QUANT",
+            metrics: [
+              { label: "NAMES", value: d?.quantNames ? String(d.quantNames) : "—" },
+              { label: "MAX SH", value: d?.quantSharpe == null ? "—" : d.quantSharpe.toFixed(2), color: "var(--accent-warning)" },
+              { label: "MPT", value: "on", color: "var(--accent-info)" },
+            ],
+          },
+          {
+            href: "/bias", title: "DAILY BIAS", badge: "MODULE 10",
+            subtitle: "Tape, levels, paper ideas", accent: "var(--module-2)", source: "BIAS",
+            metrics: [
+              { label: "LONG", value: String(d?.biasLongs ?? 0), color: "var(--accent-bull)" },
+              { label: "SHORT", value: String(d?.biasShorts ?? 0), color: "var(--accent-bear)" },
+              { label: "CHART", value: "TV", color: "var(--accent-info)" },
+            ],
+          },
+          {
+            href: "/cash", title: "TEMA + CARVER CASH", badge: "MODULE 11",
+            subtitle: "Cash-sized TEMA & Carver", accent: "var(--module-3)", source: "CASH",
+            metrics: [
+              { label: "TEMA", value: String(d?.perpsTema ?? 0), color: "var(--accent-info)" },
+              { label: "CARVER", value: String(d?.perpsCarver ?? 0), color: "var(--accent-warning)" },
+              { label: "VENUE", value: "CASH", color: "var(--accent-bull)" },
+            ],
+          },
+          {
+            href: "/rotate", title: "BETA ROTATION", badge: "MODULE 12",
+            subtitle: "Macro → sector → Carver DCA", accent: "var(--module-4)", source: "ROTATE",
+            metrics: [
+              { label: "REGIME", value: d?.rotateRegime ?? "—", color: d?.rotateRegime === "RISK-ON" ? "var(--accent-bull)" : d?.rotateRegime === "RISK-OFF" ? "var(--accent-bear)" : "var(--accent-warning)" },
+              { label: "LEADING", value: String(d?.rotateLeading ?? 0), color: "var(--accent-bull)" },
+              { label: "TAPE", value: "Carver", color: "var(--accent-info)" },
+            ],
+          },
+          {
+            href: "/health", title: "HEALTH CATALYST", badge: "MODULE 13",
+            subtitle: "Health & catalyst desk", accent: "var(--module-1)", source: "HEALTH",
+            metrics: [
+              { label: "DESK", value: "ON", color: "var(--accent-info)" },
+              { label: "NEWS", value: loading ? "…" : d?.newsCount ?? 0 },
+              { label: "EOD", value: d?.asOfDate ?? "—" },
+            ],
+          },
+          {
+            href: "/perps", title: "PERPS DESK", badge: "MODULE 14",
+            subtitle: "TEMA / Carver perps book", accent: "var(--module-2)", source: "PERPS",
+            metrics: [
+              { label: "TEMA", value: String(d?.perpsTema ?? 0), color: "var(--accent-info)" },
+              { label: "CARVER", value: String(d?.perpsCarver ?? 0), color: "var(--accent-warning)" },
+              { label: "BOOK", value: "QMIE", color: "var(--accent-bull)" },
+            ],
+          },
+        ] as const).map((m) => (
+          <Link key={m.badge} href={m.href} className="block group">
+            <ModulePanel
+              title={m.title}
+              badge={m.badge}
+              subtitle={m.subtitle}
+              accent={m.accent}
+              source={m.source}
+              className="h-full transition-opacity group-hover:opacity-95"
+            >
+              <div className="grid grid-cols-3 gap-2">
+                {m.metrics.map((metric) => (
+                  <MetricCard
+                    key={metric.label}
+                    label={metric.label}
+                    value={metric.value}
+                    color={"color" in metric ? metric.color : undefined}
+                  />
+                ))}
+              </div>
+            </ModulePanel>
+          </Link>
+        ))}
       </div>
     </div>
   );

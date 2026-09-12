@@ -5,10 +5,15 @@ the last 5 daily candles per symbol.
 
 For yfinance-sourced tickers (UK/EU stocks): uses yfinance batch download.
 
+Names that still have no rows (seed_demo, LSE miss, yfinance miss) fall
+through to the cash EOD client — Yahoo chart API, then Stooq — the same
+public-REST / closed-bar pattern QMIE uses, on listed cash prints.
+
 Upserts into prices_daily table with ON CONFLICT (symbol, date) DO UPDATE.
 
 Usage:
     python -m pipeline.ingest.prices
+    python -m pipeline.ingest.cash_eod   # 300-bar Yahoo/Stooq backfill
 """
 import logging
 import os
@@ -36,16 +41,21 @@ def _get_supabase_client() -> Client:
     return create_client(cfg.url, cfg.service_key)
 
 
+from pipeline.utils.supabase import fetch_all
+
+
 def _fetch_universe(sb: Client) -> list[dict]:
     """Read universe_members from Supabase to get ticker list with sources."""
+    from pipeline.utils.supabase import fetch_all
+
     logger.info("Fetching universe_members from Supabase...")
-    result = (
-        sb.table("universe_members")
-        .select("symbol, tier, data_source, is_active")
-        .eq("is_active", True)
-        .execute()
+    members = fetch_all(
+        sb,
+        "universe_members",
+        "symbol, tier, data_source, is_active, country",
+        filters=lambda q: q.eq("is_active", True),
+        order=("symbol", False),
     )
-    members = result.data or []
     logger.info("Loaded %d active universe members", len(members))
     return members
 
@@ -224,6 +234,31 @@ def main() -> None:
 
     if yf_symbols:
         all_rows.extend(_ingest_yfinance_prices(yf_symbols))
+
+    got = {r.get("symbol") for r in all_rows if r.get("symbol")}
+    leftover = [
+        m
+        for m in members
+        if m.get("symbol") not in got
+        and m.get("data_source") in (None, "", "seed_demo")
+    ]
+    if leftover:
+        from pipeline.clients.cash_eod import bars_to_rows, fetch_daily_bars
+
+        logger.info(
+            "Cash EOD fallback for %d seed/unknown names with no LSE/yfinance rows",
+            len(leftover),
+        )
+        for m in leftover:
+            symbol = m.get("symbol")
+            try:
+                bars, src = fetch_daily_bars(
+                    symbol, country=m.get("country"), bars=max(CANDLE_LIMIT, 10)
+                )
+                all_rows.extend(bars_to_rows(bars))
+                logger.info("cash EOD %s via %s (%d bars)", symbol, src, len(bars))
+            except Exception:
+                logger.warning("cash EOD fallback failed for %s", symbol, exc_info=True)
 
     if not all_rows:
         logger.warning("No price rows collected — nothing to upsert.")

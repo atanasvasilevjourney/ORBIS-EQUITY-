@@ -1,0 +1,17 @@
+{
+  "name": "KovaView Terminal",
+  "user": "ubuntu",
+  "install": ".cursor/scripts/install.sh",
+  "start": ".cursor/scripts/start.sh",
+  "terminals": [
+    {
+      "name": "web",
+      "command": "bash .cursor/scripts/start.sh && npm run dev",
+      "description": "Ensures the Postgres/PostgREST/nginx data stack is up (idempotent), then runs the Next.js dev server on http://localhost:3000 (reads the Supabase-compatible gateway on :54321)."
+    }
+  ],
+  "ports": [
+    { "name": "web", "port": 3000 },
+    { "name": "supabase-rest-gateway", "port": 54321 }
+  ]
+}

@@ -83,6 +83,7 @@ class LSEClient:
         report_type: str | None = None,
         period: str | None = None,
         limit: int = 1000,
+        offset: int = 0,
     ) -> list[dict]:
         """Fetch financial reports (income/balance/cashflow/growth/metrics).
 
@@ -91,6 +92,7 @@ class LSEClient:
         params: dict[str, str] = {
             "order": "date.desc",
             "limit": str(limit),
+            "offset": str(offset),
         }
         if symbol:
             params["symbol"] = f"eq.{symbol}"
@@ -198,7 +200,7 @@ class LSEClient:
         return self.get_screener(limit=5000)
 
     def get_healthcare_stocks(self) -> list[dict]:
-        """Fetch healthcare/pharma stocks for Module 3."""
+        """Fetch healthcare sector stocks."""
         return self.get_screener(sector="Healthcare", limit=5000)
 
     def get_us_stocks(self) -> list[dict]:

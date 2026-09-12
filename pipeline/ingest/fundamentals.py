@@ -173,7 +173,7 @@ def _ingest_insider_trades(lse: LSEClient, sb: Client) -> int:
     """
     logger.info("Fetching insider trades (last 30 days) from LSE API...")
     try:
-        trades = lse.get_insider_trades(days_back=30)
+        trades = lse.get_insider_trades(days_back=30, limit=5000)
     except Exception:
         logger.exception("Failed to fetch insider trades from LSE API")
         return 0
@@ -210,7 +210,7 @@ def _ingest_insider_trades(lse: LSEClient, sb: Client) -> int:
         batch = rows[i : i + batch_size]
         try:
             sb.table("insider_trades_snapshot").upsert(
-                batch, on_conflict="symbol,filing_date,reporting_name"
+                batch, on_conflict="symbol,filing_date,reporting_name,transaction_type"
             ).execute()
             upserted += len(batch)
             logger.info(
