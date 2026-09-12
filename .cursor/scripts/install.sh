@@ -114,6 +114,11 @@ if psql_su "$DBNAME" -tAc "SELECT to_regclass('public.universe_members')" | grep
     psql_su "$DBNAME" -f supabase/migrations/016_macro_canaries.sql >/dev/null
     psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
   fi
+  if ! psql_su "$DBNAME" -tAc "SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='sector_rotation_groups' AND column_name='parent_sector'" | grep -q 1; then
+    echo "   applying supabase/migrations/017_subsector_parent.sql"
+    psql_su "$DBNAME" -f supabase/migrations/017_subsector_parent.sql >/dev/null
+    psql_su "$DBNAME" -c "NOTIFY pgrst, 'reload schema';" >/dev/null || true
+  fi
 else
   for f in supabase/migrations/*.sql; do
     echo "   applying $f"

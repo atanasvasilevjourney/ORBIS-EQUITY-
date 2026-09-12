@@ -14,6 +14,7 @@ pipeline afterwards:
 
 Usage:
     python -m scripts.seed_demo
+    python -m scripts.seed_demo --append   # add missing sleeves only; keep existing tape
 """
 from __future__ import annotations
 
@@ -22,6 +23,8 @@ import math
 import os
 import random
 from datetime import date, datetime, timedelta, timezone
+
+import sys
 
 from dotenv import load_dotenv
 from supabase import create_client
@@ -55,6 +58,58 @@ STOCKS = [
     ("SHEL", "Shell plc", "Energy", "Oil & Gas", "GB", "LSE", ("side", 0.0001, 0.015)),
     ("AZN", "AstraZeneca plc", "Health Care", "Pharmaceuticals", "GB", "LSE", ("up", 0.0009, 0.013)),
     ("SAP", "SAP SE", "Technology", "Software", "DE", "XETRA", ("up", 0.0007, 0.013)),
+    # Sub-sector sleeves (appended so a full reseed keeps the original 18-name RNG path)
+    ("FSLR", "First Solar Inc.", "Energy", "Solar", "US", "NASDAQ", ("up", 0.0014, 0.026)),
+    ("ENPH", "Enphase Energy", "Energy", "Solar", "US", "NASDAQ", ("down", -0.0006, 0.030)),
+    ("CEG", "Constellation Energy", "Energy", "Nuclear", "US", "NASDAQ", ("up", 0.0012, 0.022)),
+    ("VST", "Vistra Corp.", "Energy", "Nuclear", "US", "NYSE", ("up", 0.0010, 0.024)),
+    ("SLB", "Schlumberger Ltd.", "Energy", "Oilfield Services", "US", "NYSE", ("side", 0.0001, 0.019)),
+    ("HAL", "Halliburton Co.", "Energy", "Oilfield Services", "US", "NYSE", ("down", -0.0004, 0.020)),
+    ("AVGO", "Broadcom Inc.", "Technology", "Semiconductors", "US", "NASDAQ", ("up", 0.0013, 0.022)),
+    ("TSM", "Taiwan Semiconductor", "Technology", "Semiconductors", "US", "NYSE", ("up", 0.0011, 0.020)),
+    ("WFC", "Wells Fargo & Co.", "Financials", "Banks", "US", "NYSE", ("side", 0.0003, 0.014)),
+    ("MS", "Morgan Stanley", "Financials", "Capital Markets", "US", "NYSE", ("up", 0.0006, 0.016)),
+    ("V", "Visa Inc.", "Financials", "Payments", "US", "NYSE", ("up", 0.0008, 0.012)),
+    ("MA", "Mastercard Inc.", "Financials", "Payments", "US", "NYSE", ("up", 0.0009, 0.013)),
+    ("PGR", "Progressive Corp.", "Financials", "Insurance", "US", "NYSE", ("up", 0.0007, 0.011)),
+    ("MET", "MetLife Inc.", "Financials", "Insurance", "US", "NYSE", ("side", 0.0002, 0.013)),
+    ("UNH", "UnitedHealth Group", "Health Care", "Managed Care", "US", "NYSE", ("up", 0.0006, 0.012)),
+    ("CVS", "CVS Health Corp.", "Health Care", "Managed Care", "US", "NYSE", ("down", -0.0005, 0.014)),
+    ("ABT", "Abbott Laboratories", "Health Care", "Medical Devices", "US", "NYSE", ("up", 0.0005, 0.011)),
+    ("ISRG", "Intuitive Surgical", "Health Care", "Medical Devices", "US", "NASDAQ", ("up", 0.0011, 0.018)),
+    ("AMGN", "Amgen Inc.", "Health Care", "Biotechnology", "US", "NASDAQ", ("side", 0.0003, 0.014)),
+    ("F", "Ford Motor Co.", "Consumer Discretionary", "Automobiles", "US", "NYSE", ("down", -0.0003, 0.022)),
+    ("AMZN", "Amazon.com Inc.", "Consumer Discretionary", "Internet Retail", "US", "NASDAQ", ("up", 0.0012, 0.020)),
+    ("MCD", "McDonald's Corp.", "Consumer Discretionary", "Restaurants", "US", "NYSE", ("up", 0.0005, 0.010)),
+    ("SBUX", "Starbucks Corp.", "Consumer Discretionary", "Restaurants", "US", "NASDAQ", ("side", 0.0001, 0.015)),
+    ("NKE", "Nike Inc.", "Consumer Discretionary", "Footwear", "US", "NYSE", ("down", -0.0004, 0.016)),
+    ("PEP", "PepsiCo Inc.", "Consumer Staples", "Beverages", "US", "NASDAQ", ("up", 0.0004, 0.009)),
+    ("WMT", "Walmart Inc.", "Consumer Staples", "Food Retail", "US", "NYSE", ("up", 0.0006, 0.010)),
+    ("COST", "Costco Wholesale", "Consumer Staples", "Food Retail", "US", "NASDAQ", ("up", 0.0007, 0.011)),
+    ("MDLZ", "Mondelez International", "Consumer Staples", "Packaged Foods", "US", "NASDAQ", ("side", 0.0002, 0.010)),
+    ("CAT", "Caterpillar Inc.", "Industrials", "Machinery", "US", "NYSE", ("up", 0.0008, 0.016)),
+    ("DE", "Deere & Co.", "Industrials", "Machinery", "US", "NYSE", ("side", 0.0002, 0.017)),
+    ("LMT", "Lockheed Martin", "Industrials", "Aerospace & Defense", "US", "NYSE", ("up", 0.0005, 0.012)),
+    ("RTX", "RTX Corp.", "Industrials", "Aerospace & Defense", "US", "NYSE", ("up", 0.0006, 0.013)),
+    ("UNP", "Union Pacific", "Industrials", "Railroads", "US", "NYSE", ("side", 0.0003, 0.012)),
+    ("LIN", "Linde plc", "Materials", "Chemicals", "US", "NYSE", ("up", 0.0005, 0.011)),
+    ("APD", "Air Products", "Materials", "Chemicals", "US", "NYSE", ("side", 0.0002, 0.012)),
+    ("BHP", "BHP Group", "Materials", "Metals & Mining", "US", "NYSE", ("down", -0.0003, 0.018)),
+    ("FCX", "Freeport-McMoRan", "Materials", "Metals & Mining", "US", "NYSE", ("up", 0.0007, 0.024)),
+    ("NEM", "Newmont Corp.", "Materials", "Gold", "US", "NYSE", ("side", 0.0001, 0.020)),
+    ("NEE", "NextEra Energy", "Utilities", "Electric Utilities", "US", "NYSE", ("up", 0.0004, 0.012)),
+    ("SO", "Southern Co.", "Utilities", "Electric Utilities", "US", "NYSE", ("side", 0.0002, 0.010)),
+    ("AWK", "American Water Works", "Utilities", "Water Utilities", "US", "NYSE", ("up", 0.0003, 0.011)),
+    ("GOOGL", "Alphabet Inc.", "Communication Services", "Interactive Media", "US", "NASDAQ", ("up", 0.0010, 0.016)),
+    ("META", "Meta Platforms", "Communication Services", "Interactive Media", "US", "NASDAQ", ("up", 0.0012, 0.020)),
+    ("NFLX", "Netflix Inc.", "Communication Services", "Entertainment", "US", "NASDAQ", ("up", 0.0011, 0.022)),
+    ("DIS", "Walt Disney Co.", "Communication Services", "Entertainment", "US", "NYSE", ("side", 0.0002, 0.015)),
+    ("T", "AT&T Inc.", "Communication Services", "Telecom", "US", "NYSE", ("down", -0.0002, 0.012)),
+    ("VZ", "Verizon Communications", "Communication Services", "Telecom", "US", "NYSE", ("side", 0.0001, 0.011)),
+    ("EQIX", "Equinix Inc.", "Real Estate", "Data Center REITs", "US", "NASDAQ", ("up", 0.0008, 0.015)),
+    ("AMT", "American Tower", "Real Estate", "Tower REITs", "US", "NYSE", ("side", 0.0002, 0.013)),
+    ("PLD", "Prologis Inc.", "Real Estate", "Industrial REITs", "US", "NYSE", ("up", 0.0005, 0.014)),
+    ("SPG", "Simon Property Group", "Real Estate", "Retail REITs", "US", "NYSE", ("down", -0.0003, 0.016)),
 ]
 
 
@@ -144,7 +199,7 @@ def _fundamentals(symbol: str, regime_name: str, last_close: float, rng: random.
     }
 
 
-def main() -> None:
+def main(append_only: bool = False) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
     url = os.getenv("SUPABASE_URL", "")
@@ -157,9 +212,18 @@ def main() -> None:
     rng = random.Random(SEED)
     now = datetime.now(timezone.utc).isoformat()
 
+    stocks = list(STOCKS)
+    if append_only:
+        existing = {r["symbol"] for r in sb.table("universe_members").select("symbol").execute().data or []}
+        stocks = [s for s in STOCKS if s[0] not in existing]
+        logger.info("append: %d new names (%d already present)", len(stocks), len(existing))
+        if not stocks:
+            logger.info("nothing to append")
+            return
+
     # 1. Universe -----------------------------------------------------------
     universe_rows = []
-    for sym, name, sector, industry, country, exch, _regime in STOCKS:
+    for sym, name, sector, industry, country, exch, _regime in stocks:
         universe_rows.append({
             "symbol": sym, "company_name": name, "sector": sector, "industry": industry,
             "country": country, "exchange": exch, "currency": "USD" if country == "US" else ("GBP" if country == "GB" else "EUR"),
@@ -173,13 +237,14 @@ def main() -> None:
     # 2. Prices + 3. Fundamentals ------------------------------------------
     all_prices: list[dict] = []
     fund_rows: list[dict] = []
-    for sym, _name, _sector, _industry, _country, _exch, regime in STOCKS:
-        start = rng.uniform(40, 400)
-        path = _price_path(regime, start, rng)
+    for sym, _name, _sector, _industry, _country, _exch, regime in stocks:
+        walk_rng = rng if not append_only else random.Random(SEED + sum(ord(c) for c in sym) * 17)
+        start = walk_rng.uniform(40, 400)
+        path = _price_path(regime, start, walk_rng)
         for p in path:
             p2 = dict(p); p2["symbol"] = sym
             all_prices.append(p2)
-        fund_rows.append(_fundamentals(sym, regime[0], path[-1]["close"], rng))
+        fund_rows.append(_fundamentals(sym, regime[0], path[-1]["close"], walk_rng))
 
     for i in range(0, len(all_prices), 500):
         sb.table("prices_daily").upsert(all_prices[i:i + 500], on_conflict="symbol,date").execute()
@@ -191,7 +256,7 @@ def main() -> None:
     # 4. Earnings calendar --------------------------------------------------
     today = date.today()
     earnings_rows = []
-    for idx, (sym, *_rest) in enumerate(STOCKS):
+    for idx, (sym, *_rest) in enumerate(stocks):
         # a reported result in the recent past
         ev_past = (today - timedelta(days=3 + idx)).isoformat()
         est = round(rng.uniform(0.8, 3.5), 2)
@@ -221,7 +286,7 @@ def main() -> None:
         "{c} guides above consensus for next quarter",
     ]
     news_rows = []
-    for idx, (sym, name, *_rest) in enumerate(STOCKS):
+    for idx, (sym, name, *_rest) in enumerate(stocks):
         for j in range(2):
             hours = 6 + idx * 3 + j * 11
             pub = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
@@ -238,4 +303,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main(append_only="--append" in sys.argv)

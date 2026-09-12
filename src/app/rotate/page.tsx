@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 type Group = {
@@ -23,6 +23,7 @@ type Group = {
   heatmap: (number | null)[];
   leaders: string[];
   aligned: boolean;
+  parentSector: string | null;
 };
 
 type Canary = {
@@ -119,7 +120,17 @@ function Heat({ values }: { values: (number | null)[] }) {
   );
 }
 
-function GroupTable({ rows, kind }: { rows: Group[]; kind: string }) {
+function GroupTable({
+  rows,
+  kind,
+  selected,
+  onSelect,
+}: {
+  rows: Group[];
+  kind: string;
+  selected?: string | null;
+  onSelect?: (name: string) => void;
+}) {
   return (
     <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
       <table className="w-full text-sm font-terminal">
@@ -140,30 +151,38 @@ function GroupTable({ rows, kind }: { rows: Group[]; kind: string }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
-            <tr key={`${r.groupType}-${r.name}`} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">
-              <td className="px-3 py-2">
-                <span className="font-bold">{r.name}</span>
-                <span className="text-[var(--text-muted)] ml-2 text-xs">{r.nNames}n · {r.bucket}</span>
-                {r.aligned && <span className="ml-2 text-[10px] font-bold" style={{ color: "var(--accent-bull)" }}>ALIGNED</span>}
-              </td>
-              <td className="px-3 py-2 font-bold" style={{ color: labelColor(r.label) }}>{r.label}</td>
-              <td className="px-3 py-2 text-right">{pct(r.currentBreadth, 0)}</td>
-              <td className="px-3 py-2 text-right">{pct(r.momBreadth, 0)}</td>
-              <td className="px-3 py-2 text-right">{pct(r.valueBreadth, 0)}</td>
-              <td className="px-3 py-2 text-right">{pct(r.lowvolBreadth, 0)}</td>
-              <td className="px-3 py-2 text-right">{num(r.beta60, 2)}</td>
-              <td className="px-3 py-2 text-right" style={{ color: (r.rs4w ?? 0) >= 0 ? "var(--accent-bull)" : "var(--accent-bear)" }}>{pct(r.rs4w, 1)}</td>
-              <td className="px-3 py-2 text-right" style={{ color: (r.impulse ?? 0) >= 0 ? "var(--accent-bull)" : "var(--accent-bear)" }}>{pct(r.impulse, 1)}</td>
-              <td className="px-3 py-2 text-right">{pct(r.stretchPct, 0)}</td>
-              <td className="px-3 py-2"><Heat values={r.heatmap} /></td>
-              <td className="px-3 py-2 text-xs">
-                {r.leaders.map((t) => (
-                  <Link key={t} href={`/ticker/${t}`} className="mr-2 hover:text-[var(--accent-info)]">{t}</Link>
-                ))}
-              </td>
-            </tr>
-          ))}
+          {rows.map((r) => {
+            const active = selected === r.name;
+            return (
+              <tr
+                key={`${r.groupType}-${r.name}`}
+                className={`border-b border-[var(--border)] ${onSelect ? "cursor-pointer" : ""} hover:bg-[var(--surface-alt)]`}
+                style={active ? { background: "rgba(56, 189, 248, 0.12)" } : undefined}
+                onClick={() => onSelect?.(r.name)}
+              >
+                <td className="px-3 py-2">
+                  <span className="font-bold">{r.name}</span>
+                  <span className="text-[var(--text-muted)] ml-2 text-xs">{r.nNames}n · {r.bucket}</span>
+                  {r.aligned && <span className="ml-2 text-[10px] font-bold" style={{ color: "var(--accent-bull)" }}>ALIGNED</span>}
+                </td>
+                <td className="px-3 py-2 font-bold" style={{ color: labelColor(r.label) }}>{r.label}</td>
+                <td className="px-3 py-2 text-right">{pct(r.currentBreadth, 0)}</td>
+                <td className="px-3 py-2 text-right">{pct(r.momBreadth, 0)}</td>
+                <td className="px-3 py-2 text-right">{pct(r.valueBreadth, 0)}</td>
+                <td className="px-3 py-2 text-right">{pct(r.lowvolBreadth, 0)}</td>
+                <td className="px-3 py-2 text-right">{num(r.beta60, 2)}</td>
+                <td className="px-3 py-2 text-right" style={{ color: (r.rs4w ?? 0) >= 0 ? "var(--accent-bull)" : "var(--accent-bear)" }}>{pct(r.rs4w, 1)}</td>
+                <td className="px-3 py-2 text-right" style={{ color: (r.impulse ?? 0) >= 0 ? "var(--accent-bull)" : "var(--accent-bear)" }}>{pct(r.impulse, 1)}</td>
+                <td className="px-3 py-2 text-right">{pct(r.stretchPct, 0)}</td>
+                <td className="px-3 py-2"><Heat values={r.heatmap} /></td>
+                <td className="px-3 py-2 text-xs">
+                  {r.leaders.map((t) => (
+                    <Link key={t} href={`/ticker/${t}`} className="mr-2 hover:text-[var(--accent-info)]" onClick={(e) => e.stopPropagation()}>{t}</Link>
+                  ))}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -173,6 +192,8 @@ function GroupTable({ rows, kind }: { rows: Group[]; kind: string }) {
 export default function RotatePage() {
   const [d, setD] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sector, setSector] = useState<string | null>("Energy");
+  const [industry, setIndustry] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/rotate")
@@ -182,37 +203,93 @@ export default function RotatePage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const nested = useMemo(() => {
+    const map = new Map<string, Group[]>();
+    for (const g of d?.industries ?? []) {
+      const parent = g.parentSector || "Other";
+      const list = map.get(parent) ?? [];
+      list.push(g);
+      map.set(parent, list);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => Number(b.aligned) - Number(a.aligned) || (b.score ?? 0) - (a.score ?? 0));
+    }
+    return map;
+  }, [d]);
+
+  const parentOrder = useMemo(() => {
+    const names = (d?.sectors ?? []).map((s) => s.name);
+    for (const key of nested.keys()) {
+      if (!names.includes(key)) names.push(key);
+    }
+    return names;
+  }, [d, nested]);
+
+  const visibleParents = sector ? parentOrder.filter((p) => p === sector) : parentOrder;
+
+  const sleeveTriggers = useMemo(() => {
+    let rows = d?.triggers ?? [];
+    if (sector) rows = rows.filter((t) => t.sector === sector);
+    if (industry) rows = rows.filter((t) => t.industry === industry);
+    return rows;
+  }, [d, sector, industry]);
+
+  const temaGroups = useMemo(() => {
+    const map = new Map<string, Trigger[]>();
+    for (const t of sleeveTriggers) {
+      const key = t.industry || "Other";
+      const list = map.get(key) ?? [];
+      list.push(t);
+      map.set(key, list);
+    }
+    return [...map.entries()];
+  }, [sleeveTriggers]);
+
   const s = d?.summary;
   const cards = [
     { label: "REGIME", value: s?.regime ?? "—", color: regimeColor(s?.regime ?? null) },
     { label: "CANARIES", value: s?.canaryOn == null ? "—" : `${s.canaryOn}↑ ${s.canaryOff ?? 0}↓`, color: "var(--accent-info)" },
     { label: "ALIGNED TEMA", value: (d?.triggers ?? []).filter((t) => t.aligned && t.triggered === "LONG").length, color: "var(--accent-bull)" },
     { label: "LEADING", value: s?.leading ?? "—", color: "var(--accent-bull)" },
-    { label: "FADING", value: s?.fading ?? "—", color: "var(--accent-bear)" },
+    { label: "SUB-SECTORS", value: s?.nIndustries ?? "—", color: "var(--accent-info)" },
   ];
+
+  const path = [sector, industry].filter(Boolean).join(" › ") || "all sectors";
+
+  function pickSector(name: string) {
+    if (sector === name && !industry) {
+      setSector(null);
+      return;
+    }
+    setSector(name);
+    setIndustry(null);
+  }
+
+  function pickIndustry(name: string) {
+    setIndustry((cur) => (cur === name ? null : name));
+  }
 
   return (
     <div className="px-4 py-6">
       <div className="mb-4">
         <h1 className="text-lg font-terminal font-bold tracking-wider" style={{ color: "var(--accent-info)" }}>
-          MACRO → ROTATE → TEMA
+          MACRO → ROTATE → SUB-SECTOR → TEMA
         </h1>
         <p className="text-xs text-[var(--text-secondary)]">
-          Canary votes set the regime, then sector trend, then TEMA-MACD ensemble inside aligned sub-sectors · paper only
+          Canary votes set the regime, then sector, then the sleeve inside it (Energy → Solar / Nuclear / Oil &amp; Gas) · paper only
         </p>
       </div>
 
       <div className="px-4 py-3 mb-4 rounded border border-[var(--border)] bg-[var(--badge-bg)] text-xs text-[var(--text-secondary)] font-terminal space-y-1">
         <p>
           <span style={{ color: "var(--accent-info)" }}>FLOW:</span>{" "}
-          Macro canaries (QQQ/SPY, XLY/XLP, XLE/SPY, XLU/SPY inverted, HYG/LQD credit proxy, universe vs 200-SMA) vote
-          +1/0/−1 from a 126-day z-score and 10-day causal smooth. That regime filters which GICS groups are
-          <em> aligned</em>. TEMA ensemble is a compact Fast/Slow TEMA-MACD grid (hist &gt; 0 = long). 9/99/199 swing
-          and MACD close stay separate. Baskets are equal-weight proxies — no live ETF tape on this host.
+          Click a sector to open its sub-sectors, then a sleeve to review TEMA-MACD names in that book.
+          Energy is Solar / Nuclear / Oil &amp; Gas / Oilfield Services. Technology is Semiconductors / Software /
+          Consumer Electronics. Same nest for Financials, Health Care, and the rest of GICS.
         </p>
         <p>
-          ALIGNED = group trend matches the canary regime (cyclicals on RISK-ON, defensives on RISK-OFF). Not
-          investment advice.
+          ALIGNED = group trend matches the canary regime (cyclicals on RISK-ON, defensives on RISK-OFF). Baskets
+          are equal-weight proxies — no live ETF tape. Not investment advice.
         </p>
       </div>
 
@@ -221,6 +298,32 @@ export default function RotatePage() {
           <span style={{ color: "var(--accent-info)" }}>ROTATE:</span> {d.headline}
         </div>
       )}
+
+      <div className="flex flex-wrap gap-2 mb-4 text-xs font-terminal">
+        <button
+          type="button"
+          onClick={() => { setSector(null); setIndustry(null); }}
+          className="px-2 py-1 rounded border border-[var(--border)]"
+          style={{ background: !sector ? "rgba(56, 189, 248, 0.15)" : "var(--card-bg)", color: "var(--text-secondary)" }}
+        >
+          ALL SECTORS
+        </button>
+        {sector && (
+          <button
+            type="button"
+            onClick={() => setIndustry(null)}
+            className="px-2 py-1 rounded border border-[var(--border)]"
+            style={{ background: !industry ? "rgba(56, 189, 248, 0.15)" : "var(--card-bg)", color: "var(--accent-info)" }}
+          >
+            {sector}
+          </button>
+        )}
+        {industry && (
+          <span className="px-2 py-1 rounded border border-[var(--border)]" style={{ color: "var(--accent-bull)" }}>
+            {industry}
+          </span>
+        )}
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
         {cards.map((c) => (
@@ -267,30 +370,51 @@ export default function RotatePage() {
         </table>
       </div>
 
-      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">2 · ROTATION · SECTORS ALIGNED TO THE CANARIES</h2>
+      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">2 · ROTATION · CLICK A SECTOR TO OPEN ITS SLEEVES</h2>
       {loading ? (
         <p className="text-[var(--text-muted)] font-terminal px-3 py-8 text-center">Loading…</p>
       ) : !d?.sectors?.length ? (
         <p className="text-[var(--text-muted)] font-terminal px-3 py-8 text-center">Empty. Run: python -m pipeline.compute.sector_rotation</p>
       ) : (
-        <GroupTable rows={d.sectors} kind="SECTOR" />
+        <GroupTable rows={d.sectors} kind="SECTOR" selected={sector} onSelect={pickSector} />
       )}
 
-      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">2b · INDUSTRIES · WHERE THE SECTOR TAPE HIDES</h2>
+      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">
+        2b · SUB-SECTORS · {sector ? `${sector.toUpperCase()} → ${ (nested.get(sector) ?? []).map((g) => g.name).join(" / ") || "—" }` : "EVERY SECTOR NEST"}
+      </h2>
       {loading ? null : !d?.industries?.length ? (
-        <p className="text-[var(--text-muted)] font-terminal px-3 py-8 text-center">No industries.</p>
+        <p className="text-[var(--text-muted)] font-terminal px-3 py-8 text-center">No sub-sectors. Re-seed sleeves then re-run sector_rotation.</p>
       ) : (
-        <GroupTable rows={d.industries} kind="INDUSTRY" />
+        visibleParents.map((parent) => {
+          const kids = nested.get(parent) ?? [];
+          if (!kids.length) return (
+            <p key={parent} className="text-[var(--text-muted)] font-terminal px-3 py-4 text-sm">
+              {parent} has no industry sleeves in this universe.
+            </p>
+          );
+          return (
+            <div key={parent}>
+              {!sector && (
+                <h3 className="text-[11px] font-terminal tracking-widest mb-2 px-1" style={{ color: "var(--accent-info)" }}>
+                  {parent.toUpperCase()} · {kids.length} sleeves
+                </h3>
+              )}
+              <GroupTable rows={kids} kind="SUB-SECTOR" selected={industry} onSelect={pickIndustry} />
+            </div>
+          );
+        })
       )}
 
-      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">3 · TEMA ENSEMBLE · TRIGGERED IN ALIGNED SUB-SECTORS</h2>
+      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">
+        3 · TEMA ENSEMBLE · {path.toUpperCase()}
+      </h2>
       <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
         <table className="w-full text-sm font-terminal">
           <thead>
             <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
               <th className="text-left px-3 py-2">TICKER</th>
               <th className="text-left px-3 py-2">SECTOR</th>
-              <th className="text-left px-3 py-2">INDUSTRY</th>
+              <th className="text-left px-3 py-2">SUB-SECTOR</th>
               <th className="text-left px-3 py-2">ENSEMBLE</th>
               <th className="text-right px-3 py-2">GRID</th>
               <th className="text-left px-3 py-2">TEMA 9/99/199</th>
@@ -301,24 +425,33 @@ export default function RotatePage() {
           <tbody>
             {loading ? (
               <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
-            ) : !d?.triggers?.length ? (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">No TEMA-MACD ensemble hits.</td></tr>
+            ) : !sleeveTriggers.length ? (
+              <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">No TEMA-MACD ensemble hits in {path}.</td></tr>
             ) : (
-              d.triggers.map((t) => (
-                <tr key={t.ticker} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">
-                  <td className="px-3 py-2">
-                    <Link href={`/ticker/${t.ticker}`} className="font-bold hover:text-[var(--accent-info)]">{t.ticker}</Link>
-                    {t.aligned && <span className="ml-2 text-[10px] font-bold" style={{ color: "var(--accent-bull)" }}>ALIGNED</span>}
-                  </td>
-                  <td className="px-3 py-2 text-xs">{t.sector}</td>
-                  <td className="px-3 py-2 text-xs">{t.industry}</td>
-                  <td className="px-3 py-2 font-bold" style={{ color: t.triggered === "LONG" ? "var(--accent-bull)" : "var(--accent-bear)" }}>{t.triggered} {pct(t.ensemble, 0)}</td>
-                  <td className="px-3 py-2 text-right text-xs">{t.nLong ?? 0}/{t.nCfg ?? 0}</td>
-                  <td className="px-3 py-2" style={{ color: t.temaSide === "BUY" ? "var(--accent-bull)" : t.temaSide === "SELL" ? "var(--accent-bear)" : "var(--text-muted)" }}>{t.temaSide} {t.temaGrade}</td>
-                  <td className="px-3 py-2" style={{ color: t.macdAction === "CLOSE" ? "var(--accent-bear)" : "var(--accent-bull)" }}>{t.macdAction}</td>
-                  <td className="px-3 py-2 text-xs" style={{ color: labelColor(t.groupLabel) }}>{t.groupLabel ?? "—"}</td>
-                </tr>
-              ))
+              temaGroups.flatMap(([sleeve, rows]) => [
+                !industry ? (
+                  <tr key={`h-${sleeve}`} className="bg-[var(--surface-alt)]">
+                    <td colSpan={8} className="px-3 py-1 text-[10px] tracking-widest" style={{ color: "var(--accent-info)" }}>
+                      {(sector ?? rows[0]?.sector ?? "").toUpperCase()} → {sleeve.toUpperCase()}
+                    </td>
+                  </tr>
+                ) : null,
+                ...rows.map((t) => (
+                  <tr key={t.ticker} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">
+                    <td className="px-3 py-2">
+                      <Link href={`/ticker/${t.ticker}`} className="font-bold hover:text-[var(--accent-info)]">{t.ticker}</Link>
+                      {t.aligned && <span className="ml-2 text-[10px] font-bold" style={{ color: "var(--accent-bull)" }}>ALIGNED</span>}
+                    </td>
+                    <td className="px-3 py-2 text-xs">{t.sector}</td>
+                    <td className="px-3 py-2 text-xs">{t.industry}</td>
+                    <td className="px-3 py-2 font-bold" style={{ color: t.triggered === "LONG" ? "var(--accent-bull)" : "var(--accent-bear)" }}>{t.triggered} {pct(t.ensemble, 0)}</td>
+                    <td className="px-3 py-2 text-right text-xs">{t.nLong ?? 0}/{t.nCfg ?? 0}</td>
+                    <td className="px-3 py-2" style={{ color: t.temaSide === "BUY" ? "var(--accent-bull)" : t.temaSide === "SELL" ? "var(--accent-bear)" : "var(--text-muted)" }}>{t.temaSide} {t.temaGrade}</td>
+                    <td className="px-3 py-2" style={{ color: t.macdAction === "CLOSE" ? "var(--accent-bear)" : "var(--accent-bull)" }}>{t.macdAction}</td>
+                    <td className="px-3 py-2 text-xs" style={{ color: labelColor(t.groupLabel) }}>{t.groupLabel ?? "—"}</td>
+                  </tr>
+                )),
+              ])
             )}
           </tbody>
         </table>
