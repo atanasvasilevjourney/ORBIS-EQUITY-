@@ -63,6 +63,7 @@ supabase/migrations/016_macro_canaries.sql
 supabase/migrations/017_subsector_parent.sql
 supabase/migrations/018_rotate_carver.sql
 supabase/migrations/019_cash_book.sql
+supabase/migrations/020_ingest_runs.sql
 ```
 
 ### Web
@@ -77,6 +78,13 @@ npm run dev
 ```bash
 pip install -r pipeline/requirements.txt
 python -m pipeline.bootstrap
+```
+
+Listed cash EOD (no LSE key) — same public-REST / closed-bar shape as QMIE,
+Yahoo then Stooq, not Binance perps:
+
+```bash
+python -m pipeline.ingest.cash_eod
 ```
 
 ### GitHub Actions secrets (required for nightly pipeline)
@@ -204,6 +212,8 @@ Surfaced at `/bias`, ticker **CHART** tab, `GET /api/bias`, and `GET /api/chart/
 ## TEMA + Carver cash (listed stock, fully funded)
 
 [QMIE](https://github.com/atanasvasilevjourney/QMIE) is a **crypto USDT-perp scanner**. It does **not** implement TEMA or Carver. This desk maps those two ideas onto **listed cash equities** at the `prices_daily` close. No Bybit/Binance mark, no funding, no liquidation.
+
+Cash EOD ingest copies QMIE's *ingestion shape* (public REST, provider fallback, drop the in-progress session bar, ~300 daily closes) onto **Yahoo → Stooq**. It does **not** pull USDT-M klines or vendor QMIE's exchange clients.
 
 | Sleeve | Signal | Book | Cash size |
 |---|---|---|---|

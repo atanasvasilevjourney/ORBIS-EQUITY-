@@ -97,7 +97,7 @@ jobs:
   # ---------------------------------------------------------------------------
   ingest-prices:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     needs: [validate-secrets, universe-sync]
     if: >-
       always()
@@ -130,6 +130,13 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           LSE_API_KEY: ${{ secrets.LSE_API_KEY }}
           LSE_DATA_API_URL: ${{ secrets.LSE_DATA_API_URL }}
+
+      - name: Cash EOD backfill (Yahoo → Stooq)
+        run: python -m pipeline.ingest.cash_eod
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          CASH_EOD_BARS: ${{ github.event.schedule == '30 19 * * 1' && '300' || '10' }}
 
   # ---------------------------------------------------------------------------
   # 3. Ingest Fundamentals — weekly only (Monday) or manual trigger
