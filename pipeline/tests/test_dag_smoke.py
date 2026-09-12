@@ -78,14 +78,21 @@ class TestPipelineDAGSmoke:
                 "LSE_DATA_API_URL": "https://test.lse.api",
             }))
 
+            # Shared client + per-module factories
+            stack.enter_context(
+                patch("pipeline.utils.client.get_supabase", return_value=mock_supabase)
+            )
+            if hasattr(mod, "get_supabase"):
+                stack.enter_context(
+                    patch.object(mod, "get_supabase", return_value=mock_supabase)
+                )
             if hasattr(mod, "_get_supabase_client"):
                 stack.enter_context(
                     patch.object(mod, "_get_supabase_client", return_value=mock_supabase)
                 )
-
-            if module_path in ("pipeline.compute.trend_radar", "pipeline.compute.aggregates"):
+            if hasattr(mod, "_sb"):
                 stack.enter_context(
-                    patch.object(mod, "create_client", return_value=mock_supabase)
+                    patch.object(mod, "_sb", return_value=mock_supabase)
                 )
 
             if module_path == "pipeline.ingest.universe":

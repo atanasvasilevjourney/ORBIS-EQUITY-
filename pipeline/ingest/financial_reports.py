@@ -10,9 +10,9 @@ Usage:
 import logging
 
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from supabase import Client
 
-from pipeline.config.settings import SupabaseConfig, FINANCIAL_REPORT_TYPES
+from pipeline.config.settings import FINANCIAL_REPORT_TYPES
 from pipeline.clients.lse_api import LSEClient
 from pipeline.utils.supabase import fetch_active_symbols
 
@@ -24,12 +24,9 @@ REPORT_TYPES = FINANCIAL_REPORT_TYPES
 
 
 def _get_supabase_client() -> Client:
-    cfg = SupabaseConfig()
-    if not cfg.url or not cfg.service_key:
-        raise RuntimeError(
-            "SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in environment"
-        )
-    return create_client(cfg.url, cfg.service_key)
+    from pipeline.utils.client import get_supabase
+    return get_supabase()
+
 
 
 def _ingest_reports_for_type(

@@ -23,7 +23,6 @@ from datetime import date, datetime, timedelta, timezone
 
 import pandas as pd
 from dotenv import load_dotenv
-from supabase import create_client
 
 from pipeline.utils.supabase import fetch_all
 
@@ -48,11 +47,9 @@ MIN_NOTIONAL = 500.0
 
 
 def _sb():
-    url = os.getenv("SUPABASE_URL", "")
-    key = os.getenv("SUPABASE_SERVICE_KEY", "")
-    if not url or not key:
-        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
-    return create_client(url, key)
+    from pipeline.utils.client import get_supabase
+    return get_supabase()
+
 
 
 def _atr14(df: pd.DataFrame) -> float | None:

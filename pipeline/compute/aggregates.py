@@ -13,12 +13,12 @@ Usage:
     python -m pipeline.compute.aggregates
 """
 import logging
-import os
 from collections import Counter
 from datetime import date
 
 from dotenv import load_dotenv
-from supabase import create_client
+
+from pipeline.utils.client import get_supabase
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -136,15 +136,9 @@ def main():
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
 
-    sb_url = os.getenv("SUPABASE_URL", "")
-    sb_key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-    if not sb_url or not sb_key:
-        logger.error("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
-        return
-
-    sb = create_client(sb_url, sb_key)
-
     from pipeline.utils.supabase import fetch_all
+
+    sb = get_supabase()
 
     radar_data = fetch_all(sb, "trend_radar", "symbol,state,quality_rank")
     universe_data = fetch_all(

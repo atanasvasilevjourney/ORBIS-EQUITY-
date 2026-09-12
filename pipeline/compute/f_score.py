@@ -26,9 +26,8 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from supabase import Client
 
-from pipeline.config.settings import SupabaseConfig
 
 load_dotenv()
 
@@ -36,10 +35,9 @@ logger = logging.getLogger(__name__)
 
 
 def _get_supabase_client() -> Client:
-    cfg = SupabaseConfig()
-    if not cfg.url or not cfg.service_key:
-        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
-    return create_client(cfg.url, cfg.service_key)
+    from pipeline.utils.client import get_supabase
+    return get_supabase()
+
 
 
 def _safe_div(a, b):

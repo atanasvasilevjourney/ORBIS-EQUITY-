@@ -22,7 +22,6 @@ Usage:
     python -m pipeline.compute.trend_radar
 """
 import logging
-import os
 from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
@@ -316,7 +315,9 @@ def process_ticker(df: pd.DataFrame) -> dict | None:
 
 def main() -> None:
     from dotenv import load_dotenv
-    from supabase import create_client
+
+    from pipeline.utils.client import get_supabase
+    from pipeline.utils.supabase import fetch_all
 
     load_dotenv()
     logging.basicConfig(
@@ -324,16 +325,9 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
 
-    sb_url = os.getenv("SUPABASE_URL", "")
-    sb_key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-    if not sb_url or not sb_key:
-        logger.error("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
-        return
-
-    sb = create_client(sb_url, sb_key)
+    sb = get_supabase()
 
     # Get active universe
-    from pipeline.utils.supabase import fetch_all
 
     universe_rows = fetch_all(
         sb,
