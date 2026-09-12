@@ -20,12 +20,12 @@ describe("GET /api/summary", () => {
           data: {
             asof_date: new Date().toISOString().split("T")[0],
             brief: "Risk-On - 55% GREEN",
-            inputs: JSON.stringify({
+            inputs: {
               posture_score: 65,
               posture_label: "Risk-On",
               breadth: { best_sector: "Technology", worst_sector: "Energy" },
               region_breadth: { US: 60 },
-            }),
+            },
           },
           error: null,
         }),
@@ -36,7 +36,6 @@ describe("GET /api/summary", () => {
             { state: 0, quality_rank: 50 },
           ],
           error: null,
-          count: 3,
         }),
       })
     );
@@ -56,8 +55,8 @@ describe("GET /api/summary", () => {
   it("handles missing daily brief gracefully", async () => {
     mockCreateServerClient.mockReturnValue(
       createMockSupabase({
-        daily_brief: () => ({ data: null, error: { code: "PGRST116" } }),
-        trend_radar: () => ({ data: [], error: null, count: 0 }),
+        daily_brief: () => ({ data: null, error: null }),
+        trend_radar: () => ({ data: [], error: null }),
       })
     );
 

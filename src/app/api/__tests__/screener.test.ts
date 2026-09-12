@@ -1,12 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
-import { createMockSupabase, type QueryResult } from "./helpers/mockSupabase";
+import { createMockSupabase } from "./helpers/mockSupabase";
 
 const mockCreateServerClient = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
   createServerClient: () => mockCreateServerClient(),
 }));
+
+const radarRow = (symbol: string, overrides: Record<string, unknown> = {}) => ({
+  symbol,
+  state: 1,
+  quality_rank: 75,
+  z_mom: 1.2,
+  f_ewmac: 0.8,
+  z_52: -0.05,
+  breakout_active: true,
+  volume_confirmed: true,
+  kama_regime: 1,
+  adx: 25,
+  entry_timing: null,
+  convergence_count: 4,
+  state_changed_at: "2026-01-01",
+  computed_at: "2026-01-01",
+  ...overrides,
+});
 
 describe("GET /api/screener", () => {
   beforeEach(() => {
@@ -17,43 +35,31 @@ describe("GET /api/screener", () => {
   it("returns flattened screener rows", async () => {
     mockCreateServerClient.mockReturnValue(
       createMockSupabase({
-        trend_radar: () => ({
-          data: [{
-            symbol: "AAPL",
-            state: 1,
-            quality_rank: 75,
-            z_mom: 1.2,
-            f_ewmac: 0.8,
-            z_52: -0.05,
-            breakout_active: true,
-            volume_confirmed: true,
-            convergence_count: 4,
-            state_changed_at: "2026-01-01",
-            computed_at: "2026-01-01",
-          }],
-          error: null,
-          count: 1,
-        }),
+        trend_radar: () => ({ data: [radarRow("AAPL")], error: null }),
         universe_members: () => ({
-          data: [{
-            symbol: "AAPL",
-            company_name: "Apple Inc.",
-            sector: "Technology",
-            industry: "Consumer Electronics",
-            country: "US",
-            exchange: "NASDAQ",
-            tier: "us_large",
-          }],
+          data: [
+            {
+              symbol: "AAPL",
+              company_name: "Apple Inc.",
+              sector: "Technology",
+              industry: "Consumer Electronics",
+              country: "US",
+              exchange: "NASDAQ",
+              tier: "us_large",
+            },
+          ],
           error: null,
         }),
         fundamentals_snapshot: () => ({
-          data: [{
-            symbol: "AAPL",
-            price: 180,
-            market_cap: 2800000,
-            pe_ratio: 28,
-            dividend_yield: 0.005,
-          }],
+          data: [
+            {
+              symbol: "AAPL",
+              price: 180,
+              market_cap: 2800000,
+              pe_ratio: 28,
+              dividend_yield: 0.005,
+            },
+          ],
           error: null,
         }),
       })
@@ -69,29 +75,29 @@ describe("GET /api/screener", () => {
     expect(body[0].symbol).toBe("AAPL");
     expect(body[0].rank).toBe(75);
     expect(body[0].companyName).toBe("Apple Inc.");
+    expect(body[0].kamaRegime).toBe(1);
   });
 
-  it("filters by direction=bull", async () => {
+  it("filters by direction=bull via state=1", async () => {
     const eqCalls: string[] = [];
-    const sb = createMockSupabase({
-      trend_radar: () => ({ data: [], error: null, count: 0 }),
-      universe_members: () => ({ data: [], error: null }),
-      fundamentals_snapshot: () => ({ data: [], error: null }),
-    });
-    const origEq = sb.from("trend_radar").eq;
-    sb.from = (table: string) => {
-      const chain = createMockSupabase({
-        trend_radar: () => ({ data: [], error: null, count: 0 }),
-        universe_members: () => ({ data: [], error: null }),
-        fundamentals_snapshot: () => ({ data: [], error: null }),
-      }).from(table);
-      chain.eq = (col: string, val: unknown) => {
-        eqCalls.push(`${col}=${val}`);
+    mockCreateServerClient.mockReturnValue({
+      from: (table: string) => {
+        const chain: Record<string, unknown> = {};
+        const methods = ["select", "gte", "order", "range", "limit", "maybeSingle", "single"];
+        for (const m of methods) chain[m] = () => chain;
+        chain.eq = (col: string, val: unknown) => {
+          eqCalls.push(`${col}=${val}`);
+          return chain;
+        };
+        chain.then = (onFulfilled?: (v: unknown) => unknown) =>
+          Promise.resolve(
+            table === "trend_radar" || table === "universe_members" || table === "fundamentals_snapshot"
+              ? { data: [], error: null }
+              : { data: [], error: null }
+          ).then(onFulfilled);
         return chain;
-      };
-      return chain;
-    };
-    mockCreateServerClient.mockReturnValue(sb);
+      },
+    });
 
     const { GET } = await import("../screener/route");
     const req = new NextRequest("http://localhost/api/screener?direction=bull");
@@ -104,17 +110,29 @@ describe("GET /api/screener", () => {
     mockCreateServerClient.mockReturnValue(
       createMockSupabase({
         trend_radar: () => ({
-          data: [
-            { symbol: "AAPL", state: 1, quality_rank: 70, z_mom: 0, f_ewmac: 0, z_52: 0, breakout_active: false, volume_confirmed: false, convergence_count: 1, state_changed_at: null, computed_at: null },
-            { symbol: "BP", state: 0, quality_rank: 50, z_mom: 0, f_ewmac: 0, z_52: 0, breakout_active: false, volume_confirmed: false, convergence_count: 1, state_changed_at: null, computed_at: null },
-          ],
+          data: [radarRow("AAPL"), radarRow("BP", { state: 0, quality_rank: 50 })],
           error: null,
-          count: 2,
         }),
         universe_members: () => ({
           data: [
-            { symbol: "AAPL", company_name: "Apple", sector: "Tech", industry: "", country: "US", exchange: "NASDAQ", tier: "us_large" },
-            { symbol: "BP", company_name: "BP", sector: "Energy", industry: "", country: "GB", exchange: "LSE", tier: "uk" },
+            {
+              symbol: "AAPL",
+              company_name: "Apple",
+              sector: "Tech",
+              industry: "",
+              country: "US",
+              exchange: "NASDAQ",
+              tier: "us_large",
+            },
+            {
+              symbol: "BP",
+              company_name: "BP",
+              sector: "Energy",
+              industry: "",
+              country: "GB",
+              exchange: "LSE",
+              tier: "uk",
+            },
           ],
           error: null,
         }),
@@ -135,8 +153,8 @@ describe("GET /api/screener", () => {
     mockCreateServerClient.mockReturnValue(
       createMockSupabase({
         trend_radar: () => ({ data: null, error: { message: "DB error" } }),
-        universe_members: () => ({ data: [], error: null }),
-        fundamentals_snapshot: () => ({ data: [], error: null }),
+        universe_members: () => ({ data: null, error: { message: "DB error" } }),
+        fundamentals_snapshot: () => ({ data: null, error: { message: "DB error" } }),
       })
     );
 
@@ -148,28 +166,33 @@ describe("GET /api/screener", () => {
   });
 
   it("caps limit at 1000", async () => {
-    let capturedLimit = 0;
-    const sb = {
-      from: (table: string) => {
-        const chain: Record<string, unknown> = {};
-        const methods = ["select", "eq", "gte", "order"];
-        for (const m of methods) chain[m] = () => chain;
-        chain.limit = (n: number) => { capturedLimit = n; return chain; };
-        chain.then = (onFulfilled?: (v: QueryResult) => unknown) =>
-          Promise.resolve(
-            table === "trend_radar"
-              ? { data: [], error: null, count: 0 }
-              : { data: [], error: null }
-          ).then(onFulfilled);
-        return chain;
-      },
-    };
-    mockCreateServerClient.mockReturnValue(sb);
+    const many = Array.from({ length: 1100 }, (_, i) =>
+      radarRow(`T${i}`, { quality_rank: 90 })
+    );
+    const universe = many.map((r) => ({
+      symbol: r.symbol,
+      company_name: r.symbol,
+      sector: "Tech",
+      industry: "",
+      country: "US",
+      exchange: "NASDAQ",
+      tier: "us_large",
+    }));
+
+    mockCreateServerClient.mockReturnValue(
+      createMockSupabase({
+        trend_radar: () => ({ data: many, error: null }),
+        universe_members: () => ({ data: universe, error: null }),
+        fundamentals_snapshot: () => ({ data: [], error: null }),
+      })
+    );
 
     const { GET } = await import("../screener/route");
     const req = new NextRequest("http://localhost/api/screener?limit=5000");
-    await GET(req);
+    const res = await GET(req);
+    const body = await res.json();
 
-    expect(capturedLimit).toBe(1000);
+    expect(res.status).toBe(200);
+    expect(body).toHaveLength(1000);
   });
 });
