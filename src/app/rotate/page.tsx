@@ -120,6 +120,45 @@ function Heat({ values }: { values: (number | null)[] }) {
   );
 }
 
+function TemaSleeveRows({
+  sleeve,
+  rows,
+  sector,
+  showHeader,
+}: {
+  sleeve: string;
+  rows: Trigger[];
+  sector: string | null;
+  showHeader: boolean;
+}) {
+  return (
+    <>
+      {showHeader && (
+        <tr className="bg-[var(--surface-alt)]">
+          <td colSpan={8} className="px-3 py-1 text-[10px] tracking-widest" style={{ color: "var(--accent-info)" }}>
+            {(sector ?? rows[0]?.sector ?? "").toUpperCase()} → {sleeve.toUpperCase()}
+          </td>
+        </tr>
+      )}
+      {rows.map((t) => (
+        <tr key={t.ticker} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">
+          <td className="px-3 py-2">
+            <Link href={`/ticker/${t.ticker}`} className="font-bold hover:text-[var(--accent-info)]">{t.ticker}</Link>
+            {t.aligned && <span className="ml-2 text-[10px] font-bold" style={{ color: "var(--accent-bull)" }}>ALIGNED</span>}
+          </td>
+          <td className="px-3 py-2 text-xs">{t.sector}</td>
+          <td className="px-3 py-2 text-xs">{t.industry}</td>
+          <td className="px-3 py-2 font-bold" style={{ color: t.triggered === "LONG" ? "var(--accent-bull)" : "var(--accent-bear)" }}>{t.triggered} {pct(t.ensemble, 0)}</td>
+          <td className="px-3 py-2 text-right text-xs">{t.nLong ?? 0}/{t.nCfg ?? 0}</td>
+          <td className="px-3 py-2" style={{ color: t.temaSide === "BUY" ? "var(--accent-bull)" : t.temaSide === "SELL" ? "var(--accent-bear)" : "var(--text-muted)" }}>{t.temaSide} {t.temaGrade}</td>
+          <td className="px-3 py-2" style={{ color: t.macdAction === "CLOSE" ? "var(--accent-bear)" : "var(--accent-bull)" }}>{t.macdAction}</td>
+          <td className="px-3 py-2 text-xs" style={{ color: labelColor(t.groupLabel) }}>{t.groupLabel ?? "—"}</td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
 function GroupTable({
   rows,
   kind,
@@ -204,24 +243,23 @@ export default function RotatePage() {
   }, []);
 
   const nested = useMemo(() => {
-    const map = new Map<string, Group[]>();
+    const map: Record<string, Group[]> = {};
     for (const g of d?.industries ?? []) {
       const parent = g.parentSector || "Other";
-      const list = map.get(parent) ?? [];
-      list.push(g);
-      map.set(parent, list);
+      if (!map[parent]) map[parent] = [];
+      map[parent].push(g);
     }
-    for (const list of map.values()) {
-      list.sort((a, b) => Number(b.aligned) - Number(a.aligned) || (b.score ?? 0) - (a.score ?? 0));
-    }
+    Object.keys(map).forEach((key) => {
+      map[key].sort((a: Group, b: Group) => Number(b.aligned) - Number(a.aligned) || (b.score ?? 0) - (a.score ?? 0));
+    });
     return map;
   }, [d]);
 
   const parentOrder = useMemo(() => {
     const names = (d?.sectors ?? []).map((s) => s.name);
-    for (const key of nested.keys()) {
+    Object.keys(nested).forEach((key) => {
       if (!names.includes(key)) names.push(key);
-    }
+    });
     return names;
   }, [d, nested]);
 
@@ -235,14 +273,13 @@ export default function RotatePage() {
   }, [d, sector, industry]);
 
   const temaGroups = useMemo(() => {
-    const map = new Map<string, Trigger[]>();
+    const map: Record<string, Trigger[]> = {};
     for (const t of sleeveTriggers) {
       const key = t.industry || "Other";
-      const list = map.get(key) ?? [];
-      list.push(t);
-      map.set(key, list);
+      if (!map[key]) map[key] = [];
+      map[key].push(t);
     }
-    return [...map.entries()];
+    return Object.entries(map);
   }, [sleeveTriggers]);
 
   const s = d?.summary;
@@ -380,13 +417,13 @@ export default function RotatePage() {
       )}
 
       <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">
-        2b · SUB-SECTORS · {sector ? `${sector.toUpperCase()} → ${ (nested.get(sector) ?? []).map((g) => g.name).join(" / ") || "—" }` : "EVERY SECTOR NEST"}
+        2b · SUB-SECTORS · {sector ? `${sector.toUpperCase()} → ${ (nested[sector] ?? []).map((g) => g.name).join(" / ") || "—" }` : "EVERY SECTOR NEST"}
       </h2>
       {loading ? null : !d?.industries?.length ? (
         <p className="text-[var(--text-muted)] font-terminal px-3 py-8 text-center">No sub-sectors. Re-seed sleeves then re-run sector_rotation.</p>
       ) : (
         visibleParents.map((parent) => {
-          const kids = nested.get(parent) ?? [];
+          const kids = nested[parent] ?? [];
           if (!kids.length) return (
             <p key={parent} className="text-[var(--text-muted)] font-terminal px-3 py-4 text-sm">
               {parent} has no industry sleeves in this universe.
@@ -428,30 +465,15 @@ export default function RotatePage() {
             ) : !sleeveTriggers.length ? (
               <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">No TEMA-MACD ensemble hits in {path}.</td></tr>
             ) : (
-              temaGroups.flatMap(([sleeve, rows]) => [
-                !industry ? (
-                  <tr key={`h-${sleeve}`} className="bg-[var(--surface-alt)]">
-                    <td colSpan={8} className="px-3 py-1 text-[10px] tracking-widest" style={{ color: "var(--accent-info)" }}>
-                      {(sector ?? rows[0]?.sector ?? "").toUpperCase()} → {sleeve.toUpperCase()}
-                    </td>
-                  </tr>
-                ) : null,
-                ...rows.map((t) => (
-                  <tr key={t.ticker} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">
-                    <td className="px-3 py-2">
-                      <Link href={`/ticker/${t.ticker}`} className="font-bold hover:text-[var(--accent-info)]">{t.ticker}</Link>
-                      {t.aligned && <span className="ml-2 text-[10px] font-bold" style={{ color: "var(--accent-bull)" }}>ALIGNED</span>}
-                    </td>
-                    <td className="px-3 py-2 text-xs">{t.sector}</td>
-                    <td className="px-3 py-2 text-xs">{t.industry}</td>
-                    <td className="px-3 py-2 font-bold" style={{ color: t.triggered === "LONG" ? "var(--accent-bull)" : "var(--accent-bear)" }}>{t.triggered} {pct(t.ensemble, 0)}</td>
-                    <td className="px-3 py-2 text-right text-xs">{t.nLong ?? 0}/{t.nCfg ?? 0}</td>
-                    <td className="px-3 py-2" style={{ color: t.temaSide === "BUY" ? "var(--accent-bull)" : t.temaSide === "SELL" ? "var(--accent-bear)" : "var(--text-muted)" }}>{t.temaSide} {t.temaGrade}</td>
-                    <td className="px-3 py-2" style={{ color: t.macdAction === "CLOSE" ? "var(--accent-bear)" : "var(--accent-bull)" }}>{t.macdAction}</td>
-                    <td className="px-3 py-2 text-xs" style={{ color: labelColor(t.groupLabel) }}>{t.groupLabel ?? "—"}</td>
-                  </tr>
-                )),
-              ])
+              temaGroups.map(([sleeve, rows]) => (
+                <TemaSleeveRows
+                  key={sleeve}
+                  sleeve={sleeve}
+                  rows={rows}
+                  sector={sector}
+                  showHeader={!industry}
+                />
+              ))
             )}
           </tbody>
         </table>
