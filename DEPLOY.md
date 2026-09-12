@@ -18,7 +18,7 @@ Render Cron (pipeline) ─────→ Supabase
 | [Render](https://render.com) | Run weekday data jobs |
 | GitHub repo connected to both | This repository |
 
-Apply migrations in Supabase SQL editor (or CLI) if the project is empty: run `001` → `005` in order from `supabase/migrations/`.
+Apply migrations in Supabase SQL editor (or CLI) if the project is empty: run **all** files in `supabase/migrations/` in filename order (`001` → `020`, including desk/KAMA migrations). Do not stop at `005` — cloud desk modules need `006`+.
 
 ---
 
@@ -48,6 +48,9 @@ Optional: LSE key → `LSE_API_KEY` (production fundamentals/US prices). Without
 | `SUPABASE_SERVICE_KEY` | service_role key |
 | `ALLOWED_ORIGIN` | your Vercel domain, e.g. `orbis-equity.vercel.app` |
 | `API_SECRET` | random string (enables `x-api-key` on `/api/*`; leave empty only for open demo) |
+| `RESEND_API_KEY` | optional — EOD GREEN_FLIP alert digest |
+| `ALERT_EMAIL` / `ALERT_EMAIL_FROM` | optional — digest recipients |
+| `APP_BASE_URL` | optional — deep links in alert emails |
 
 4. Deploy. Open `https://<project>.vercel.app`.
 5. After first deploy, set `ALLOWED_ORIGIN` to that host and redeploy if Server Actions warn.
