@@ -1,7 +1,8 @@
-"""MODULE 11 — TEMA + Carver paper book on equity-mapped USDT perps.
+"""MODULE 11 — TEMA + Carver paper book on cash-market stocks.
 
-Separate from LOOP / ORB / BIAS. Signals from `prices_daily`. Sizing as
-isolated USDT-M perpetuals (leverage, margin, liq). No live orders.
+Separate from LOOP / ORB / BIAS / ROTATE. Signals and size from
+`prices_daily` (listed close). Fully funded cash shares — no USDT-M
+leverage, funding, or liquidation. No live broker orders.
 
   TEMA sleeve   50% of $100k · 9/99/199 swing · MACD(12,26,9) close · B+ 3L/3S · 2.5 ATR stop
   Carver sleeve 50% of $100k · EWMAC + vol-target + DD scalar · LIVE/REDUCE/CASH
@@ -20,16 +21,14 @@ import numpy as np
 from dotenv import load_dotenv
 from supabase import create_client
 
-from pipeline.clients.perp_venue import fetch_venue_tape
 from pipeline.compute.perps_math import (
-    CARVER_GROSS_LEV_CAP,
+    CASH_GROSS_CAP,
     CARVER_MIN_ABS,
     CARVER_REDUCE_TOP,
     CARVER_SLEEVE_FRAC,
     CARVER_TARGET_VOL,
     EQUITY,
     MAX_ATR_PCT,
-    MAX_LEVERAGE,
     MIN_ATR_PCT,
     MIN_BARS,
     TEMA_CLUSTER_MAX,
@@ -49,16 +48,13 @@ from pipeline.compute.perps_math import (
     carver_notional,
     drawdown_scalar,
     equal_weight_equity,
-    funding_ann,
-    funding_blocks,
     peak_drawdown_current,
-    perp_contract,
     rotation_regime,
     rotation_size_mult,
     round_px,
     scale_gross,
     side_weights,
-    size_perp,
+    size_cash,
     tema_book_eligible,
     tema_notional,
     tema_signal,
@@ -90,7 +86,7 @@ def run() -> dict:
     today = date.today()
     run_id = f"p-{today.isoformat()}-{datetime.now(timezone.utc).strftime('%H%M%S')}"
     sb = _sb()
-    logger.info("=== Perps desk (TEMA + Carver) start ===")
+    logger.info("=== Cash desk (TEMA + Carver) start ===")
 
     uni = fetch_all(
         sb, "universe_members",
@@ -162,11 +158,8 @@ def run() -> dict:
         })
 
     if not scanned:
-        logger.warning("Perps desk produced 0 names; leaving previous snapshot")
+        logger.warning("Cash desk produced 0 names; leaving previous snapshot")
         return {"run_id": None, "names": 0, "headline": "no names", "tema_slots": 0, "carver_slots": 0}
-
-    contracts = [perp_contract(r["symbol"]) for r in scanned]
-    tape = fetch_venue_tape(contracts)
 
     tema_equity = EQUITY * TEMA_SLEEVE_FRAC
     carver_equity = EQUITY * CARVER_SLEEVE_FRAC
@@ -228,7 +221,7 @@ def run() -> dict:
         ranked = sorted(carver_raw, key=lambda x: -abs(x[1]))
         keep = {sym for sym, ntl in ranked[:CARVER_REDUCE_TOP] if abs(ntl) > 0}
         carver_raw = [(sym, ntl if sym in keep else 0.0) for sym, ntl in carver_raw]
-    scaled = scale_gross([n for _, n in carver_raw], carver_equity, CARVER_GROSS_LEV_CAP * max(risk_mult, 1e-9))
+    scaled = scale_gross([n for _, n in carver_raw], carver_equity, CASH_GROSS_CAP * max(risk_mult, 1e-9))
     carver_ntl = {sym: ntl for (sym, _), ntl in zip(carver_raw, scaled)}
 
     now = datetime.now(timezone.utc).isoformat()
@@ -242,63 +235,47 @@ def run() -> dict:
         sym = r["symbol"]
         last = r["last_px"]
         ts = r["tema"]
-        contract = perp_contract(sym)
-        venue_row = tape.get(contract) or tape.get(contract.upper()) or {}
-        mark = venue_row.get("mark")
-        funding = venue_row.get("funding_8h")
-        venue = venue_row.get("venue") or "synthetic"
-        listed = bool(venue_row)
 
         skip = r["skip_reason"]
         ta = tema_alloc.get(sym)
         in_tema = False
         tema_weight = None
         tema_ntl = 0.0
-        tema_lev = 0.0
-        tema_margin = 0.0
-        tema_liq = None
+        tema_shares = 0.0
+        tema_cash = 0.0
         if ta and skip is None:
-            if funding_blocks(ta["side"], funding):
-                skip = "funding_against"
-            else:
-                allocated = tema_equity * (ta["weight_pct"] / 100.0)
-                raw_ntl = tema_notional(allocated, last, r["atr"]) * risk_mult
-                signed = raw_ntl if ta["side"] == "BUY" else -raw_ntl
-                sized = size_perp(signed, allocated, last, ta["side"])
-                in_tema = abs(sized.notional) > 0
-                tema_weight = ta["weight_pct"]
-                tema_ntl = sized.notional
-                tema_lev = sized.leverage
-                tema_margin = sized.margin
-                tema_liq = sized.liq
-                if in_tema:
-                    tema_slots += 1
+            allocated = tema_equity * (ta["weight_pct"] / 100.0)
+            raw_ntl = tema_notional(allocated, last, r["atr"]) * risk_mult
+            signed = raw_ntl if ta["side"] == "BUY" else -raw_ntl
+            sized = size_cash(signed, allocated, last, ta["side"])
+            in_tema = abs(sized.notional) > 0
+            tema_weight = ta["weight_pct"]
+            tema_ntl = sized.notional
+            tema_shares = sized.shares
+            tema_cash = sized.cash
+            if in_tema:
+                tema_slots += 1
 
         in_carver = False
         cv_ntl = 0.0
-        cv_lev = 0.0
-        cv_margin = 0.0
-        cv_liq = None
+        cv_shares = 0.0
+        cv_cash = 0.0
         cv_side = "FLAT"
         n_carver = sum(1 for v in carver_ntl.values() if abs(v) > 0)
         if skip is None and abs(r["forecast"]) >= CARVER_MIN_ABS:
             cv_side = "BUY" if r["forecast"] > 0 else "SELL"
-            if funding_blocks(cv_side, funding):
-                skip = skip or "funding_against"
-            else:
-                raw = carver_ntl.get(sym, 0.0)
-                allocated = carver_equity / max(1, n_carver)
-                sized = size_perp(raw, allocated, last, cv_side)
-                cv_ntl = sized.notional
-                cv_lev = sized.leverage
-                cv_margin = sized.margin
-                cv_liq = sized.liq
-                in_carver = abs(cv_ntl) > 0
-                if in_carver:
-                    carver_slots += 1
+            raw = carver_ntl.get(sym, 0.0)
+            allocated = carver_equity / max(1, n_carver)
+            sized = size_cash(raw, allocated, last, cv_side)
+            cv_ntl = sized.notional
+            cv_shares = sized.shares
+            cv_cash = sized.cash
+            in_carver = abs(cv_ntl) > 0
+            if in_carver:
+                carver_slots += 1
 
         gross += abs(tema_ntl) + abs(cv_ntl)
-        margin_sum += tema_margin + cv_margin
+        margin_sum += tema_cash + cv_cash
 
         if skip is None and ts.side in ("BUY", "SELL") and ts.macd_action == "CLOSE" and not in_tema:
             skip = "macd_close"
@@ -313,13 +290,10 @@ def run() -> dict:
         )
         bits.append(f"Carver forecast {r['forecast']:+.1f} (16/64 {r['ewmac_fast']:+.1f}, 32/128 {r['ewmac_slow']:+.1f})")
         bits.append(f"σ {r['inst_vol']*100:.0f}% · regime {regime} · DD {current_dd*100:.1f}% · scalar {dd_s:.2f}")
-        if listed:
-            bits.append(f"{venue} {contract} listed")
-        else:
-            bits.append(f"{contract} synthetic — no venue tape from this host")
+        bits.append(f"cash {last:.2f} · paper shares, no borrow model")
         if skip:
             bits.append(f"skip {skip}")
-        rationale = " · ".join(bits) + ". Paper perp — not a live order."
+        rationale = " · ".join(bits) + ". Paper cash book — not a live order."
 
         rows.append({
             "symbol": sym,
@@ -327,12 +301,12 @@ def run() -> dict:
             "company_name": r["company_name"],
             "sector": r["sector"],
             "last_px": _px(last),
-            "perp_symbol": contract,
-            "venue": venue,
-            "venue_listed": listed,
-            "mark_px": _px(mark) if mark is not None else None,
-            "funding_8h": funding,
-            "funding_ann": funding_ann(funding),
+            "perp_symbol": sym,
+            "venue": "cash",
+            "venue_listed": True,
+            "mark_px": _px(last),
+            "funding_8h": None,
+            "funding_ann": None,
             "tema_side": ts.side,
             "tema_grade": ts.grade,
             "tema_score": ts.score,
@@ -347,18 +321,20 @@ def run() -> dict:
             "macd_action": ts.macd_action,
             "tema_weight_pct": tema_weight,
             "tema_notional": round(tema_ntl, 2),
-            "tema_leverage": tema_lev,
-            "tema_margin": round(tema_margin, 2),
-            "tema_liq": _px(tema_liq),
+            "tema_leverage": 1.0 if in_tema else 0.0,
+            "tema_margin": round(tema_cash, 2),
+            "tema_liq": None,
+            "tema_shares": tema_shares,
             "carver_forecast": round(r["forecast"], 2),
             "carver_ewmac_fast": round(r["ewmac_fast"], 2),
             "carver_ewmac_slow": round(r["ewmac_slow"], 2),
             "carver_vol": round(r["inst_vol"], 4) if r["inst_vol"] else None,
             "carver_side": cv_side,
             "carver_notional": round(cv_ntl, 2),
-            "carver_leverage": cv_lev,
-            "carver_margin": round(cv_margin, 2),
-            "carver_liq": _px(cv_liq),
+            "carver_leverage": 1.0 if in_carver else 0.0,
+            "carver_margin": round(cv_cash, 2),
+            "carver_liq": None,
+            "carver_shares": cv_shares,
             "atr": _px(r["atr"]),
             "atr_pct": round(r["atr_pct"], 3),
             "in_tema_book": in_tema,
@@ -368,13 +344,12 @@ def run() -> dict:
             "computed_at": now,
         })
 
-    gross_lev = gross / EQUITY if EQUITY else 0.0
-    listed_n = sum(1 for r in rows if r["venue_listed"])
+    deployed_frac = gross / EQUITY if EQUITY else 0.0
     headline = (
-        f"{today.isoformat()} · {len(rows)} names · TEMA 9/99/199 + MACD close {tema_slots} slots · "
+        f"{today.isoformat()} · {len(rows)} names · cash close · "
+        f"TEMA 9/99/199 + MACD close {tema_slots} slots · "
         f"Carver {carver_slots} slots · {regime} · DD {current_dd*100:.1f}% "
-        f"(scalar {dd_s:.2f}) · gross {gross_lev:.2f}x · "
-        f"{listed_n} venue-listed / {len(rows) - listed_n} synthetic"
+        f"(scalar {dd_s:.2f}) · deployed ${gross:,.0f} ({deployed_frac*100:.0f}% of $100k)"
     )
     config = {
         "equity": EQUITY,
@@ -393,8 +368,8 @@ def run() -> dict:
         "topShort": TEMA_TOP_SHORT,
         "clusterMax": TEMA_CLUSTER_MAX,
         "carverTargetVol": CARVER_TARGET_VOL,
-        "carverGrossLevCap": CARVER_GROSS_LEV_CAP,
-        "maxLeverage": MAX_LEVERAGE,
+        "cashGrossCap": CASH_GROSS_CAP,
+        "book": "cash",
         "minAtrPct": MIN_ATR_PCT,
         "maxAtrPct": MAX_ATR_PCT,
         "regime": regime,
@@ -403,6 +378,7 @@ def run() -> dict:
         "ddScalar": round(dd_s, 4),
         "riskMult": round(risk_mult, 4),
         "activeForecasts": n_active,
+        "deployed": round(gross, 2),
     }
     sb.table("perp_runs").upsert({
         "run_id": run_id,
@@ -410,7 +386,7 @@ def run() -> dict:
         "names": len(rows),
         "tema_slots": tema_slots,
         "carver_slots": carver_slots,
-        "gross_leverage": round(gross_lev, 4),
+        "gross_leverage": round(deployed_frac, 4),
         "headline": headline,
         "config": config,
         "computed_at": now,
@@ -424,14 +400,15 @@ def run() -> dict:
     for i in range(0, len(stale), 40):
         sb.table("perp_names").delete().in_("symbol", stale[i:i + 40]).execute()
 
-    logger.info("Perps desk wrote %d names · %s", len(rows), headline)
+    logger.info("Cash desk wrote %d names · %s", len(rows), headline)
     return {
         "run_id": run_id,
         "names": len(rows),
         "headline": headline,
         "tema_slots": tema_slots,
         "carver_slots": carver_slots,
-        "gross_leverage": gross_lev,
+        "gross_leverage": deployed_frac,
+        "deployed": gross,
     }
 
 
