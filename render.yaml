@@ -2,9 +2,11 @@
 # https://dashboard.render.com/blueprints
 #
 # After first deploy:
-#   1. Set env group secrets (SUPABASE_URL, SUPABASE_SERVICE_KEY, optional LSE_*)
-#   2. Manually trigger "orbis-equity-bootstrap" once
-#   3. Weekday crons keep prices/signals fresh
+#   1. Set env group secrets with REAL values (SUPABASE_URL, SUPABASE_SERVICE_KEY, optional LSE_*)
+#      Placeholders like https://example.supabase.co will fail validation.
+#   2. Apply all supabase/migrations (001→020) in the SQL editor
+#   3. Manually trigger "orbis-equity-bootstrap" once
+#   4. Weekday crons run prices + radar + brief + desk modules (soft-fail per desk)
 
 services:
   # One-shot / rare seed job — trigger manually from Render dashboard

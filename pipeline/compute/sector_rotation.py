@@ -20,7 +20,6 @@ from datetime import date, datetime, timezone
 
 import numpy as np
 from dotenv import load_dotenv
-from supabase import create_client
 
 from pipeline.compute.canary_math import (
     build_canaries,
@@ -48,11 +47,9 @@ logger = logging.getLogger(__name__)
 
 
 def _sb():
-    url = os.getenv("SUPABASE_URL", "")
-    key = os.getenv("SUPABASE_SERVICE_KEY", "")
-    if not url or not key:
-        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
-    return create_client(url, key)
+    from pipeline.utils.client import get_supabase
+    return get_supabase()
+
 
 
 def _round(v: float | None, d: int = 4) -> float | None:

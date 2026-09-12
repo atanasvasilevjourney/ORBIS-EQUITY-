@@ -105,7 +105,22 @@ Nightly workflow has been failing because these were empty. Render can replace A
 
 ## 5. Trust checklist after go-live
 
-In Supabase Table Editor (or SQL):
+### A. Secrets must be real (not placeholders)
+
+`https://example.supabase.co` / template JWT keys will make every ingest fail fast.
+Set the same real values in:
+
+1. **Vercel** → Project → Settings → Environment Variables  
+2. **Render** → env group `orbis-equity-pipeline`  
+3. **GitHub** → Settings → Secrets and variables → Actions (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`; `LSE_API_KEY` optional)
+
+Then verify:
+
+```bash
+python -m pipeline.scripts.check_health
+```
+
+### B. Apply migrations, then bootstrap once
 
 ```sql
 select count(*) from universe_members;
@@ -121,6 +136,14 @@ Expect after bootstrap + one daily:
 - `trend_radar` rows for names with enough history
 - `daily_brief.asof_date` today/yesterday
 
+### C. Trigger pipeline
+
+1. Render → `orbis-equity-bootstrap` → **Manual Trigger** (required once)
+2. Render → `orbis-equity-daily` → Manual Trigger (or wait for weekday cron)
+3. Optional: GitHub Actions → "Orbis Equity Nightly Pipeline" → Run workflow
+
+Daily now also runs cash EOD + desk modules (skew, ORB, analysis, quantropy, bias, perps, rotation, factors). Soft-fail keeps radar/brief alive if one desk module errors.
+
 In the live site, `DataHonestyBar` should show a real **DATA AS OF** date (not `—`) and not STALE after a weekday run.
 
 ---
@@ -133,8 +156,10 @@ npm i && npm run build && npm start
 
 # pipeline
 pip install -r pipeline/requirements.txt
-export $(grep -v '^#' .env.local | xargs)
+set -a; source .env.local; set +a
+python -m pipeline.scripts.check_health
 bash pipeline/scripts/run_bootstrap.sh
+bash pipeline/scripts/run_daily.sh
 ```
 
 ---

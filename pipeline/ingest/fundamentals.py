@@ -12,9 +12,9 @@ import os
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from supabase import Client
 
-from pipeline.config.settings import LSEConfig, SupabaseConfig, SCREENER_FIELDS
+from pipeline.config.settings import LSEConfig, SCREENER_FIELDS
 from pipeline.clients.lse_api import LSEClient
 
 load_dotenv()
@@ -98,13 +98,9 @@ INSIDER_FIELD_MAP: dict[str, str] = {
 
 
 def _get_supabase_client() -> Client:
-    """Create and return a Supabase client from env config."""
-    cfg = SupabaseConfig()
-    if not cfg.url or not cfg.service_key:
-        raise RuntimeError(
-            "SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in environment"
-        )
-    return create_client(cfg.url, cfg.service_key)
+    from pipeline.utils.client import get_supabase
+    return get_supabase()
+
 
 
 def _map_row(raw: dict, field_map: dict[str, str]) -> dict:

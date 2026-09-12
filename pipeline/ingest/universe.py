@@ -15,9 +15,9 @@ from datetime import datetime, timezone
 import pandas as pd
 import requests
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from supabase import Client
 
-from pipeline.config.settings import LSEConfig, SupabaseConfig, UNIVERSE_TIERS
+from pipeline.config.settings import LSEConfig, UNIVERSE_TIERS
 from pipeline.clients.lse_api import LSEClient
 
 load_dotenv()
@@ -107,13 +107,9 @@ def classify_stock(stock: dict, sp_indices: dict[str, set[str]]) -> str:
 
 
 def _get_supabase_client() -> Client:
-    """Create and return a Supabase client from env config."""
-    cfg = SupabaseConfig()
-    if not cfg.url or not cfg.service_key:
-        raise RuntimeError(
-            "SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in environment"
-        )
-    return create_client(cfg.url, cfg.service_key)
+    from pipeline.utils.client import get_supabase
+    return get_supabase()
+
 
 
 def main() -> None:

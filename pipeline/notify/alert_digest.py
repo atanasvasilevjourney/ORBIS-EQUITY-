@@ -312,14 +312,9 @@ def run_digest(
     if skip_wait_pullback is None:
         skip_wait_pullback = _env_bool("ALERT_SKIP_WAIT_PULLBACK", False)
 
-    sb_url = os.getenv("SUPABASE_URL", "")
-    sb_key = os.getenv("SUPABASE_SERVICE_KEY", "")
-    if not sb_url or not sb_key:
-        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
+    from pipeline.utils.client import get_supabase
 
-    from supabase import create_client
-
-    sb = create_client(sb_url, sb_key)
+    sb = get_supabase()
     radar, uni_map = fetch_radar_and_universe(sb)
     filtered = filter_alert_rows(
         radar,
@@ -333,7 +328,7 @@ def run_digest(
     app_base = os.getenv("APP_BASE_URL", "").strip()
     text = format_digest_text(candidates, as_of=as_of, app_base_url=app_base)
     html = format_digest_html(candidates, as_of=as_of, app_base_url=app_base)
-    subject = f"KovaView alerts {as_of.isoformat()} — {len(candidates)} GREEN flip(s)"
+    subject = f"Orbis Equity alerts {as_of.isoformat()} — {len(candidates)} GREEN flip(s)"
 
     logger.info("Digest prepared: %d candidates for %s", len(candidates), as_of)
     print(text)

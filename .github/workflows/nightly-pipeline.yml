@@ -37,7 +37,6 @@ jobs:
           missing=()
           [ -z "${{ secrets.SUPABASE_URL }}" ] && missing+=("SUPABASE_URL")
           [ -z "${{ secrets.SUPABASE_SERVICE_KEY }}" ] && missing+=("SUPABASE_SERVICE_KEY")
-          [ -z "${{ secrets.LSE_API_KEY }}" ] && missing+=("LSE_API_KEY")
           if [ ${#missing[@]} -gt 0 ]; then
             echo "::error::Missing GitHub Actions secrets: ${missing[*]}"
             echo ""
@@ -47,13 +46,24 @@ jobs:
             echo "Required secrets:"
             echo "  SUPABASE_URL          — https://your-project.supabase.co"
             echo "  SUPABASE_SERVICE_KEY  — service_role key (not anon key)"
-            echo "  LSE_API_KEY           — London Strategic Edge API key"
             echo ""
-            echo "Optional:"
+            echo "Optional (recommended for full US universe / LSE path):"
+            echo "  LSE_API_KEY           — London Strategic Edge API key"
             echo "  LSE_DATA_API_URL      — defaults to https://data-api.londonstrategicedge.com"
             exit 1
           fi
-          echo "All required secrets are configured."
+          # Reject obvious placeholders so the workflow fails fast with a clear message
+          url="${{ secrets.SUPABASE_URL }}"
+          case "$url" in
+            *example.supabase.co*|*your-project.supabase.co*|"")
+              echo "::error::SUPABASE_URL looks like a placeholder ($url). Use your real project URL."
+              exit 1
+              ;;
+          esac
+          if [ -z "${{ secrets.LSE_API_KEY }}" ]; then
+            echo "::warning::LSE_API_KEY is not set — weekly LSE ingest will be limited; bootstrap/yfinance/cash_eod still work."
+          fi
+          echo "Required Supabase secrets are configured."
 
   # ---------------------------------------------------------------------------
   # 1. Universe Sync — weekly only (Monday) or manual trigger

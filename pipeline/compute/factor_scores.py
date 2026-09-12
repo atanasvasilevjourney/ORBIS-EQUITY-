@@ -18,12 +18,10 @@ Usage:
 from __future__ import annotations
 
 import logging
-import os
 from datetime import datetime, timezone
 
 import numpy as np
 from dotenv import load_dotenv
-from supabase import create_client
 
 from pipeline.utils.supabase import fetch_all
 
@@ -187,13 +185,9 @@ def main() -> None:
     )
     logger.info("=== Factor Scores Compute Start ===")
 
-    sb_url = os.getenv("SUPABASE_URL", "")
-    sb_key = os.getenv("SUPABASE_SERVICE_KEY", "")
-    if not sb_url or not sb_key:
-        logger.error("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
-        return
+    from pipeline.utils.client import get_supabase
 
-    sb = create_client(sb_url, sb_key)
+    sb = get_supabase()
 
     # Load fundamentals + universe sector map
     fundamentals = fetch_all(sb, "fundamentals_snapshot", "*")

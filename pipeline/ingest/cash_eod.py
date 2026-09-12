@@ -18,7 +18,7 @@ import time
 from datetime import date, datetime, timezone
 
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from supabase import Client
 
 from pipeline.clients.cash_eod import (
     DEFAULT_BARS,
@@ -26,7 +26,6 @@ from pipeline.clients.cash_eod import (
     bars_to_rows,
     fetch_daily_bars,
 )
-from pipeline.config.settings import SupabaseConfig
 from pipeline.utils.supabase import fetch_all
 
 load_dotenv()
@@ -39,10 +38,9 @@ SEED_SOURCE = "seed_demo"
 
 
 def _sb() -> Client:
-    cfg = SupabaseConfig()
-    if not cfg.url or not cfg.service_key:
-        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set")
-    return create_client(cfg.url, cfg.service_key)
+    from pipeline.utils.client import get_supabase
+    return get_supabase()
+
 
 
 def _int_env(name: str, default: int) -> int:
