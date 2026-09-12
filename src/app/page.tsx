@@ -224,11 +224,11 @@ export default function Home() {
       href: "/rotate",
       title: "BETA ROTATION",
       badge: "MODULE 12",
-      desc: "Macro canaries → sector → nested sub-sectors (Energy → Solar / Nuclear) → TEMA ensemble",
+      desc: "Macro → sector → sub-sector → asset. Carver D-rungs DCA on the bigger trend and rotate into the sleeve",
       stats: d ? [
         { label: "Regime", value: d.rotateRegime ?? "—", color: d.rotateRegime === "RISK-ON" ? "var(--accent-bull)" : d.rotateRegime === "RISK-OFF" ? "var(--accent-bear)" : "var(--accent-warning)" },
         { label: "Leading", value: String(d.rotateLeading), color: "var(--accent-bull)" },
-        { label: "Tape", value: "nested", color: "var(--accent-info)" },
+        { label: "Tape", value: "Carver", color: "var(--accent-info)" },
       ] : null,
     },
   ];

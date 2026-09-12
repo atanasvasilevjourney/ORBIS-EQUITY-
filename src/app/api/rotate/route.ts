@@ -16,6 +16,8 @@ type RunRow = {
   canary_on: number | null;
   canary_off: number | null;
   n_triggers: number | null;
+  n_carver: number | null;
+  carver_rungs: number | null;
   headline: string | null;
   config: Record<string, unknown> | null;
   computed_at: string | null;
@@ -73,6 +75,26 @@ type TriggerRow = {
   run_id: string | null;
 };
 
+type CarverRow = {
+  symbol: string;
+  sector: string | null;
+  industry: string | null;
+  forecast: number | null;
+  parent_forecast: number | null;
+  sleeve_forecast: number | null;
+  xs_score: number | null;
+  xs_rank: number | null;
+  sleeve_rank: number | null;
+  unlocked: number | null;
+  rungs: number | null;
+  weight: number | null;
+  notional: number | null;
+  side: string | null;
+  action: string | null;
+  aligned: boolean | null;
+  run_id: string | null;
+};
+
 function mapGroup(r: GroupRow) {
   return {
     groupType: r.group_type,
@@ -104,7 +126,7 @@ export async function GET() {
     const runs = await fetchAll<RunRow>(
       sb,
       "sector_rotation_runs",
-      "run_id, asof_date, names, n_sectors, n_industries, regime, canary_score, canary_on, canary_off, n_triggers, headline, config, computed_at",
+      "run_id, asof_date, names, n_sectors, n_industries, regime, canary_score, canary_on, canary_off, n_triggers, n_carver, carver_rungs, headline, config, computed_at",
       (q) => q.order("computed_at", { ascending: false })
     );
     const latest = runs[0] ?? null;
@@ -115,15 +137,17 @@ export async function GET() {
         industries: [],
         canaries: [],
         triggers: [],
+        carver: [],
         headline: null,
         config: null,
         stale: true,
       });
     }
-    const [rows, canaryRows, triggerRows] = await Promise.all([
+    const [rows, canaryRows, triggerRows, carverRows] = await Promise.all([
       fetchAll<GroupRow>(sb, "sector_rotation_groups", "*"),
       fetchAll<CanaryRow>(sb, "sector_rotation_canaries", "*").catch(() => []),
       fetchAll<TriggerRow>(sb, "sector_rotation_triggers", "*").catch(() => []),
+      fetchAll<CarverRow>(sb, "sector_rotation_carver", "*").catch(() => []),
     ]);
     const groups = rows.filter((r) => r.run_id === latest.run_id).map(mapGroup);
     const sectors = groups
@@ -161,6 +185,27 @@ export async function GET() {
         groupLabel: r.group_label,
       }))
       .sort((a, b) => Number(b.aligned) - Number(a.aligned) || (b.ensemble ?? 0) - (a.ensemble ?? 0));
+    const carver = carverRows
+      .filter((r) => r.run_id === latest.run_id)
+      .map((r) => ({
+        ticker: r.symbol,
+        sector: r.sector ?? "",
+        industry: r.industry ?? "",
+        forecast: r.forecast,
+        parentForecast: r.parent_forecast,
+        sleeveForecast: r.sleeve_forecast,
+        xsScore: r.xs_score,
+        xsRank: r.xs_rank,
+        sleeveRank: r.sleeve_rank,
+        unlocked: r.unlocked ?? 0,
+        rungs: r.rungs ?? 0,
+        weight: r.weight,
+        notional: r.notional,
+        side: r.side ?? "FLAT",
+        action: r.action ?? "FLAT",
+        aligned: Boolean(r.aligned),
+      }))
+      .sort((a, b) => b.rungs - a.rungs || (a.sleeveRank ?? 99) - (b.sleeveRank ?? 99) || (a.xsRank ?? 99) - (b.xsRank ?? 99));
 
     let stale = false;
     if (latest.asof_date) {
@@ -178,6 +223,8 @@ export async function GET() {
         canaryOn: latest.canary_on,
         canaryOff: latest.canary_off,
         nTriggers: latest.n_triggers,
+        nCarver: latest.n_carver,
+        carverRungs: latest.carver_rungs,
         asOfDate: latest.asof_date,
         leading,
         fading,
@@ -187,6 +234,7 @@ export async function GET() {
       industries,
       canaries,
       triggers,
+      carver,
       headline: latest.headline,
       config: latest.config,
       stale,

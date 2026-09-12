@@ -51,6 +51,25 @@ type Trigger = {
   groupLabel: string | null;
 };
 
+type Carver = {
+  ticker: string;
+  sector: string;
+  industry: string;
+  forecast: number | null;
+  parentForecast: number | null;
+  sleeveForecast: number | null;
+  xsScore: number | null;
+  xsRank: number | null;
+  sleeveRank: number | null;
+  unlocked: number;
+  rungs: number;
+  weight: number | null;
+  notional: number | null;
+  side: string;
+  action: string;
+  aligned: boolean;
+};
+
 type Data = {
   summary: {
     names: number | null;
@@ -64,11 +83,14 @@ type Data = {
     canaryOn: number | null;
     canaryOff: number | null;
     nTriggers: number | null;
+    nCarver: number | null;
+    carverRungs: number | null;
   } | null;
   sectors: Group[];
   industries: Group[];
   canaries: Canary[];
   triggers: Trigger[];
+  carver: Carver[];
   headline: string | null;
   stale: boolean;
 };
@@ -76,6 +98,8 @@ type Data = {
 const pct = (v: number | null | undefined, d = 0) =>
   v == null ? "—" : `${(v * 100).toFixed(d)}%`;
 const num = (v: number | null | undefined, d = 2) => (v == null ? "—" : v.toFixed(d));
+const usd = (v: number | null | undefined) =>
+  v == null ? "—" : `$${Math.round(v).toLocaleString()}`;
 
 function labelColor(l: string | null) {
   if (l === "LEAD") return "var(--accent-bull)";
@@ -88,6 +112,23 @@ function regimeColor(r: string | null) {
   if (r?.includes("RISK-ON")) return "var(--accent-bull)";
   if (r?.includes("RISK-OFF")) return "var(--accent-bear)";
   return "var(--accent-warning)";
+}
+
+function actionColor(a: string) {
+  if (a === "ADD") return "var(--accent-bull)";
+  if (a === "ROTATE") return "var(--accent-info)";
+  if (a === "TRIM") return "var(--accent-warning)";
+  return "var(--text-muted)";
+}
+
+function Rungs({ n, max = 4 }: { n: number; max?: number }) {
+  return (
+    <span className="tracking-tight" title={`${n}/${max} D-rungs`}>
+      {Array.from({ length: max }, (_, i) => (
+        <span key={i} style={{ color: i < n ? "var(--accent-bull)" : "var(--text-muted)" }}>{i < n ? "■" : "□"}</span>
+      ))}
+    </span>
+  );
 }
 
 function voteColor(v: number) {
@@ -265,6 +306,13 @@ export default function RotatePage() {
 
   const visibleParents = sector ? parentOrder.filter((p) => p === sector) : parentOrder;
 
+  const sleeveCarver = useMemo(() => {
+    let rows = d?.carver ?? [];
+    if (sector) rows = rows.filter((t) => t.sector === sector);
+    if (industry) rows = rows.filter((t) => t.industry === industry);
+    return rows;
+  }, [d, sector, industry]);
+
   const sleeveTriggers = useMemo(() => {
     let rows = d?.triggers ?? [];
     if (sector) rows = rows.filter((t) => t.sector === sector);
@@ -287,8 +335,8 @@ export default function RotatePage() {
     { label: "REGIME", value: s?.regime ?? "—", color: regimeColor(s?.regime ?? null) },
     { label: "CANARIES", value: s?.canaryOn == null ? "—" : `${s.canaryOn}↑ ${s.canaryOff ?? 0}↓`, color: "var(--accent-info)" },
     { label: "ALIGNED TEMA", value: (d?.triggers ?? []).filter((t) => t.aligned && t.triggered === "LONG").length, color: "var(--accent-bull)" },
-    { label: "LEADING", value: s?.leading ?? "—", color: "var(--accent-bull)" },
-    { label: "SUB-SECTORS", value: s?.nIndustries ?? "—", color: "var(--accent-info)" },
+    { label: "CARVER ADD", value: (d?.carver ?? []).filter((t) => t.action === "ADD").length, color: "var(--accent-bull)" },
+    { label: "D-RUNGS", value: s?.carverRungs ?? "—", color: "var(--accent-info)" },
   ];
 
   const path = [sector, industry].filter(Boolean).join(" › ") || "all sectors";
@@ -310,23 +358,23 @@ export default function RotatePage() {
     <div className="px-4 py-6">
       <div className="mb-4">
         <h1 className="text-lg font-terminal font-bold tracking-wider" style={{ color: "var(--accent-info)" }}>
-          MACRO → ROTATE → SUB-SECTOR → TEMA
+          MACRO → SECTOR → SUB-SECTOR → ASSET · CARVER DCA
         </h1>
         <p className="text-xs text-[var(--text-secondary)]">
-          Canary votes set the regime, then sector, then the sleeve inside it (Energy → Solar / Nuclear / Oil &amp; Gas) · paper only
+          Canaries decide WHERE, the nest decides WHICH sleeve, Carver D-rungs size HOW MUCH as DCA on the bigger trend · paper only
         </p>
       </div>
 
       <div className="px-4 py-3 mb-4 rounded border border-[var(--border)] bg-[var(--badge-bg)] text-xs text-[var(--text-secondary)] font-terminal space-y-1">
         <p>
           <span style={{ color: "var(--accent-info)" }}>FLOW:</span>{" "}
-          Click a sector to open its sub-sectors, then a sleeve to review TEMA-MACD names in that book.
-          Energy is Solar / Nuclear / Oil &amp; Gas / Oilfield Services. Technology is Semiconductors / Software /
-          Consumer Electronics. Same nest for Financials, Health Care, and the rest of GICS.
+          Click a sector to open its sub-sectors, then a sleeve. TEMA-MACD is the WHEN. Carver D1–D4 are discrete
+          partials unlocked by the parent-sector EWMAC (|f| 5 / 10 / 15 / 20). Those rungs rotate into the leading
+          sub-sector and its top names (Strategy 19-lite). Isolated from the PERPS Carver book.
         </p>
         <p>
-          ALIGNED = group trend matches the canary regime (cyclicals on RISK-ON, defensives on RISK-OFF). Baskets
-          are equal-weight proxies — no live ETF tape. Not investment advice.
+          ADD = DCA onto the bigger trend. ROTATE = the same rungs belong to a hotter sleeve. ALIGNED = group trend
+          matches the canary regime. Not investment advice.
         </p>
       </div>
 
@@ -479,9 +527,57 @@ export default function RotatePage() {
         </table>
       </div>
 
+      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">
+        4 · CARVER DCA · {path.toUpperCase()} · D-RUNGS ON THE BIGGER TREND
+      </h2>
+      <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
+        <table className="w-full text-sm font-terminal">
+          <thead>
+            <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
+              <th className="text-left px-3 py-2">TICKER</th>
+              <th className="text-left px-3 py-2">SECTOR → SLEEVE</th>
+              <th className="text-left px-3 py-2">ACTION</th>
+              <th className="text-left px-3 py-2">D-RUNGS</th>
+              <th className="text-right px-3 py-2">PARENT f</th>
+              <th className="text-right px-3 py-2">NAME f</th>
+              <th className="text-right px-3 py-2">XS</th>
+              <th className="text-right px-3 py-2">WEIGHT</th>
+              <th className="text-right px-3 py-2">NOTIONAL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={9} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
+            ) : !sleeveCarver.length ? (
+              <tr><td colSpan={9} className="px-3 py-8 text-center text-[var(--text-muted)]">No Carver tape in {path}. Re-run sector_rotation after migration 018.</td></tr>
+            ) : (
+              sleeveCarver.map((r) => (
+                <tr key={r.ticker} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">
+                  <td className="px-3 py-2">
+                    <Link href={`/ticker/${r.ticker}`} className="font-bold hover:text-[var(--accent-info)]">{r.ticker}</Link>
+                    {r.aligned && <span className="ml-2 text-[10px] font-bold" style={{ color: "var(--accent-bull)" }}>ALIGNED</span>}
+                  </td>
+                  <td className="px-3 py-2 text-xs">
+                    {r.sector} → {r.industry}
+                    <span className="text-[var(--text-muted)]"> · sleeve #{r.sleeveRank} · xs #{r.xsRank}</span>
+                  </td>
+                  <td className="px-3 py-2 font-bold" style={{ color: actionColor(r.action) }}>{r.action} {r.side !== "FLAT" ? r.side : ""}</td>
+                  <td className="px-3 py-2"><Rungs n={r.rungs} /> <span className="text-[10px] text-[var(--text-muted)]">{r.rungs}/{r.unlocked}</span></td>
+                  <td className="px-3 py-2 text-right" style={{ color: (r.parentForecast ?? 0) >= 0 ? "var(--accent-bull)" : "var(--accent-bear)" }}>{num(r.parentForecast, 1)}</td>
+                  <td className="px-3 py-2 text-right" style={{ color: (r.forecast ?? 0) >= 0 ? "var(--accent-bull)" : "var(--accent-bear)" }}>{num(r.forecast, 1)}</td>
+                  <td className="px-3 py-2 text-right">{pct(r.xsScore, 1)}</td>
+                  <td className="px-3 py-2 text-right">{pct(r.weight, 1)}</td>
+                  <td className="px-3 py-2 text-right">{usd(r.notional)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
       <p className="text-[10px] text-[var(--text-muted)] font-terminal mt-3">
-        Current = 20d up-name share · Momentum = 60d · Value = value-score ≥ 50 · Low-vol = 20d σ below universe median ·
-        β vs equal-weight universe, 60d. Demo tape is synthetic. Not investment advice.
+        Current = 20d up-name share · Momentum = 60d · Carver D-rungs = parent EWMAC 5/10/15/20 ·
+        XS = 60d return minus sleeve mean. Demo tape is synthetic. Isolated from PERPS. Not investment advice.
       </p>
     </div>
   );
