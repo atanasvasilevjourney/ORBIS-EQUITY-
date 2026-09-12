@@ -84,9 +84,20 @@ export function CommandPalette() {
       group: "Recent",
     }));
 
-    // Direct ticker jump when query looks like a symbol
+    if (!q) return [...STATIC_ITEMS, ...tickerItems];
+
+    // Prefer module matches (e.g. "SCR" → Swing Screener) over raw ticker jumps
+    const moduleHits = STATIC_ITEMS.filter(
+      (i) =>
+        i.label.toUpperCase().includes(q) ||
+        i.hint.includes(q) ||
+        i.href.toUpperCase().includes(q)
+    );
+    const recentHits = tickerItems.filter((i) => i.label.includes(q));
+    const looksLikeTicker = /^[A-Z0-9.\-]{1,12}$/.test(q);
+    const exactModuleHint = STATIC_ITEMS.some((i) => i.hint === q);
     const direct: PaletteItem[] =
-      q && /^[A-Z0-9.\-]{1,12}$/.test(q)
+      looksLikeTicker && !exactModuleHint
         ? [
             {
               id: `go-${q}`,
@@ -96,16 +107,26 @@ export function CommandPalette() {
               group: "Ticker",
             },
           ]
-        : [];
+        : looksLikeTicker && exactModuleHint
+          ? [
+              {
+                id: `go-${q}`,
+                label: `Open ${q}`,
+                hint: "GO",
+                href: `/ticker/${q}`,
+                group: "Ticker",
+              },
+            ]
+          : [];
 
-    const all = [...direct, ...STATIC_ITEMS, ...tickerItems];
-    if (!q) return all;
-    return all.filter(
-      (i) =>
-        i.label.toUpperCase().includes(q) ||
-        i.hint.includes(q) ||
-        i.href.toUpperCase().includes(q)
-    );
+    // Module hits first, then ticker open (if any), then recent
+    const merged = [...moduleHits, ...direct, ...recentHits];
+    const seen = new Set<string>();
+    return merged.filter((i) => {
+      if (seen.has(i.id)) return false;
+      seen.add(i.id);
+      return true;
+    });
   }, [query, recents]);
 
   const go = useCallback(
