@@ -1,0 +1,836 @@
+[
+  {
+    "ticker": "SPY",
+    "n_bars": 2173,
+    "train_bars": 1303,
+    "test_bars": 870,
+    "train_start": "2018-01-02",
+    "train_end": "2023-03-07",
+    "test_start": "2023-03-08",
+    "test_end": "2026-08-25",
+    "production_defaults": {
+      "n_short": 10,
+      "fast_short": 2,
+      "slow_short": 30,
+      "n_long": 30,
+      "fast_long": 2,
+      "slow_long": 30
+    },
+    "stable_params": {
+      "n_short": 15,
+      "fast_short": 3,
+      "slow_short": 30,
+      "n_long": 60,
+      "fast_long": 2,
+      "slow_long": 30
+    },
+    "n_grid": 64,
+    "n_qualified": 2,
+    "neighbor_oos_std": 0.2282405489334235,
+    "metrics": {
+      "buyhold_is": {
+        "sharpe": 0.5406669855050062,
+        "cagr": 0.09699871959668704,
+        "volatility": 0.21373707037805023,
+        "max_drawdown": -0.33717259405893585,
+        "win_rate": 0.5434949961508853,
+        "trades": 0,
+        "trades_per_year": 0.0,
+        "total_return": 0.6139540706885096,
+        "bars": 1303
+      },
+      "buyhold_oos": {
+        "sharpe": 1.4236095999997789,
+        "cagr": 0.22375151545024874,
+        "volatility": 0.14972743710180778,
+        "max_drawdown": -0.18755234489427253,
+        "win_rate": 0.5679723502304147,
+        "trades": 0,
+        "trades_per_year": 0.0,
+        "total_return": 1.007938840176318,
+        "bars": 870
+      },
+      "production_cross_is": {
+        "sharpe": 0.3031024366424256,
+        "cagr": 0.029372145539705796,
+        "volatility": 0.11892399852587486,
+        "max_drawdown": -0.2223272046900333,
+        "win_rate": 0.5436893203883495,
+        "trades": 38,
+        "trades_per_year": 7.349194167306216,
+        "total_return": 0.16146828004637626,
+        "bars": 1303
+      },
+      "production_cross_oos": {
+        "sharpe": 1.1646142553793994,
+        "cagr": 0.11312172302156398,
+        "volatility": 0.09600056876497892,
+        "max_drawdown": -0.10100066779636752,
+        "win_rate": 0.5651438240270727,
+        "trades": 27,
+        "trades_per_year": 7.820689655172413,
+        "total_return": 0.4477147088404778,
+        "bars": 870
+      },
+      "production_regime_is": {
+        "sharpe": 0.5632716161078792,
+        "cagr": 0.05857497750266649,
+        "volatility": 0.11231365698282907,
+        "max_drawdown": -0.19483179586089583,
+        "win_rate": 0.5502392344497608,
+        "trades": 99,
+        "trades_per_year": 19.146584804297774,
+        "total_return": 0.3422286114457107,
+        "bars": 1303
+      },
+      "production_regime_oos": {
+        "sharpe": 1.5076545210880923,
+        "cagr": 0.14481911230469469,
+        "volatility": 0.09257408341662651,
+        "max_drawdown": -0.07509720201400993,
+        "win_rate": 0.5691056910569106,
+        "trades": 75,
+        "trades_per_year": 21.72413793103448,
+        "total_return": 0.5950784781685834,
+        "bars": 870
+      },
+      "stable_cross_is": {
+        "sharpe": 1.0433606477285724,
+        "cagr": 0.10928477915262458,
+        "volatility": 0.10470900871393365,
+        "max_drawdown": -0.14136981423137474,
+        "win_rate": 0.5767575322812052,
+        "trades": 17,
+        "trades_per_year": 3.2877973906369915,
+        "total_return": 0.7096262899846746,
+        "bars": 1303
+      },
+      "stable_cross_oos": {
+        "sharpe": 0.6036125231166743,
+        "cagr": 0.04830942643227654,
+        "volatility": 0.08402952752174302,
+        "max_drawdown": -0.11050932592294571,
+        "win_rate": 0.5623471882640587,
+        "trades": 17,
+        "trades_per_year": 4.924137931034482,
+        "total_return": 0.17689448701449595,
+        "bars": 870
+      },
+      "stable_regime_is": {
+        "sharpe": 0.49128248218415793,
+        "cagr": 0.052302274974379115,
+        "volatility": 0.11803870146219149,
+        "max_drawdown": -0.17093561089950327,
+        "win_rate": 0.5515643105446119,
+        "trades": 75,
+        "trades_per_year": 14.504988488104374,
+        "total_return": 0.3016088431889077,
+        "bars": 1303
+      },
+      "stable_regime_oos": {
+        "sharpe": 1.4037816651595,
+        "cagr": 0.13950181770099146,
+        "volatility": 0.09636199658220596,
+        "max_drawdown": -0.07710985848799301,
+        "win_rate": 0.5682539682539682,
+        "trades": 45,
+        "trades_per_year": 13.034482758620689,
+        "total_return": 0.5696465241671271,
+        "bars": 870
+      }
+    }
+  },
+  {
+    "ticker": "QQQ",
+    "n_bars": 2173,
+    "train_bars": 1303,
+    "test_bars": 870,
+    "train_start": "2018-01-02",
+    "train_end": "2023-03-07",
+    "test_start": "2023-03-08",
+    "test_end": "2026-08-25",
+    "production_defaults": {
+      "n_short": 10,
+      "fast_short": 2,
+      "slow_short": 30,
+      "n_long": 30,
+      "fast_long": 2,
+      "slow_long": 30
+    },
+    "stable_params": null,
+    "n_grid": 55,
+    "n_qualified": 0,
+    "neighbor_oos_std": null,
+    "metrics": {
+      "buyhold_is": {
+        "sharpe": 0.6207927663202799,
+        "cagr": 0.1362060372826619,
+        "volatility": 0.2607333411095405,
+        "max_drawdown": -0.35118722271351754,
+        "win_rate": 0.5564950038431975,
+        "trades": 0,
+        "trades_per_year": 0.0,
+        "total_return": 0.9353003695692392,
+        "bars": 1303
+      },
+      "buyhold_oos": {
+        "sharpe": 1.386355926000333,
+        "cagr": 0.29407741175402746,
+        "volatility": 0.20048231526420485,
+        "max_drawdown": -0.22768308447040164,
+        "win_rate": 0.567318757192175,
+        "trades": 0,
+        "trades_per_year": 0.0,
+        "total_return": 1.4351709674245243,
+        "bars": 870
+      },
+      "production_cross_is": {
+        "sharpe": 0.3141448297471569,
+        "cagr": 0.03561408029768032,
+        "volatility": 0.14505611037106078,
+        "max_drawdown": -0.23206968148417617,
+        "win_rate": 0.5698778833107191,
+        "trades": 43,
+        "trades_per_year": 8.316193399846508,
+        "total_return": 0.19834821396401803,
+        "bars": 1303
+      },
+      "production_cross_oos": {
+        "sharpe": 0.8990881666838013,
+        "cagr": 0.12456970601871142,
+        "volatility": 0.1418121935132254,
+        "max_drawdown": -0.13503021241716495,
+        "win_rate": 0.5586206896551724,
+        "trades": 28,
+        "trades_per_year": 8.110344827586207,
+        "total_return": 0.4997691216091511,
+        "bars": 870
+      },
+      "production_regime_is": {
+        "sharpe": 0.5186401831574178,
+        "cagr": 0.0654631642714727,
+        "volatility": 0.1417174779804743,
+        "max_drawdown": -0.2383131266555698,
+        "win_rate": 0.5671834625322998,
+        "trades": 109,
+        "trades_per_year": 21.080583269378355,
+        "total_return": 0.38800559829460757,
+        "bars": 1303
+      },
+      "production_regime_oos": {
+        "sharpe": 0.95828286437987,
+        "cagr": 0.12172745620243886,
+        "volatility": 0.12854065422894853,
+        "max_drawdown": -0.1459675331496908,
+        "win_rate": 0.5611015490533563,
+        "trades": 82,
+        "trades_per_year": 23.751724137931035,
+        "total_return": 0.4867232640726704,
+        "bars": 870
+      }
+    }
+  },
+  {
+    "ticker": "IWM",
+    "n_bars": 2173,
+    "train_bars": 1303,
+    "test_bars": 870,
+    "train_start": "2018-01-02",
+    "train_end": "2023-03-07",
+    "test_start": "2023-03-08",
+    "test_end": "2026-08-25",
+    "production_defaults": {
+      "n_short": 10,
+      "fast_short": 2,
+      "slow_short": 30,
+      "n_long": 30,
+      "fast_long": 2,
+      "slow_long": 30
+    },
+    "stable_params": null,
+    "n_grid": 64,
+    "n_qualified": 0,
+    "neighbor_oos_std": null,
+    "metrics": {
+      "buyhold_is": {
+        "sharpe": 0.32072837501113594,
+        "cagr": 0.0506340307933435,
+        "volatility": 0.26186467479371883,
+        "max_drawdown": -0.41133299536043455,
+        "win_rate": 0.5342571208622017,
+        "trades": 0,
+        "trades_per_year": 0.0,
+        "total_return": 0.2909745710867655,
+        "bars": 1303
+      },
+      "buyhold_oos": {
+        "sharpe": 0.8165553763011976,
+        "cagr": 0.16055915011056476,
+        "volatility": 0.2091290144646397,
+        "max_drawdown": -0.2750308471921833,
+        "win_rate": 0.5281933256616801,
+        "trades": 0,
+        "trades_per_year": 0.0,
+        "total_return": 0.6720762787880381,
+        "bars": 870
+      },
+      "production_cross_is": {
+        "sharpe": 0.4142694770892578,
+        "cagr": 0.054966166888901435,
+        "volatility": 0.16014188368588442,
+        "max_drawdown": -0.28257154415540775,
+        "win_rate": 0.5383561643835616,
+        "trades": 41,
+        "trades_per_year": 7.929393706830391,
+        "total_return": 0.31873631093702826,
+        "bars": 1303
+      },
+      "production_cross_oos": {
+        "sharpe": 0.6246728924586796,
+        "cagr": 0.0870377132531499,
+        "volatility": 0.15210908787529714,
+        "max_drawdown": -0.16913374850370388,
+        "win_rate": 0.5295169946332737,
+        "trades": 21,
+        "trades_per_year": 6.0827586206896544,
+        "total_return": 0.3339212977482291,
+        "bars": 870
+      },
+      "production_regime_is": {
+        "sharpe": 0.15522577148776096,
+        "cagr": 0.012090460915377133,
+        "volatility": 0.1595789467175918,
+        "max_drawdown": -0.3772083319295393,
+        "win_rate": 0.5272969374167776,
+        "trades": 141,
+        "trades_per_year": 27.269378357636224,
+        "total_return": 0.06411179772837627,
+        "bars": 1303
+      },
+      "production_regime_oos": {
+        "sharpe": 0.6157458704044951,
+        "cagr": 0.08638264515142557,
+        "volatility": 0.15373404688853404,
+        "max_drawdown": -0.125379953332162,
+        "win_rate": 0.5236486486486487,
+        "trades": 69,
+        "trades_per_year": 19.986206896551725,
+        "total_return": 0.33114817033803967,
+        "bars": 870
+      }
+    }
+  },
+  {
+    "ticker": "AAPL",
+    "n_bars": 2173,
+    "train_bars": 1303,
+    "test_bars": 870,
+    "train_start": "2018-01-02",
+    "train_end": "2023-03-07",
+    "test_start": "2023-03-08",
+    "test_end": "2026-08-25",
+    "production_defaults": {
+      "n_short": 10,
+      "fast_short": 2,
+      "slow_short": 30,
+      "n_long": 30,
+      "fast_long": 2,
+      "slow_long": 30
+    },
+    "stable_params": {
+      "n_short": 15,
+      "fast_short": 2,
+      "slow_short": 30,
+      "n_long": 40,
+      "fast_long": 2,
+      "slow_long": 30
+    },
+    "n_grid": 64,
+    "n_qualified": 20,
+    "neighbor_oos_std": 0.1066537476508244,
+    "metrics": {
+      "buyhold_is": {
+        "sharpe": 0.9290226339863418,
+        "cagr": 0.2884405129574419,
+        "volatility": 0.33246543665777456,
+        "max_drawdown": -0.385159454640692,
+        "win_rate": 0.5315384615384615,
+        "trades": 0,
+        "trades_per_year": 0.0,
+        "total_return": 2.7076837683614805,
+        "bars": 1303
+      },
+      "buyhold_oos": {
+        "sharpe": 0.9369312741890401,
+        "cagr": 0.23290216399903008,
+        "volatility": 0.2592292692870237,
+        "max_drawdown": -0.33360511752564725,
+        "win_rate": 0.5420991926182238,
+        "trades": 0,
+        "trades_per_year": 0.0,
+        "total_return": 1.0602514001815182,
+        "bars": 870
+      },
+      "production_cross_is": {
+        "sharpe": 1.0542308307342185,
+        "cagr": 0.2116300091109724,
+        "volatility": 0.20138424078384992,
+        "max_drawdown": -0.21802331860161972,
+        "win_rate": 0.541782729805014,
+        "trades": 41,
+        "trades_per_year": 7.929393706830391,
+        "total_return": 1.6982112143722068,
+        "bars": 1303
+      },
+      "production_cross_oos": {
+        "sharpe": 0.6719425752148541,
+        "cagr": 0.0970209621364102,
+        "volatility": 0.15594012325217263,
+        "max_drawdown": -0.2305162456165052,
+        "win_rate": 0.5509259259259259,
+        "trades": 27,
+        "trades_per_year": 7.820689655172413,
+        "total_return": 0.37669344766683044,
+        "bars": 870
+      },
+      "production_regime_is": {
+        "sharpe": 1.1058191185127604,
+        "cagr": 0.21469195265771512,
+        "volatility": 0.1926943444154267,
+        "max_drawdown": -0.20838173172693752,
+        "win_rate": 0.5369127516778524,
+        "trades": 105,
+        "trades_per_year": 20.306983883346124,
+        "total_return": 1.7336546431059143,
+        "bars": 1303
+      },
+      "production_regime_oos": {
+        "sharpe": 1.0164577210349561,
+        "cagr": 0.16467291254910976,
+        "volatility": 0.16307371734339043,
+        "max_drawdown": -0.13410992545030997,
+        "win_rate": 0.5466101694915254,
+        "trades": 66,
+        "trades_per_year": 19.117241379310343,
+        "total_return": 0.6926273034540258,
+        "bars": 870
+      },
+      "stable_cross_is": {
+        "sharpe": 1.1101256094696876,
+        "cagr": 0.214149156055915,
+        "volatility": 0.19133950486094592,
+        "max_drawdown": -0.26705226735846366,
+        "win_rate": 0.5446428571428571,
+        "trades": 29,
+        "trades_per_year": 5.608595548733692,
+        "total_return": 1.7273442880516066,
+        "bars": 1303
+      },
+      "stable_cross_oos": {
+        "sharpe": 0.13608739799932193,
+        "cagr": 0.009037224346975847,
+        "volatility": 0.1565008552936302,
+        "max_drawdown": -0.20750393300634018,
+        "win_rate": 0.5356265356265356,
+        "trades": 27,
+        "trades_per_year": 7.820689655172413,
+        "total_return": 0.031547193133006024,
+        "bars": 870
+      },
+      "stable_regime_is": {
+        "sharpe": 1.1719762244338237,
+        "cagr": 0.2267875891927944,
+        "volatility": 0.18981245479003636,
+        "max_drawdown": -0.20462225908117482,
+        "win_rate": 0.5397260273972603,
+        "trades": 101,
+        "trades_per_year": 19.53338449731389,
+        "total_return": 1.8773588212596737,
+        "bars": 1303
+      },
+      "stable_regime_oos": {
+        "sharpe": 0.8080840962145318,
+        "cagr": 0.11977286204272675,
+        "volatility": 0.15485541228897667,
+        "max_drawdown": -0.15475063241794929,
+        "win_rate": 0.5432900432900433,
+        "trades": 65,
+        "trades_per_year": 18.82758620689655,
+        "total_return": 0.4777986393076292,
+        "bars": 870
+      }
+    }
+  },
+  {
+    "ticker": "MSFT",
+    "n_bars": 2173,
+    "train_bars": 1303,
+    "test_bars": 870,
+    "train_start": "2018-01-02",
+    "train_end": "2023-03-07",
+    "test_start": "2023-03-08",
+    "test_end": "2026-08-25",
+    "production_defaults": {
+      "n_short": 10,
+      "fast_short": 2,
+      "slow_short": 30,
+      "n_long": 30,
+      "fast_long": 2,
+      "slow_long": 30
+    },
+    "stable_params": {
+      "n_short": 12,
+      "fast_short": 3,
+      "slow_short": 30,
+      "n_long": 60,
+      "fast_long": 2,
+      "slow_long": 30
+    },
+    "n_grid": 47,
+    "n_qualified": 4,
+    "neighbor_oos_std": 0.14069856386488713,
+    "metrics": {
+      "buyhold_is": {
+        "sharpe": 0.8704601943393688,
+        "cagr": 0.24828941771441415,
+        "volatility": 0.310209176472359,
+        "max_drawdown": -0.3714848461357292,
+        "win_rate": 0.5397070161912105,
+        "trades": 0,
+        "trades_per_year": 0.0,
+        "total_return": 2.147829461851687,
+        "bars": 1303
+      },
+      "buyhold_oos": {
+        "sharpe": 0.8943179195916333,
+        "cagr": 0.2209466880785642,
+        "volatility": 0.2610226907744636,
+        "max_drawdown": -0.34498397568158845,
+        "win_rate": 0.5350978135788262,
+        "trades": 0,
+        "trades_per_year": 0.0,
+        "total_return": 0.992094973569351,
+        "bars": 870
+      },
+      "production_cross_is": {
+        "sharpe": 0.6156595821830964,
+        "cagr": 0.10557926072257784,
+        "volatility": 0.19361542642401874,
+        "max_drawdown": -0.3206055004956381,
+        "win_rate": 0.5472813238770685,
+        "trades": 31,
+        "trades_per_year": 5.995395241749808,
+        "total_return": 0.680302109887247,
+        "bars": 1303
+      },
+      "production_cross_oos": {
+        "sharpe": 0.18522607703415978,
+        "cagr": 0.01676618486086512,
+        "volatility": 0.15417815743951996,
+        "max_drawdown": -0.21843722962004752,
+        "win_rate": 0.5225,
+        "trades": 27,
+        "trades_per_year": 7.820689655172413,
+        "total_return": 0.059082929724439515,
+        "bars": 870
+      },
+      "production_regime_is": {
+        "sharpe": 0.21256705071202825,
+        "cagr": 0.022536554504825723,
+        "volatility": 0.1911765435729884,
+        "max_drawdown": -0.28713839006348385,
+        "win_rate": 0.5333333333333333,
+        "trades": 127,
+        "trades_per_year": 24.561780506523405,
+        "total_return": 0.12213668589285609,
+        "bars": 1303
+      },
+      "production_regime_oos": {
+        "sharpe": 0.49402281802121323,
+        "cagr": 0.07402443297394523,
+        "volatility": 0.17616844350867564,
+        "max_drawdown": -0.21034429924777698,
+        "win_rate": 0.5426695842450766,
+        "trades": 63,
+        "trades_per_year": 18.248275862068965,
+        "total_return": 0.27959548643553855,
+        "bars": 870
+      },
+      "stable_cross_is": {
+        "sharpe": 1.0195039800427117,
+        "cagr": 0.1671518882397407,
+        "volatility": 0.1650583249274269,
+        "max_drawdown": -0.2056767676536464,
+        "win_rate": 0.559322033898305,
+        "trades": 19,
+        "trades_per_year": 3.674597083653108,
+        "total_return": 1.2237766182030159,
+        "bars": 1303
+      },
+      "stable_cross_oos": {
+        "sharpe": -0.11526064998209172,
+        "cagr": -0.02536504322584754,
+        "volatility": 0.13891238892364502,
+        "max_drawdown": -0.31934904758583793,
+        "win_rate": 0.5076452599388379,
+        "trades": 17,
+        "trades_per_year": 4.924137931034482,
+        "total_return": -0.08487951330366705,
+        "bars": 870
+      },
+      "stable_regime_is": {
+        "sharpe": 0.4301044775345477,
+        "cagr": 0.06337631831176571,
+        "volatility": 0.18115662239444272,
+        "max_drawdown": -0.2543274284164613,
+        "win_rate": 0.5330132052821128,
+        "trades": 101,
+        "trades_per_year": 19.53338449731389,
+        "total_return": 0.3740060739198938,
+        "bars": 1303
+      },
+      "stable_regime_oos": {
+        "sharpe": 0.5261742702444204,
+        "cagr": 0.07467807998880915,
+        "volatility": 0.16172806937812892,
+        "max_drawdown": -0.21158964854097218,
+        "win_rate": 0.5295566502463054,
+        "trades": 59,
+        "trades_per_year": 17.089655172413792,
+        "total_return": 0.2822860583289186,
+        "bars": 870
+      }
+    }
+  },
+  {
+    "ticker": "XOM",
+    "n_bars": 2173,
+    "train_bars": 1303,
+    "test_bars": 870,
+    "train_start": "2018-01-02",
+    "train_end": "2023-03-07",
+    "test_start": "2023-03-08",
+    "test_end": "2026-08-25",
+    "production_defaults": {
+      "n_short": 10,
+      "fast_short": 2,
+      "slow_short": 30,
+      "n_long": 30,
+      "fast_long": 2,
+      "slow_long": 30
+    },
+    "stable_params": {
+      "n_short": 8,
+      "fast_short": 3,
+      "slow_short": 30,
+      "n_long": 60,
+      "fast_long": 2,
+      "slow_long": 30
+    },
+    "n_grid": 47,
+    "n_qualified": 4,
+    "neighbor_oos_std": 0.11431261635994337,
+    "metrics": {
+      "buyhold_is": {
+        "sharpe": 0.4803365876762931,
+        "cagr": 0.11061543448624667,
+        "volatility": 0.33615552159905177,
+        "max_drawdown": -0.6100657500074469,
+        "win_rate": 0.5076923076923077,
+        "trades": 0,
+        "trades_per_year": 0.0,
+        "total_return": 0.7202567970159248,
+        "bars": 1303
+      },
+      "buyhold_oos": {
+        "sharpe": 0.7234057889178388,
+        "cagr": 0.15390757911614683,
+        "volatility": 0.23678792986708336,
+        "max_drawdown": -0.20112264413803937,
+        "win_rate": 0.5311778290993071,
+        "trades": 0,
+        "trades_per_year": 0.0,
+        "total_return": 0.6392231003070812,
+        "bars": 870
+      },
+      "production_cross_is": {
+        "sharpe": 0.591294042133494,
+        "cagr": 0.12149337256561465,
+        "volatility": 0.2443847936323959,
+        "max_drawdown": -0.29494581462200287,
+        "win_rate": 0.5157068062827225,
+        "trades": 30,
+        "trades_per_year": 5.801995395241749,
+        "total_return": 0.8091751560049139,
+        "bars": 1303
+      },
+      "production_cross_oos": {
+        "sharpe": 0.13970039797494332,
+        "cagr": 0.009553594251168196,
+        "volatility": 0.15884124780122572,
+        "max_drawdown": -0.3020816495219223,
+        "win_rate": 0.526595744680851,
+        "trades": 21,
+        "trades_per_year": 6.0827586206896544,
+        "total_return": 0.03337081187983926,
+        "bars": 870
+      },
+      "production_regime_is": {
+        "sharpe": 0.7010904906592301,
+        "cagr": 0.14920967027184906,
+        "volatility": 0.23910157121864195,
+        "max_drawdown": -0.2873489879922463,
+        "win_rate": 0.5286713286713287,
+        "trades": 105,
+        "trades_per_year": 20.306983883346124,
+        "total_return": 1.052591773344028,
+        "bars": 1303
+      },
+      "production_regime_oos": {
+        "sharpe": 0.27634633505493866,
+        "cagr": 0.0325342253738512,
+        "volatility": 0.16599207027139815,
+        "max_drawdown": -0.31312759504975074,
+        "win_rate": 0.5317647058823529,
+        "trades": 83,
+        "trades_per_year": 24.041379310344826,
+        "total_return": 0.11687219576635433,
+        "bars": 870
+      },
+      "stable_cross_is": {
+        "sharpe": 1.0689610978859507,
+        "cagr": 0.2878666800776022,
+        "volatility": 0.2709305553230288,
+        "max_drawdown": -0.2721397056314262,
+        "win_rate": 0.5403128760529483,
+        "trades": 13,
+        "trades_per_year": 2.5141980046047583,
+        "total_return": 2.6991534689626238,
+        "bars": 1303
+      },
+      "stable_cross_oos": {
+        "sharpe": 0.22522615657608785,
+        "cagr": 0.023997914242896767,
+        "volatility": 0.1690335535775677,
+        "max_drawdown": -0.3225557402328071,
+        "win_rate": 0.5266666666666666,
+        "trades": 21,
+        "trades_per_year": 6.0827586206896544,
+        "total_return": 0.08531628636687927,
+        "bars": 870
+      },
+      "stable_regime_is": {
+        "sharpe": 0.5866365030356153,
+        "cagr": 0.12015678184241141,
+        "volatility": 0.2444152367686347,
+        "max_drawdown": -0.33605367229314687,
+        "win_rate": 0.5241199478487614,
+        "trades": 87,
+        "trades_per_year": 16.825786646201074,
+        "total_return": 0.7980540776674807,
+        "bars": 1303
+      },
+      "stable_regime_oos": {
+        "sharpe": 0.08558042542385857,
+        "cagr": -6.206056766933088e-06,
+        "volatility": 0.1702301823819458,
+        "max_drawdown": -0.3791228856778722,
+        "win_rate": 0.5241228070175439,
+        "trades": 75,
+        "trades_per_year": 21.72413793103448,
+        "total_return": -2.1425509126982156e-05,
+        "bars": 870
+      }
+    }
+  },
+  {
+    "ticker": "JPM",
+    "n_bars": 2173,
+    "train_bars": 1303,
+    "test_bars": 870,
+    "train_start": "2018-01-02",
+    "train_end": "2023-03-07",
+    "test_start": "2023-03-08",
+    "test_end": "2026-08-25",
+    "production_defaults": {
+      "n_short": 10,
+      "fast_short": 2,
+      "slow_short": 30,
+      "n_long": 30,
+      "fast_long": 2,
+      "slow_long": 30
+    },
+    "stable_params": null,
+    "n_grid": 64,
+    "n_qualified": 0,
+    "neighbor_oos_std": null,
+    "metrics": {
+      "buyhold_is": {
+        "sharpe": 0.4036081915001966,
+        "cagr": 0.08092670686801284,
+        "volatility": 0.31702791144392733,
+        "max_drawdown": -0.4362650683181649,
+        "win_rate": 0.505011565150347,
+        "trades": 0,
+        "trades_per_year": 0.0,
+        "total_return": 0.4953679086714242,
+        "bars": 1303
+      },
+      "buyhold_oos": {
+        "sharpe": 1.4017918300749739,
+        "cagr": 0.3482994378017412,
+        "volatility": 0.2325932769464961,
+        "max_drawdown": -0.24423926616996194,
+        "win_rate": 0.5691244239631337,
+        "trades": 0,
+        "trades_per_year": 0.0,
+        "total_return": 1.8058983551202332,
+        "bars": 870
+      },
+      "production_cross_is": {
+        "sharpe": 0.14335974065975104,
+        "cagr": 0.008915173507747953,
+        "volatility": 0.1998311481674448,
+        "max_drawdown": -0.3337018485437968,
+        "win_rate": 0.49715099715099714,
+        "trades": 45,
+        "trades_per_year": 8.702993092862624,
+        "total_return": 0.04696221118691657,
+        "bars": 1303
+      },
+      "production_cross_oos": {
+        "sharpe": 1.4306205618588617,
+        "cagr": 0.26509002095768963,
+        "volatility": 0.17510606091834355,
+        "max_drawdown": -0.2044688934519847,
+        "win_rate": 0.5863874345549738,
+        "trades": 21,
+        "trades_per_year": 6.0827586206896544,
+        "total_return": 1.2519672993227777,
+        "bars": 870
+      },
+      "production_regime_is": {
+        "sharpe": 0.1752085741105781,
+        "cagr": 0.015584496015063065,
+        "volatility": 0.17907293235008154,
+        "max_drawdown": -0.2728381545065487,
+        "win_rate": 0.49117647058823527,
+        "trades": 117,
+        "trades_per_year": 22.627782041442824,
+        "total_return": 0.08324403485154064,
+        "bars": 1303
+      },
+      "production_regime_oos": {
+        "sharpe": 1.060870157857678,
+        "cagr": 0.17878219463558565,
+        "volatility": 0.1684197180852353,
+        "max_drawdown": -0.193873322927691,
+        "win_rate": 0.5673758865248227,
+        "trades": 75,
+        "trades_per_year": 21.72413793103448,
+        "total_return": 0.7644765339045958,
+        "bars": 870
+      }
+    }
+  }
+]

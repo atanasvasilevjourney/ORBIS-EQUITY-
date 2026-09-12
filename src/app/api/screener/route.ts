@@ -25,18 +25,49 @@ export async function GET(req: NextRequest) {
 
     const sb = createServerClient();
 
-    type UniverseRow = { symbol: string; company_name: string | null; sector: string | null; industry: string | null; country: string | null; exchange: string | null; tier: string | null };
-    type FundRow = { symbol: string; price: number | null; market_cap: number | null; pe_ratio: number | null; dividend_yield: number | null };
-    type RadarRow = { symbol: string; state: number; quality_rank: number; z_mom: number; f_ewmac: number; z_52: number; breakout_active: boolean; volume_confirmed: boolean; convergence_count: number; state_changed_at: string | null; computed_at: string | null };
+    type UniverseRow = {
+      symbol: string;
+      company_name: string | null;
+      sector: string | null;
+      industry: string | null;
+      country: string | null;
+      exchange: string | null;
+      tier: string | null;
+    };
+    type FundRow = {
+      symbol: string;
+      price: number | null;
+      market_cap: number | null;
+      pe_ratio: number | null;
+      dividend_yield: number | null;
+    };
+    type RadarRow = {
+      symbol: string;
+      state: number;
+      quality_rank: number;
+      z_mom: number;
+      f_ewmac: number;
+      z_52: number;
+      breakout_active: boolean;
+      volume_confirmed: boolean;
+      kama_regime: number | null;
+      adx: number | null;
+      entry_timing: string | null;
+      convergence_count: number;
+      state_changed_at: string | null;
+      computed_at: string | null;
+    };
 
     const [universe, fundamentals] = await Promise.all([
-      fetchAll<UniverseRow>(sb, "universe_members", "symbol, company_name, sector, industry, country, exchange, tier", (q) =>
-        q.eq("is_active", true)
+      fetchAll<UniverseRow>(
+        sb,
+        "universe_members",
+        "symbol, company_name, sector, industry, country, exchange, tier",
+        (q) => q.eq("is_active", true)
       ),
       fetchAll<FundRow>(sb, "fundamentals_snapshot", "symbol, price, market_cap, pe_ratio, dividend_yield"),
     ]);
 
-    // Apply region/sector filters before ranking
     let filteredUniverse = universe;
     if (region && region !== "all") {
       const countries = REGION_COUNTRIES[region];
@@ -50,12 +81,17 @@ export async function GET(req: NextRequest) {
 
     const allowedSymbols = new Set(filteredUniverse.map((u) => u.symbol));
 
-    const allRadar: RadarRow[] = await fetchAll<RadarRow>(sb, "trend_radar", "symbol, state, quality_rank, z_mom, f_ewmac, z_52, breakout_active, volume_confirmed, convergence_count, state_changed_at, computed_at", (q) => {
-      let query = q.gte("quality_rank", minRank).order("quality_rank", { ascending: false });
-      if (direction === "bull") query = query.eq("state", 1);
-      else if (direction === "bear") query = query.eq("state", -1);
-      return query;
-    });
+    const allRadar = await fetchAll<RadarRow>(
+      sb,
+      "trend_radar",
+      "symbol, state, quality_rank, z_mom, f_ewmac, z_52, breakout_active, volume_confirmed, kama_regime, adx, entry_timing, convergence_count, state_changed_at, computed_at",
+      (q) => {
+        let query = q.gte("quality_rank", minRank).order("quality_rank", { ascending: false });
+        if (direction === "bull") query = query.eq("state", 1);
+        else if (direction === "bear") query = query.eq("state", -1);
+        return query;
+      }
+    );
 
     const rows = allRadar
       .filter((r) => allowedSymbols.has(r.symbol))
@@ -78,6 +114,9 @@ export async function GET(req: NextRequest) {
           z52: r.z_52,
           breakout: r.breakout_active,
           volumeConfirmed: r.volume_confirmed,
+          kamaRegime: r.kama_regime ?? 0,
+          adx: r.adx ?? null,
+          entryTiming: r.entry_timing ?? null,
           convergence: r.convergence_count,
           stateChangedAt: r.state_changed_at,
           price: f?.price ?? null,

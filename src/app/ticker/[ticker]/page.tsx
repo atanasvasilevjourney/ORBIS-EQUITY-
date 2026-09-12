@@ -294,8 +294,16 @@ export default function TickerPage() {
   const u = data?.universe;
 
   const signals = r
-    ? [r.z_mom > 0, r.f_ewmac > 0, r.z_52 > -0.10, r.breakout_active, r.volume_confirmed]
-    : [false, false, false, false, false];
+    ? [
+        r.z_mom > 0,
+        r.f_ewmac > 0,
+        r.z_52 > -0.10,
+        r.breakout_active,
+        r.volume_confirmed,
+        (r.kama_regime ?? 0) > 0,
+        (r.adx ?? 0) >= 20,
+      ]
+    : [false, false, false, false, false, false, false];
 
   const tabs = [
     { key: "chart", label: "CHART" },
@@ -471,13 +479,28 @@ export default function TickerPage() {
       )}
 
       {tab === "swing" && r && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {[
             { label: "QUALITY RANK", value: r.quality_rank, color: r.quality_rank >= 70 ? "var(--accent-bull)" : r.quality_rank <= 30 ? "var(--accent-bear)" : "" },
             { label: "Z-MOM", value: r.z_mom?.toFixed(2), color: r.z_mom > 0 ? "var(--accent-bull)" : "var(--accent-bear)" },
             { label: "EWMAC", value: r.f_ewmac?.toFixed(2), color: r.f_ewmac > 0 ? "var(--accent-bull)" : "var(--accent-bear)" },
             { label: "52W PROX", value: `${((r.z_52 + 1) * 100).toFixed(1)}%`, color: r.z_52 > -0.05 ? "var(--accent-bull)" : "var(--accent-bear)" },
-            { label: "CONVERGENCE", value: `${r.convergence_count}/5`, color: r.convergence_count >= 4 ? "var(--accent-bull)" : "" },
+            {
+              label: "KAMA REGIME",
+              value: (r.kama_regime ?? 0) > 0 ? "BULL" : (r.kama_regime ?? 0) < 0 ? "BEAR" : "—",
+              color: (r.kama_regime ?? 0) > 0 ? "var(--accent-bull)" : (r.kama_regime ?? 0) < 0 ? "var(--accent-bear)" : "",
+            },
+            {
+              label: "ADX",
+              value: r.adx != null ? Number(r.adx).toFixed(1) : "—",
+              color: (r.adx ?? 0) >= 25 ? "var(--accent-bull)" : (r.adx ?? 0) >= 20 ? "" : "var(--accent-bear)",
+            },
+            {
+              label: "ENTRY TIMING",
+              value: (r.entry_timing ?? "ok").replace("_", " ").toUpperCase(),
+              color: r.entry_timing === "too_late" ? "var(--accent-bear)" : r.entry_timing === "wait_pullback" ? "var(--accent-warning)" : "var(--accent-bull)",
+            },
+            { label: "CONVERGENCE", value: `${r.convergence_count}/7`, color: r.convergence_count >= 4 ? "var(--accent-bull)" : "" },
           ].map((c) => (
             <div key={c.label} className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
               <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">{c.label}</div>
@@ -487,6 +510,11 @@ export default function TickerPage() {
           <div className="col-span-full mt-2 flex gap-2">
             {r.breakout_active && <span className="text-xs px-2 py-1 rounded bg-[var(--badge-bg)] text-[var(--accent-warning)] font-terminal">BREAKOUT</span>}
             {r.volume_confirmed && <span className="text-xs px-2 py-1 rounded bg-[var(--badge-bg)] text-[var(--accent-bull)] font-terminal">VOL CONFIRMED</span>}
+            {(r.kama_regime ?? 0) > 0 && <span className="text-xs px-2 py-1 rounded bg-[var(--badge-bg)] text-[var(--accent-bull)] font-terminal">KAMA BULL</span>}
+            {(r.kama_regime ?? 0) < 0 && <span className="text-xs px-2 py-1 rounded bg-[var(--badge-bg)] text-[var(--accent-bear)] font-terminal">KAMA BEAR</span>}
+            {(r.adx ?? 0) >= 20 && <span className="text-xs px-2 py-1 rounded bg-[var(--badge-bg)] text-[var(--accent-bull)] font-terminal">ADX TREND</span>}
+            {r.entry_timing === "too_late" && <span className="text-xs px-2 py-1 rounded bg-[var(--badge-bg)] text-[var(--accent-bear)] font-terminal">TOO LATE</span>}
+            {r.entry_timing === "wait_pullback" && <span className="text-xs px-2 py-1 rounded bg-[var(--badge-bg)] text-[var(--accent-warning)] font-terminal">WAIT PULLBACK</span>}
             {r.state_changed_at && <span className="text-xs text-[var(--text-muted)] font-terminal">State changed: {r.state_changed_at}</span>}
           </div>
         </div>

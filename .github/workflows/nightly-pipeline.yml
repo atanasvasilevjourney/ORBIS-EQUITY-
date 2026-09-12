@@ -247,6 +247,19 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
+      - name: Email EOD alert digest
+        run: python -m pipeline.notify.alert_digest
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+          ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
+          ALERT_MIN_RANK: ${{ vars.ALERT_MIN_RANK }}
+          ALERT_MIN_CONVERGENCE: ${{ vars.ALERT_MIN_CONVERGENCE }}
+          ALERT_SKIP_WAIT_PULLBACK: ${{ vars.ALERT_SKIP_WAIT_PULLBACK }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+
       - name: Run market aggregates
         run: python -m pipeline.compute.aggregates
         env:
