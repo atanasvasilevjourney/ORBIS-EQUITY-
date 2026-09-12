@@ -224,7 +224,7 @@ export default function Home() {
       href: "/rotate",
       title: "BETA ROTATION",
       badge: "MODULE 12",
-      desc: "Which sectors and industries are trending — breadth, impulse, 60-day beta, 8-week heatmap",
+      desc: "Macro canaries → sector rotation → TEMA-MACD ensemble in aligned sub-sectors",
       stats: d ? [
         { label: "Regime", value: d.rotateRegime ?? "—", color: d.rotateRegime === "RISK-ON" ? "var(--accent-bull)" : d.rotateRegime === "RISK-OFF" ? "var(--accent-bear)" : "var(--accent-warning)" },
         { label: "Leading", value: String(d.rotateLeading), color: "var(--accent-bull)" },
