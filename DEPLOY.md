@@ -90,6 +90,24 @@ Scripts:
 
 ---
 
+## 3b. London Strategic Edge live stream (optional)
+
+Your `lse_live_…` key unlocks **candles + WebSocket ticks** (not the PostgREST screener).
+
+1. Apply migration `021_live_quotes.sql` in the Supabase SQL editor.
+2. Set `LSE_API_KEY` in GitHub Actions secrets **and** Render env group `orbis-equity-pipeline`.
+3. Nightly/daily price ingest will prefer LSE daily candles for US names automatically.
+4. Live ticks need an always-on worker (not Actions):
+
+```bash
+# local
+export LSE_STREAM_SYMBOLS=AAPL,MSFT,NVDA
+bash pipeline/scripts/run_live_stream.sh
+```
+
+On Render: blueprint service `orbis-equity-live-stream` (background worker — requires billing).
+Writes latest ticks to `live_quotes`.
+
 ## 4. (Optional) Fix GitHub Actions too
 
 Repo → Settings → Secrets and variables → Actions — add the same:

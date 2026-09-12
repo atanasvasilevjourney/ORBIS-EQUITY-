@@ -48,6 +48,22 @@ services:
         value: "3.12.0"
       - fromGroup: orbis-equity-pipeline
 
+  # Always-on LSE live tick stream → live_quotes (requires paid background worker)
+  - type: worker
+    name: orbis-equity-live-stream
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r pipeline/requirements.txt
+    startCommand: bash pipeline/scripts/run_live_stream.sh
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: LSE_STREAM_LIMIT
+        value: "50"
+      - key: LSE_STREAM_FLUSH_SEC
+        value: "2"
+      - fromGroup: orbis-equity-pipeline
+
 envVarGroups:
   - name: orbis-equity-pipeline
     envVars:
