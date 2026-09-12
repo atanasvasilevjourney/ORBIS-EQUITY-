@@ -21,7 +21,9 @@ const STATIC_ITEMS: PaletteItem[] = [
 
 function recentTickers(): string[] {
   try {
-    const raw = localStorage.getItem("kovaview-recent-tickers");
+    const raw =
+      localStorage.getItem("orbis-equity-recent-tickers") ||
+      localStorage.getItem("kovaview-recent-tickers");
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.slice(0, 8) : [];
@@ -34,7 +36,11 @@ export function recordRecentTicker(ticker: string) {
   try {
     const t = ticker.toUpperCase();
     const prev = recentTickers().filter((x) => x !== t);
-    localStorage.setItem("kovaview-recent-tickers", JSON.stringify([t, ...prev].slice(0, 8)));
+    localStorage.setItem(
+      "orbis-equity-recent-tickers",
+      JSON.stringify([t, ...prev].slice(0, 8))
+    );
+    localStorage.removeItem("kovaview-recent-tickers");
   } catch {
     /* ignore */
   }
@@ -58,10 +64,10 @@ export function CommandPalette() {
     };
     const onOpen = () => setOpen(true);
     window.addEventListener("keydown", onKey);
-    window.addEventListener("kovaview:open-palette", onOpen);
+    window.addEventListener("orbis:open-palette", onOpen);
     return () => {
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("kovaview:open-palette", onOpen);
+      window.removeEventListener("orbis:open-palette", onOpen);
     };
   }, []);
 

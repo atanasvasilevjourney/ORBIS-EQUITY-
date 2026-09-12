@@ -1,5 +1,5 @@
 -- ============================================================================
--- KovaView Terminal — Schema v1
+-- Orbis Equity Terminal — Schema v1
 -- Equity swing-trading terminal: universe management, EOD prices, fundamentals,
 -- trend radar signals, pharma/biotech pipeline, earnings, news, insider trades,
 -- and daily AI briefs.

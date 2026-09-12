@@ -84,7 +84,7 @@ export default function Home() {
             className="text-2xl md:text-3xl font-terminal font-bold tracking-wider"
             style={{ color: "var(--accent-info)" }}
           >
-            KOVAVIEW
+            ORBIS EQUITY
           </h1>
           <p className="text-xs text-[var(--text-secondary)] mt-1">
             Equity Swing Terminal — Free Data, Honest Signals, Global Coverage

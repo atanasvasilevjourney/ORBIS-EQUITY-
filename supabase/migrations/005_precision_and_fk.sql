@@ -1,5 +1,5 @@
 -- ============================================================================
--- KovaView Terminal — Migration 005: Financial precision + foreign keys
+-- Orbis Equity Terminal — Migration 005: Financial precision + foreign keys
 -- 1. Upgrade REAL → DOUBLE PRECISION for large financial values
 -- 2. Add updated_at auto-update trigger
 -- ============================================================================

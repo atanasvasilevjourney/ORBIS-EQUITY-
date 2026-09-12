@@ -13,13 +13,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>("neon");
 
   useEffect(() => {
-    const stored = localStorage.getItem("kovaview-theme") as Theme | null;
-    if (stored) setTheme(stored);
+    const stored =
+      (localStorage.getItem("orbis-equity-theme") as Theme | null) ||
+      (localStorage.getItem("kovaview-theme") as Theme | null);
+    if (stored) {
+      setTheme(stored);
+      localStorage.setItem("orbis-equity-theme", stored);
+      localStorage.removeItem("kovaview-theme");
+    }
   }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("kovaview-theme", theme);
+    localStorage.setItem("orbis-equity-theme", theme);
   }, [theme]);
 
   const toggle = () => setTheme((t) => (t === "neon" ? "paper" : "neon"));

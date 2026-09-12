@@ -6,7 +6,7 @@ import { Nav } from "@/components/nav/Nav";
 import { CommandPalette } from "@/components/command/CommandPalette";
 
 export const metadata: Metadata = {
-  title: "KovaView Terminal",
+  title: "Orbis Equity Terminal",
   description: "Equity swing terminal — momentum, fundamentals, pharma pipeline, earnings & news",
 };
 
@@ -16,7 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{document.documentElement.setAttribute("data-theme",localStorage.getItem("kovaview-theme")||"neon")}catch(e){}`,
+            __html: `try{var t=localStorage.getItem("orbis-equity-theme")||localStorage.getItem("kovaview-theme")||"neon";document.documentElement.setAttribute("data-theme",t);localStorage.setItem("orbis-equity-theme",t);localStorage.removeItem("kovaview-theme")}catch(e){}`,
           }}
         />
         <link

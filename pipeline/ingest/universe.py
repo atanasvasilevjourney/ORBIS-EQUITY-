@@ -41,7 +41,7 @@ def _scrape_sp_tickers(url: str) -> set[str]:
     tickers: set[str] = set()
     try:
         resp = requests.get(url, timeout=30, headers={
-            "User-Agent": "KovaView-Pipeline/1.0"
+            "User-Agent": "OrbisEquity-Pipeline/1.0"
         })
         resp.raise_for_status()
         from io import StringIO

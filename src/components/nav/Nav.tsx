@@ -36,7 +36,7 @@ export function Nav() {
             className="text-lg font-bold font-terminal tracking-widest"
             style={{ color: "var(--accent-info)" }}
           >
-            KOVAVIEW
+            ORBIS EQUITY
           </Link>
           <div className="hidden md:flex items-center gap-1">
             {NAV_LINKS.map((l) => {
@@ -61,7 +61,7 @@ export function Nav() {
           {/* Command palette affordance */}
           <button
             type="button"
-            onClick={() => window.dispatchEvent(new Event("kovaview:open-palette"))}
+            onClick={() => window.dispatchEvent(new Event("orbis:open-palette"))}
             className="hidden sm:flex items-center gap-2 px-2 py-1 text-[10px] font-terminal rounded border border-[var(--panel-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent-info)] transition-colors"
             title="Open command palette"
           >

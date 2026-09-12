@@ -1,4 +1,4 @@
-# Deploy KovaView (online)
+# Deploy Orbis Equity (online)
 
 Goal: **Next.js app on Vercel**, **Python data pipeline on Render Cron**, **data in Supabase**.
 
@@ -46,7 +46,7 @@ Optional: LSE key → `LSE_API_KEY` (production fundamentals/US prices). Without
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon key |
 | `SUPABASE_URL` | same project URL |
 | `SUPABASE_SERVICE_KEY` | service_role key |
-| `ALLOWED_ORIGIN` | your Vercel domain, e.g. `kovaview.vercel.app` |
+| `ALLOWED_ORIGIN` | your Vercel domain, e.g. `orbis-equity.vercel.app` |
 | `API_SECRET` | random string (enables `x-api-key` on `/api/*`; leave empty only for open demo) |
 
 4. Deploy. Open `https://<project>.vercel.app`.
@@ -60,7 +60,7 @@ Optional: LSE key → `LSE_API_KEY` (production fundamentals/US prices). Without
 
 1. Open https://dashboard.render.com/blueprints → **New Blueprint Instance**.
 2. Connect the same repo. Render reads `render.yaml`.
-3. Create/fill env group **`kovaview-pipeline`**:
+3. Create/fill env group **`orbis-equity-pipeline`**:
 
 | Name | Required |
 |------|----------|
@@ -70,14 +70,14 @@ Optional: LSE key → `LSE_API_KEY` (production fundamentals/US prices). Without
 | `LSE_API_URL` / `LSE_DATA_API_URL` | prefilled |
 
 4. Approve services:
-   - `kovaview-bootstrap` (manual)
-   - `kovaview-weekly` (Mon 19:00 UTC)
-   - `kovaview-daily` (Tue–Fri 19:30 UTC)
+   - `orbis-equity-bootstrap` (manual)
+   - `orbis-equity-weekly` (Mon 19:00 UTC)
+   - `orbis-equity-daily` (Tue–Fri 19:30 UTC)
 
-5. **Critical first run:** Render → `kovaview-bootstrap` → **Manual Trigger**.  
+5. **Critical first run:** Render → `orbis-equity-bootstrap` → **Manual Trigger**.  
    Wait until it finishes (S&P history + radar). Without this, daily jobs lack ≥148 price days and radar stays empty.
 
-6. Optionally trigger `kovaview-daily` once to verify.
+6. Optionally trigger `orbis-equity-daily` once to verify.
 
 Scripts:
 

@@ -1,5 +1,5 @@
 # =============================================================================
-# KovaView Nightly Pipeline
+# Orbis Equity Nightly Pipeline
 # =============================================================================
 # Schedule : Mon 19:30 UTC (weekly+daily), Tue-Fri 19:30 UTC (daily only)
 # Budget   : ~1,040 min/month of 2,000 free GitHub Actions minutes
@@ -15,7 +15,7 @@
 #   Total estimate                                    ~1,040 min/month
 # =============================================================================
 
-name: KovaView Nightly Pipeline
+name: Orbis Equity Nightly Pipeline
 
 on:
   schedule:

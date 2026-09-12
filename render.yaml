@@ -1,15 +1,15 @@
-# KovaView on Render — Blueprint
+# Orbis Equity on Render — Blueprint
 # https://dashboard.render.com/blueprints
 #
 # After first deploy:
 #   1. Set env group secrets (SUPABASE_URL, SUPABASE_SERVICE_KEY, optional LSE_*)
-#   2. Manually trigger "kovaview-bootstrap" once
+#   2. Manually trigger "orbis-equity-bootstrap" once
 #   3. Weekday crons keep prices/signals fresh
 
 services:
   # One-shot / rare seed job — trigger manually from Render dashboard
   - type: cron
-    name: kovaview-bootstrap
+    name: orbis-equity-bootstrap
     runtime: python
     plan: starter
     schedule: "0 0 1 1 *"   # essentially never; use Manual Run
@@ -18,11 +18,11 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.0"
-      - fromGroup: kovaview-pipeline
+      - fromGroup: orbis-equity-pipeline
 
   # Monday heavy jobs (universe + fundamentals + pharma) then daily chain
   - type: cron
-    name: kovaview-weekly
+    name: orbis-equity-weekly
     runtime: python
     plan: starter
     schedule: "0 19 * * 1"  # Mon 19:00 UTC
@@ -31,11 +31,11 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.0"
-      - fromGroup: kovaview-pipeline
+      - fromGroup: orbis-equity-pipeline
 
   # Tue–Fri price + signal refresh
   - type: cron
-    name: kovaview-daily
+    name: orbis-equity-daily
     runtime: python
     plan: starter
     schedule: "30 19 * * 2-5"  # Tue–Fri 19:30 UTC
@@ -44,10 +44,10 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.0"
-      - fromGroup: kovaview-pipeline
+      - fromGroup: orbis-equity-pipeline
 
 envVarGroups:
-  - name: kovaview-pipeline
+  - name: orbis-equity-pipeline
     envVars:
       - key: SUPABASE_URL
         sync: false

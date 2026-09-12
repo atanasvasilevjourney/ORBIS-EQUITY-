@@ -1,5 +1,5 @@
 -- ============================================================================
--- KovaView Terminal — Migration 002: Financial Reports + F-Score
+-- Orbis Equity Terminal — Migration 002: Financial Reports + F-Score
 -- Adds financial_reports table for LSE z_financial_reports data
 -- and f_score column to fundamentals_snapshot
 -- ============================================================================

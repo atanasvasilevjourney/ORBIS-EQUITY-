@@ -1,5 +1,5 @@
 -- ============================================================================
--- KovaView Terminal — Migration 004: Fix pharma_signals unique constraint
+-- Orbis Equity Terminal — Migration 004: Fix pharma_signals unique constraint
 -- Changes UNIQUE(nct_id) to UNIQUE(nct_id, event_type) to allow multiple
 -- signal types per clinical trial without data loss.
 -- ============================================================================

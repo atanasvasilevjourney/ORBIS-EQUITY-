@@ -1,4 +1,4 @@
-"""KovaView pipeline configuration."""
+"""Orbis Equity pipeline configuration."""
 import os
 from dataclasses import dataclass, field
 

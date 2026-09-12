@@ -1,4 +1,4 @@
-"""Bootstrap: populate KovaView database using yfinance (free, no API key).
+"""Bootstrap: populate Orbis Equity database using yfinance (free, no API key).
 
 Scrapes S&P 500 tickers from Wikipedia, fetches prices + fundamentals
 via yfinance, then runs compute pipeline (trend_radar, f_score, aggregates).
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 def _scrape_sp500() -> list[dict]:
     """Scrape S&P 500 constituents from Wikipedia using pandas."""
     url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-    resp = requests.get(url, timeout=30, headers={"User-Agent": "KovaView-Bootstrap/1.0"})
+    resp = requests.get(url, timeout=30, headers={"User-Agent": "OrbisEquity-Bootstrap/1.0"})
     resp.raise_for_status()
     from io import StringIO
     tables = pd.read_html(StringIO(resp.text))

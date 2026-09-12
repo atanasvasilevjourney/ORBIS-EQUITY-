@@ -1,5 +1,5 @@
 -- ============================================================================
--- KovaView Terminal — Migration 003: RLS Policies + Pharma Signal Upsert
+-- Orbis Equity Terminal — Migration 003: RLS Policies + Pharma Signal Upsert
 -- Enables Row-Level Security on all tables with read-only anon access.
 -- Adds unique constraint on pharma_signals.nct_id for atomic upserts.
 -- ============================================================================

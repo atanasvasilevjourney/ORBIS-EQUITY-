@@ -1,4 +1,4 @@
-"""Trend Radar compute engine — core signal layer for KovaView.
+"""Trend Radar compute engine — core signal layer for Orbis Equity.
 
 Reads prices_daily, computes five component signals per ticker, produces
 a composite quality_rank (0-100) and state (GREEN/GREY/RED). Writes to
