@@ -7,7 +7,9 @@ export function createServerClient(): SupabaseClient {
   if (_client) return _client;
 
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_KEY;
+  // Prefer service role; accept common Supabase dashboard alias
+  const key =
+    process.env.SUPABASE_SERVICE_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
     throw new Error(
       "Missing SUPABASE_URL or SUPABASE_SERVICE_KEY environment variables"

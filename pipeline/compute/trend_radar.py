@@ -237,7 +237,7 @@ def main() -> None:
     )
 
     sb_url = os.getenv("SUPABASE_URL", "")
-    sb_key = os.getenv("SUPABASE_SERVICE_KEY", "")
+    sb_key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     if not sb_url or not sb_key:
         logger.error("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
         return

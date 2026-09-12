@@ -13,7 +13,9 @@ class LSEConfig:
 @dataclass
 class SupabaseConfig:
     url: str = os.getenv("SUPABASE_URL", "")
-    service_key: str = os.getenv("SUPABASE_SERVICE_KEY", "")
+    service_key: str = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv(
+        "SUPABASE_SERVICE_ROLE_KEY", ""
+    )
 
 @dataclass
 class UniverseTier:

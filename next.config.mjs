@@ -1,11 +1,11 @@
 /** @type {import('next').NextConfig} */
+const allowed = ["localhost:3000"];
+if (process.env.ALLOWED_ORIGIN) allowed.push(process.env.ALLOWED_ORIGIN);
+
 const nextConfig = {
   experimental: {
     serverActions: {
-      allowedOrigins: [
-        "localhost:3000",
-        ...(process.env.ALLOWED_ORIGIN ? [process.env.ALLOWED_ORIGIN] : []),
-      ],
+      allowedOrigins: allowed,
     },
   },
   async headers() {
@@ -16,7 +16,10 @@ const nextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=31536000; includeSubDomains",
+          },
         ],
       },
     ];

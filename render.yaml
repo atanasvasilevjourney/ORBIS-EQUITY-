@@ -1,0 +1,61 @@
+# KovaView on Render — Blueprint
+# https://dashboard.render.com/blueprints
+#
+# After first deploy:
+#   1. Set env group secrets (SUPABASE_URL, SUPABASE_SERVICE_KEY, optional LSE_*)
+#   2. Manually trigger "kovaview-bootstrap" once
+#   3. Weekday crons keep prices/signals fresh
+
+services:
+  # One-shot / rare seed job — trigger manually from Render dashboard
+  - type: cron
+    name: kovaview-bootstrap
+    runtime: python
+    plan: starter
+    schedule: "0 0 1 1 *"   # essentially never; use Manual Run
+    buildCommand: pip install -r pipeline/requirements.txt
+    startCommand: bash pipeline/scripts/run_bootstrap.sh
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - fromGroup: kovaview-pipeline
+
+  # Monday heavy jobs (universe + fundamentals + pharma) then daily chain
+  - type: cron
+    name: kovaview-weekly
+    runtime: python
+    plan: starter
+    schedule: "0 19 * * 1"  # Mon 19:00 UTC
+    buildCommand: pip install -r pipeline/requirements.txt
+    startCommand: bash pipeline/scripts/run_weekly.sh && bash pipeline/scripts/run_daily.sh
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - fromGroup: kovaview-pipeline
+
+  # Tue–Fri price + signal refresh
+  - type: cron
+    name: kovaview-daily
+    runtime: python
+    plan: starter
+    schedule: "30 19 * * 2-5"  # Tue–Fri 19:30 UTC
+    buildCommand: pip install -r pipeline/requirements.txt
+    startCommand: bash pipeline/scripts/run_daily.sh
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - fromGroup: kovaview-pipeline
+
+envVarGroups:
+  - name: kovaview-pipeline
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: LSE_API_KEY
+        sync: false
+      - key: LSE_API_URL
+        value: https://api.londonstrategicedge.com
+      - key: LSE_DATA_API_URL
+        value: https://data-api.londonstrategicedge.com
