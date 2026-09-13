@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { ScoreboardRow, type ScreenerRow } from "@/components/scoreboard/ScoreboardRow";
 
+type SectorScore = { sector: string; n: number; green: number; red: number; grey: number; net: number };
+
 type Summary = {
   asOfDate: string | null;
   briefText: string | null;
@@ -12,13 +14,18 @@ type Summary = {
   avgRank: number;
   bestSector: string | null;
   worstSector: string | null;
+  bestSectorScore: number | null;
+  worstSectorScore: number | null;
+  sectors?: SectorScore[];
   regionBreadth: Record<string, number>;
+  tape?: { source: string | null; lastClose: string | null; names: number };
 };
 
 type FilterState = {
   direction: "all" | "bull" | "bear";
   region: "all" | "us" | "uk" | "eu";
   minRank: number;
+  sector: string | null;
 };
 
 const DIRECTION_FILTERS = [
@@ -44,15 +51,19 @@ const RANK_FILTERS = [
 export default function ScreenerPage() {
   const [rows, setRows] = useState<ScreenerRow[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [filters, setFilters] = useState<FilterState>({ direction: "all", region: "all", minRank: 0 });
+  const [filters, setFilters] = useState<FilterState>({ direction: "all", region: "all", minRank: 0, sector: null });
   const [loading, setLoading] = useState(true);
+  const [maxRank, setMaxRank] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams();
+    setError(null);
+    const params = new URLSearchParams({ meta: "1" });
     if (filters.direction !== "all") params.set("direction", filters.direction);
     if (filters.region !== "all") params.set("region", filters.region);
     if (filters.minRank > 0) params.set("min_rank", String(filters.minRank));
+    if (filters.sector) params.set("sector", filters.sector);
 
     try {
       const [screenerRes, summaryRes] = await Promise.all([
@@ -62,10 +73,19 @@ export default function ScreenerPage() {
       const screenerData = await screenerRes.json();
       const summaryData = await summaryRes.json();
 
-      if (Array.isArray(screenerData)) setRows(screenerData);
+      const nextRows = Array.isArray(screenerData)
+        ? screenerData
+        : Array.isArray(screenerData?.rows)
+          ? screenerData.rows
+          : [];
+      setRows(nextRows);
+      if (screenerData?.meta?.maxRank != null) setMaxRank(screenerData.meta.maxRank);
+      if (screenerData?.error) setError(String(screenerData.error));
       setSummary(summaryData);
     } catch (e) {
       console.error("Failed to fetch screener data:", e);
+      setError("Screener fetch failed");
+      setRows([]);
     } finally {
       setLoading(false);
     }
@@ -97,16 +117,32 @@ export default function ScreenerPage() {
           </div>
           <div className="text-xs text-[var(--text-secondary)]">{summary?.breadth?.total ?? 0} names</div>
         </div>
-        <div className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
+        <button
+          type="button"
+          onClick={() => setFilters((p) => ({ ...p, sector: summary?.bestSector ?? null }))}
+          className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center"
+        >
           <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">BEST SECTOR</div>
-          <div className="text-lg font-terminal font-bold mt-1">{summary?.bestSector ?? "—"}</div>
-          <div className="text-xs text-[var(--text-secondary)]">Leading</div>
-        </div>
-        <div className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
+          <div className="text-lg font-terminal font-bold mt-1" style={{ color: "var(--accent-bull)" }}>
+            {summary?.bestSector ?? "—"}
+          </div>
+          <div className="text-xs text-[var(--text-secondary)]">
+            {summary?.bestSectorScore != null ? `Net ${summary.bestSectorScore}` : "Leading"}
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilters((p) => ({ ...p, sector: summary?.worstSector ?? null }))}
+          className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center"
+        >
           <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">WORST SECTOR</div>
-          <div className="text-lg font-terminal font-bold mt-1">{summary?.worstSector ?? "—"}</div>
-          <div className="text-xs text-[var(--text-secondary)]">Lagging</div>
-        </div>
+          <div className="text-lg font-terminal font-bold mt-1" style={{ color: "var(--accent-bear)" }}>
+            {summary?.worstSector ?? "—"}
+          </div>
+          <div className="text-xs text-[var(--text-secondary)]">
+            {summary?.worstSectorScore != null ? `Net ${summary.worstSectorScore}` : "Lagging"}
+          </div>
+        </button>
         <div className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
           <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">AVG RANK</div>
           <div className="text-xl font-terminal font-bold mt-1">{summary?.avgRank ?? "—"}</div>
@@ -168,6 +204,19 @@ export default function ScreenerPage() {
             {f.label}
           </button>
         ))}
+
+        {filters.sector && (
+          <>
+            <span className="border-l border-[var(--border)] mx-1" />
+            <button
+              type="button"
+              onClick={() => setFilters((p) => ({ ...p, sector: null }))}
+              className="px-3 py-1 text-xs font-terminal rounded border border-[var(--accent-info)] text-[var(--accent-info)]"
+            >
+              {filters.sector} ×
+            </button>
+          </>
+        )}
       </div>
 
       {/* Scoreboard table */}
@@ -194,7 +243,11 @@ export default function ScreenerPage() {
             ) : rows.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-3 py-8 text-center text-[var(--text-muted)]">
-                  No data. Run pipeline to populate: python -m pipeline.ingest.universe
+                  {error
+                    ? `Screener error: ${error}`
+                    : filters.minRank > 0 || filters.direction !== "all" || filters.region !== "all" || filters.sector
+                      ? `No names match these filters${filters.minRank ? ` (Q>=${filters.minRank}${maxRank != null ? `; highest rank is ${maxRank}` : ""})` : ""}. Click Any / ALL, or tap the leading sector card.`
+                      : "No radar rows. Re-run python -m pipeline.compute.trend_radar after cash EOD ingest."}
                 </td>
               </tr>
             ) : (
@@ -206,7 +259,7 @@ export default function ScreenerPage() {
 
       <div className="flex items-center justify-between mt-3">
         <p className="text-xs text-[var(--text-muted)] font-terminal">
-          {rows.length} names | Data: {summary?.asOfDate ?? "—"} EOD
+          {rows.length} names · LAST $ = cash EOD ({summary?.tape?.source ?? "yahoo"}) · {summary?.asOfDate ?? "—"} · not an LSE stream
         </p>
       </div>
     </div>

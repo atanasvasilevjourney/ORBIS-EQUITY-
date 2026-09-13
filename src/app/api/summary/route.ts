@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { lastClosedSession, sessionLabel, sessionState } from "@/lib/cashSession";
+import { sectorBreadth } from "@/lib/sectorBreadth";
 
 export const revalidate = 0;
 export const dynamic = "force-dynamic";
@@ -17,11 +18,19 @@ export async function GET() {
       .limit(1)
       .maybeSingle();
 
-    const radar = await fetchAll<{ state: number; quality_rank: number }>(
-      sb,
-      "trend_radar",
-      "state, quality_rank"
-    );
+    const [radar, universe] = await Promise.all([
+      fetchAll<{ symbol: string; state: number; quality_rank: number }>(
+        sb,
+        "trend_radar",
+        "symbol, state, quality_rank"
+      ),
+      fetchAll<{ symbol: string; sector: string | null }>(
+        sb,
+        "universe_members",
+        "symbol, sector",
+        (q) => q.eq("is_active", true)
+      ),
+    ]);
 
     const total = radar.length;
     const greens = radar.filter((r) => r.state === 1).length;
@@ -41,7 +50,10 @@ export async function GET() {
       stale = diffDays > 3;
     }
 
-    const breadth = inputs.breadth as Record<string, unknown> | undefined;
+    const stored = inputs.breadth as Record<string, unknown> | undefined;
+    const sectors = sectorBreadth(radar, universe);
+    const liveBest = sectors[0] ?? null;
+    const liveWorst = sectors.length ? sectors[sectors.length - 1] : null;
 
     const { data: lastBar } = await sb
       .from("prices_daily")
@@ -76,8 +88,11 @@ export async function GET() {
         pctRed: total > 0 ? Math.round((reds / total) * 100) : 0,
       },
       avgRank,
-      bestSector: breadth?.best_sector ?? null,
-      worstSector: breadth?.worst_sector ?? null,
+      bestSector: liveBest?.sector ?? (stored?.best_sector as string | undefined) ?? null,
+      worstSector: liveWorst?.sector ?? (stored?.worst_sector as string | undefined) ?? null,
+      bestSectorScore: liveBest?.net ?? null,
+      worstSectorScore: liveWorst?.net ?? null,
+      sectors,
       regionBreadth: inputs.region_breadth ?? {},
       stale: stale || (tapeDate != null && tapeDate < closed),
       tape: {
