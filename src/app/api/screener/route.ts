@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { sectorsMatch } from "@/lib/sectorBreadth";
 
 export const revalidate = 0;
 export const dynamic = "force-dynamic";
@@ -55,7 +56,7 @@ export async function GET(req: NextRequest) {
       }
     }
     if (sector) {
-      filteredUniverse = filteredUniverse.filter((u) => u.sector === sector);
+      filteredUniverse = filteredUniverse.filter((u) => sectorsMatch(u.sector, sector));
     }
 
     const allowedSymbols = new Set(filteredUniverse.map((u) => u.symbol));

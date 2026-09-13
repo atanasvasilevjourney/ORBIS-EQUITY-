@@ -63,6 +63,9 @@ export function ScoreboardRow({ row }: { row: ScreenerRow }) {
         </Link>
         <span className="text-[var(--text-muted)] ml-2 text-xs hidden lg:inline">{row.companyName}</span>
       </td>
+      <td className="px-3 py-2.5 text-[10px] text-[var(--text-secondary)] uppercase tracking-wide">
+        {row.sector || "—"}
+      </td>
       <td className="px-3 py-2.5">
         <BiasChip state={row.state} rank={row.rank} />
       </td>
