@@ -61,6 +61,7 @@ from pipeline.compute.perps_math import (
     pick_ranked,
     wilder_atr,
 )
+from pipeline.utils.cash_session import last_closed_session
 from pipeline.utils.supabase import fetch_all
 
 load_dotenv()
@@ -83,7 +84,7 @@ def _px(v: float | None) -> float | None:
 
 
 def run() -> dict:
-    today = date.today()
+    today = last_closed_session()
     run_id = f"p-{today.isoformat()}-{datetime.now(timezone.utc).strftime('%H%M%S')}"
     sb = _sb()
     logger.info("=== Cash desk (TEMA + Carver) start ===")

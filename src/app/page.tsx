@@ -244,7 +244,7 @@ export default function Home() {
         </p>
         {d?.asOfDate && (
           <p className="text-xs text-[var(--text-muted)] mt-1 font-terminal">
-            Last refresh: {d.asOfDate} EOD
+            Last cash close: {d.asOfDate} EOD · LSE is batch REST, not a live stream
           </p>
         )}
       </div>

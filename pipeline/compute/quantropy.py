@@ -27,6 +27,7 @@ from dotenv import load_dotenv
 from scipy.optimize import Bounds, minimize
 from supabase import create_client
 
+from pipeline.utils.cash_session import last_closed_session
 from pipeline.utils.supabase import fetch_all
 
 load_dotenv()
@@ -183,7 +184,7 @@ def _align_returns(by_sym: dict[str, list[tuple[str, float]]]) -> tuple[list[str
 
 
 def run() -> dict:
-    today = date.today()
+    today = last_closed_session()
     run_id = f"q-{today.isoformat()}-{datetime.now(timezone.utc).strftime('%H%M%S')}"
     sb = _sb()
     logger.info("=== Quantropy desk start ===")

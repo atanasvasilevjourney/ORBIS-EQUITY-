@@ -40,6 +40,7 @@ from pipeline.compute.sector_math import (
     period_return,
     rotation_regime,
 )
+from pipeline.utils.cash_session import last_closed_session
 from pipeline.utils.supabase import fetch_all
 
 load_dotenv()
@@ -90,7 +91,7 @@ def _tape_row(run_id: str, t: GroupTape, now: str, aligned: bool) -> dict:
 
 
 def run() -> dict:
-    today = date.today()
+    today = last_closed_session()
     run_id = f"r-{today.isoformat()}-{datetime.now(timezone.utc).strftime('%H%M%S')}"
     sb = _sb()
     logger.info("=== Sector rotation (beta) start ===")
