@@ -25,6 +25,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from supabase import create_client
 
+from pipeline.utils.cash_session import last_closed_session
 from pipeline.utils.supabase import fetch_all
 
 load_dotenv()
@@ -90,7 +91,7 @@ def main() -> None:
     )
     logger.info("=== Portfolio Loop Start (equity breakout harness) ===")
     sb = _sb()
-    today = date.today()
+    today = last_closed_session()
     run_id = f"run_{today.isoformat()}_{datetime.now(timezone.utc).strftime('%H%M%S')}"
     now = datetime.now(timezone.utc).isoformat()
     log: list[dict] = []

@@ -34,6 +34,7 @@ from pipeline.compute.tech_signals import (
     signal_linear_regression,
     signal_moving_averages_long_term,
 )
+from pipeline.utils.cash_session import last_closed_session
 from pipeline.utils.supabase import fetch_all
 
 load_dotenv()
@@ -140,7 +141,7 @@ def analyze_series(close: np.ndarray, volume: np.ndarray) -> dict | None:
 
 
 def run() -> dict:
-    today = date.today()
+    today = last_closed_session()
     run_id = f"an-{today.isoformat()}-{datetime.now(timezone.utc).strftime('%H%M%S')}"
     sb = _sb()
     logger.info("=== Stock analysis start ===")

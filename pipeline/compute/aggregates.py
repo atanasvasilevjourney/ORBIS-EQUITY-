@@ -17,6 +17,8 @@ import os
 from collections import Counter
 from datetime import date
 
+from pipeline.utils.cash_session import last_closed_session
+
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -198,12 +200,12 @@ def main():
         "breadth": breadth,
         "region_breadth": region_breadth,
         "avg_quality_rank": avg_rank,
-        "computed_at": date.today().isoformat(),
+        "computed_at": last_closed_session().isoformat(),
     }
 
     # Store in daily_brief as inputs
     sb.table("daily_brief").upsert({
-        "asof_date": date.today().isoformat(),
+        "asof_date": last_closed_session().isoformat(),
         "brief": f"{label} - {breadth['pct_green']}% GREEN, led by {breadth['best_sector']}",
         "inputs": summary,
         "model": "aggregates_v1",
