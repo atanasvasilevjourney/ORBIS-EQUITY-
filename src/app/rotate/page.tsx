@@ -581,7 +581,7 @@ export default function RotatePage() {
 
       <p className="text-[10px] text-[var(--text-muted)] font-terminal mt-3">
         Current = 20d up-name share · Momentum = 60d · Carver D-rungs = parent EWMAC 5/10/15/20 ·
-        XS = 60d return minus sleeve mean. Demo tape is synthetic. Isolated from the CASH book. Not investment advice.
+        XS = 60d return minus sleeve mean. Tape is prices_daily cash EOD (Yahoo/Stooq or LSE batch — not a live stream). Isolated from the CASH book. Not investment advice.
       </p>
     </div>
   );

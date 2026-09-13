@@ -215,6 +215,8 @@ Surfaced at `/bias`, ticker **CHART** tab, `GET /api/bias`, and `GET /api/chart/
 
 Cash EOD ingest copies QMIE's *ingestion shape* (public REST, provider fallback, drop the in-progress session bar, ~300 daily closes) onto **Yahoo → Stooq**. It does **not** pull USDT-M klines or vendor QMIE's exchange clients.
 
+**LSE is not a live stream.** London Strategic Edge is weekday batch REST (screener, filings, last 5 daily candles). There is no LSE websocket. Near-real-time in the UI is **on-demand Yahoo 5m** on the chart/BIAS pages only. Nightly compute is Mon–Fri ~19:30 UTC. Weekend views the last closed cash session (typically Friday).
+
 | Sleeve | Signal | Book | Cash size |
 |---|---|---|---|
 | **TEMA** (50% of $100k) | Triple EMA **9/99/199**: 9 vs 99 is the trigger, 199 is the regime. **MACD(12,26,9)** is the systematic close. Grade B+ and MACD HOLD to stay in the book. | Ranked 3 long + 3 short, sector cap 2, 2.5 ATR hard stop. | Shares = cash $ / last close, capped at the slot's allocated cash |

@@ -45,6 +45,8 @@ type Data = {
     drawdown: number | null;
     ddScalar: number | null;
     book: string | null;
+    listed: number | null;
+    synthetic: number | null;
   } | null;
   names: Name[];
   temaBook: Name[];
@@ -99,6 +101,8 @@ export default function CashPage() {
     { label: "TEMA 9/99/199", value: s?.temaSlots ?? "—", color: "var(--accent-info)" },
     { label: "CARVER", value: s?.carverSlots ?? "—", color: "var(--accent-warning)" },
     { label: "CASH OUT", value: s?.deployed == null ? "—" : usd(s.deployed, 0), color: "var(--accent-bull)" },
+    { label: "AS OF", value: s?.asOfDate ?? "—", color: "" },
+    { label: "LISTED / SYN", value: s?.listed == null ? "—" : `${s.listed} / ${s.synthetic ?? 0}`, color: (s?.synthetic ?? 0) > 0 ? "var(--accent-warning)" : "var(--accent-bull)" },
   ];
 
   return (
@@ -131,7 +135,7 @@ export default function CashPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-7 gap-3 mb-4">
         {cards.map((c) => (
           <div key={c.label} className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
             <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">{c.label}</div>

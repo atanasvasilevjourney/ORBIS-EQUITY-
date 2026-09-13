@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { lastClosedSession, sessionLabel, sessionState } from "@/lib/cashSession";
 
-export const revalidate = 900;
+export const revalidate = 0;
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
@@ -41,8 +43,28 @@ export async function GET() {
 
     const breadth = inputs.breadth as Record<string, unknown> | undefined;
 
+    const { data: lastBar } = await sb
+      .from("prices_daily")
+      .select("date, source")
+      .order("date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const tapeDate = (lastBar?.date as string | undefined) ?? null;
+    let tapeNames = 0;
+    if (tapeDate) {
+      const { count } = await sb
+        .from("prices_daily")
+        .select("symbol", { count: "exact", head: true })
+        .eq("date", tapeDate);
+      tapeNames = count ?? 0;
+    }
+
+    const sess = sessionState();
+    const closed = lastClosedSession();
+
     return NextResponse.json({
-      asOfDate: brief?.asof_date ?? null,
+      asOfDate: tapeDate ?? brief?.asof_date ?? null,
       briefText: brief?.brief ?? null,
       posture: inputs.posture_score ?? null,
       postureLabel: inputs.posture_label ?? null,
@@ -57,7 +79,20 @@ export async function GET() {
       bestSector: breadth?.best_sector ?? null,
       worstSector: breadth?.worst_sector ?? null,
       regionBreadth: inputs.region_breadth ?? {},
-      stale,
+      stale: stale || (tapeDate != null && tapeDate < closed),
+      tape: {
+        source: (lastBar?.source as string | undefined) ?? null,
+        lastClose: tapeDate,
+        names: tapeNames,
+      },
+      session: {
+        state: sess,
+        label: sessionLabel(sess),
+        lastClosedSession: closed,
+        workday: sess !== "CLOSED_WEEKEND",
+        lseStreaming: false,
+        yahoo5mOnDemand: true,
+      },
     });
   } catch (err) {
     console.error("Summary API error:", err);
