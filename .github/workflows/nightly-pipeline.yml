@@ -140,11 +140,14 @@ jobs:
           LSE_DATA_API_URL: ${{ secrets.LSE_DATA_API_URL }}
 
       - name: Cash EOD backfill (Yahoo → Stooq)
+        continue-on-error: true
         run: python -m pipeline.ingest.cash_eod
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           CASH_EOD_BARS: ${{ github.event.schedule == '30 19 * * 1' && '300' || '10' }}
+          CASH_EOD_LIMIT: ${{ github.event.schedule == '30 19 * * 1' && '250' || '80' }}
+          CASH_EOD_MAX_SEC: "720"
 
   # ---------------------------------------------------------------------------
   # 3. Ingest Fundamentals — weekly only (Monday) or manual trigger
@@ -313,24 +316,28 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: Run Quantropy risk + Markowitz allocation
+        continue-on-error: true
         run: python -m pipeline.compute.quantropy
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: Run daily bias levels + paper trade ideas
+        continue-on-error: true
         run: python -m pipeline.compute.daily_bias
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: Run TEMA + MACD close + Carver equity-perp paper desk
+        continue-on-error: true
         run: python -m pipeline.compute.perps_desk
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: Run beta rotational sector / industry tape
+        continue-on-error: true
         run: python -m pipeline.compute.sector_rotation
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

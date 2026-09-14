@@ -11,6 +11,7 @@ import logging
 import os
 from datetime import datetime, timezone
 
+import requests
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
@@ -122,7 +123,14 @@ def _ingest_fundamentals(lse: LSEClient, sb: Client) -> int:
     Returns the number of rows successfully upserted.
     """
     logger.info("Fetching all screener data from LSE API...")
-    stocks = lse.get_all_screener_data()
+    try:
+        stocks = lse.get_all_screener_data()
+    except requests.HTTPError as err:
+        logger.error(
+            "LSE screener failed (%s) — keeping existing fundamentals_snapshot",
+            err,
+        )
+        return 0
     logger.info("Received %d stocks from screener", len(stocks))
 
     if not stocks:

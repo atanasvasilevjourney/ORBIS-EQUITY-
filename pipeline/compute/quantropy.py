@@ -39,6 +39,8 @@ RF_DAILY = RF_ANNUAL / PERIOD
 VAR_Q = 0.05
 MIN_OBS = 60
 FRONTIER_N = 24
+# Cap the Markowitz book so one thin UK/LSE calendar cannot empty the join.
+ALLOC_MAX_NAMES = int(os.getenv("QUANTROPY_MAX_NAMES", "40"))
 
 
 def _sb():
@@ -160,26 +162,93 @@ def _optimize(mu: np.ndarray, cov: np.ndarray, target: str, target_return: float
     return w / s if s > 0 else None
 
 
-def _align_returns(by_sym: dict[str, list[tuple[str, float]]]) -> tuple[list[str], np.ndarray]:
-    """Inner-join daily close series → return matrix (T × N)."""
-    dates_sets = []
+def _as_iso_date(value: object) -> str | None:
+    """Normalize PostgREST date / timestamptz / date() to YYYY-MM-DD."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    text = str(value).strip()
+    if len(text) >= 10 and text[4] == "-" and text[7] == "-":
+        return text[:10]
+    return None
+
+
+def _align_returns(
+    by_sym: dict[str, list[tuple[object, float]]],
+    *,
+    min_obs: int = MIN_OBS,
+    max_names: int = ALLOC_MAX_NAMES,
+) -> tuple[list[str], np.ndarray]:
+    """Build a return matrix from names that actually share a calendar.
+
+    A full-universe inner join is empty as soon as one UK/LSE name (or a
+    10-bar cash backfill) sits beside NYSE history. Grow a core from the
+    densest series and only add names that keep ≥ min_obs+1 common dates.
+    """
     closes: dict[str, dict[str, float]] = {}
     for sym, pts in by_sym.items():
-        pts = sorted(pts)
-        if len(pts) < MIN_OBS + 1:
-            continue
-        closes[sym] = {d: c for d, c in pts}
-        dates_sets.append(set(closes[sym]))
+        series: dict[str, float] = {}
+        for raw_d, close in pts:
+            iso = _as_iso_date(raw_d)
+            if iso is None:
+                continue
+            series[iso] = float(close)
+        if len(series) >= min_obs + 1:
+            closes[sym] = series
     if len(closes) < 2:
         return [], np.empty((0, 0))
-    common = sorted(set.intersection(*dates_sets))
-    if len(common) < MIN_OBS + 1:
-        return [], np.empty((0, 0))
-    syms = sorted(closes)
-    px = np.array([[closes[s][d] for s in syms] for d in common], dtype=float)
-    rets = np.diff(px, axis=0) / px[:-1]
+
+    date_freq: dict[str, int] = {}
+    for series in closes.values():
+        for d in series:
+            date_freq[d] = date_freq.get(d, 0) + 1
+
+    def _cluster_score(sym: str) -> tuple[int, int]:
+        # Dates that also appear on another name beat a long private calendar.
+        overlap = sum(1 for d in closes[sym] if date_freq[d] >= 2)
+        return overlap, len(closes[sym])
+
+    ranked = sorted(closes, key=_cluster_score, reverse=True)
+    pool = ranked[: max(int(max_names), 2)]
+
+    core = [pool[0]]
+    common = set(closes[pool[0]])
+    for sym in pool[1:]:
+        nxt = common & set(closes[sym])
+        if len(nxt) >= min_obs + 1:
+            core.append(sym)
+            common = nxt
+
+    if len(core) < 2:
+        densest = pool[0]
+        partner = None
+        best = 0
+        for sym in pool[1:]:
+            n = len(set(closes[densest]) & set(closes[sym]))
+            if n > best:
+                best = n
+                partner = sym
+        if partner is None or best < min_obs + 1:
+            return [], np.empty((0, 0))
+        core = [densest, partner]
+        common = set(closes[densest]) & set(closes[partner])
+
+    common_dates = sorted(common)
+    window = min_obs * 4  # ~240 sessions, enough for annualized stats
+    if len(common_dates) > window:
+        common_dates = common_dates[-window:]
+    core = sorted(core)
+    px = np.array([[closes[s][d] for s in core] for d in common_dates], dtype=float)
+    rets = np.diff(px, axis=0) / np.where(px[:-1] == 0, np.nan, px[:-1])
     rets = np.where(np.isfinite(rets), rets, 0.0)
-    return syms, rets
+    logger.info(
+        "Quantropy aligned %d names × %d sessions (eligible %d, pool %d)",
+        len(core), len(common_dates), len(closes), len(pool),
+    )
+    return core, rets
 
 
 def run() -> dict:
@@ -203,7 +272,24 @@ def run() -> dict:
 
     symbols, rets = _align_returns(by_sym)
     if len(symbols) < 2:
-        raise RuntimeError("Need ≥2 names with overlapping daily history for Quantropy")
+        headline = (
+            f"{today.isoformat()} Quantropy empty — "
+            "need ≥2 names with overlapping daily history"
+        )
+        logger.warning("%s", headline)
+        try:
+            sb.table("quantropy_runs").upsert({
+                "run_id": run_id,
+                "asof_date": today.isoformat(),
+                "names": 0,
+                "headline": headline,
+                "allocations": {},
+                "frontier": [],
+                "computed_at": datetime.now(timezone.utc).isoformat(),
+            }).execute()
+        except Exception:
+            logger.exception("quantropy_runs write skipped")
+        return {"run_id": run_id, "names": 0, "headline": headline, "books": {}}
 
     mkt = rets.mean(axis=1)
     mu = rets.mean(axis=0) * PERIOD

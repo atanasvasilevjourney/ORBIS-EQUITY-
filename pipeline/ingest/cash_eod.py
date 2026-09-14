@@ -170,9 +170,11 @@ def main() -> None:
     min_real = _int_env("CASH_EOD_MIN_BARS", 200)
     limit = _int_env("CASH_EOD_LIMIT", 0)
     sleep_s = _float_env("CASH_EOD_SLEEP", SLEEP_SEC)
+    max_sec = _float_env("CASH_EOD_MAX_SEC", 0)
     replace_seed = os.getenv("CASH_EOD_KEEP_SEED", "").strip() not in ("1", "true", "yes")
 
     started = datetime.now(timezone.utc)
+    t0 = time.monotonic()
     run_id = f"eod-{started.strftime('%Y%m%d-%H%M%S')}"
     logger.info("=== Cash EOD ingest %s · bars=%d ===", run_id, bars)
 
@@ -189,6 +191,12 @@ def main() -> None:
     failures: list[str] = []
 
     for idx, m in enumerate(members, 1):
+        if max_sec > 0 and (time.monotonic() - t0) >= max_sec:
+            logger.warning(
+                "Stopping early after %.0fs (CASH_EOD_MAX_SEC) · %d/%d names",
+                max_sec, idx - 1, len(members),
+            )
+            break
         symbol = (m.get("symbol") or "").strip().upper()
         if not symbol:
             continue
