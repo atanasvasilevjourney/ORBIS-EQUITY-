@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isMissingRelation } from "@/lib/supabase/errors";
 
 const PAGE_SIZE = 1000;
 
@@ -21,7 +22,14 @@ export async function fetchAll<T = Record<string, unknown>>(
       query = buildQuery(query);
     }
     const { data, error } = await query.range(offset, offset + PAGE_SIZE - 1);
-    if (error) throw error;
+    if (error) {
+      // Hosted schema can lag migrations; empty desks beat a 500 overlay.
+      if (offset === 0 && isMissingRelation(error)) {
+        console.warn(`fetchAll ${table}: missing relation`, error);
+        return [];
+      }
+      throw error;
+    }
     const rows = (data ?? []) as T[];
     all.push(...rows);
     if (rows.length < PAGE_SIZE) break;

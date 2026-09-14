@@ -140,6 +140,12 @@ export async function GET() {
     });
   } catch (err) {
     console.error("ORB API error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({
+      summary: null,
+      watch: [],
+      orders: [],
+      headline: null,
+      stale: true,
+    });
   }
 }

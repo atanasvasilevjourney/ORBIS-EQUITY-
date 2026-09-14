@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { parseDesk, pickNamed } from "@/lib/deskPayload";
 
 type Spark = { close: number[]; sma50: (number | null)[]; ema20: (number | null)[] };
 
@@ -98,17 +99,18 @@ export default function AnalysisPage() {
   useEffect(() => {
     fetch("/api/analysis")
       .then((r) => r.json())
-      .then((data: AnalysisData) => {
-        setD(data);
+      .then((data: unknown) => {
+        const desk = parseDesk<AnalysisData>(data, "names");
+        setD(desk);
         const q = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("ticker") : null;
-        const pick = (q && data.names?.find((n) => n.ticker === q.toUpperCase())?.ticker) || data.names?.[0]?.ticker;
+        const pick = (q && desk?.names?.find((n) => n.ticker === q.toUpperCase())?.ticker) || desk?.names?.[0]?.ticker;
         if (pick) setTicker(pick);
       })
       .catch(() => setD(null))
       .finally(() => setLoading(false));
   }, []);
 
-  const name = d?.names.find((n) => n.ticker === ticker) ?? d?.names[0] ?? null;
+  const name = pickNamed(d?.names, ticker);
   const s = d?.summary;
   const cards = [
     { label: "NAMES", value: s?.names ?? "—", color: "" },

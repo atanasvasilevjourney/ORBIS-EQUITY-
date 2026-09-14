@@ -30,7 +30,12 @@ export async function GET(
 
   if (error) {
     console.error("prices query error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({
+      symbol: ticker,
+      bars: [],
+      source: "EOD",
+      delayed: true,
+    });
   }
 
   const bars = (data ?? []).map((r) => ({

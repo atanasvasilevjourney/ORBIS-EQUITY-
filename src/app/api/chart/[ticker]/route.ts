@@ -92,7 +92,14 @@ export async function GET(
       .limit(400);
     if (error) {
       console.error("chart query", error);
-      return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+      return NextResponse.json({
+        ticker,
+        interval: "1d",
+        source: "prices_daily",
+        candles: [],
+        sma20: [],
+        fallbackFrom5m: requested === "5m",
+      });
     }
     const candles: Candle[] = (data ?? [])
       .map((r) =>
@@ -118,6 +125,12 @@ export async function GET(
     });
   } catch (err) {
     console.error("Chart API error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({
+      ticker,
+      interval: requested,
+      source: "none",
+      candles: [],
+      sma20: [],
+    });
   }
 }

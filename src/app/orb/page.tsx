@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { parseDesk, pickNamed } from "@/lib/deskPayload";
 
 type Bar = { t: string; o: number; h: number; l: number; c: number; tag: string };
 
@@ -96,16 +97,17 @@ export default function OrbPage() {
   useEffect(() => {
     fetch("/api/orb")
       .then((r) => r.json())
-      .then((data: OrbData) => {
-        setD(data);
-        if (data.watch?.[0]) setSel(data.watch[0].ticker);
+      .then((data: unknown) => {
+        const desk = parseDesk<OrbData>(data, "watch");
+        setD(desk);
+        if (desk?.watch?.[0]) setSel(desk.watch[0].ticker);
       })
       .catch(() => setD(null))
       .finally(() => setLoading(false));
   }, []);
 
   const s = d?.summary;
-  const row = d?.watch.find((w) => w.ticker === sel) ?? d?.watch[0] ?? null;
+  const row = pickNamed(d?.watch, sel);
   const cards = [
     { label: "SESSION", value: s?.sessionDate ?? "—", color: d?.stale ? "var(--accent-warning)" : "" },
     { label: "GAPPERS", value: s?.names ?? "—", color: "var(--accent-info)" },

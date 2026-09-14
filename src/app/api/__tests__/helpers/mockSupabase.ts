@@ -4,10 +4,9 @@
  */
 export type QueryResult = { data: unknown; error: unknown; count?: number };
 
-function buildChain(getResult: (from?: number, to?: number) => QueryResult) {
+function buildChain(getResult: (from?: number, to?: number, select?: string) => QueryResult) {
   const chain: Record<string, unknown> = {};
   const methods = [
-    "select",
     "eq",
     "neq",
     "gte",
@@ -27,6 +26,12 @@ function buildChain(getResult: (from?: number, to?: number) => QueryResult) {
 
   let rangeFrom = 0;
   let rangeTo: number | undefined;
+  let selectCols = "";
+
+  chain.select = (cols?: string) => {
+    selectCols = cols ?? "";
+    return chain;
+  };
 
   chain.range = (from: number, to: number) => {
     rangeFrom = from;
@@ -37,16 +42,16 @@ function buildChain(getResult: (from?: number, to?: number) => QueryResult) {
   chain.then = (
     onFulfilled?: (value: QueryResult) => unknown,
     onRejected?: (reason: unknown) => unknown
-  ) => Promise.resolve(getResult(rangeFrom, rangeTo)).then(onFulfilled, onRejected);
+  ) => Promise.resolve(getResult(rangeFrom, rangeTo, selectCols)).then(onFulfilled, onRejected);
 
   return chain;
 }
 
-export function createMockSupabase(handlers: Record<string, () => QueryResult>) {
+export function createMockSupabase(handlers: Record<string, (select?: string) => QueryResult>) {
   return {
     from: (table: string) =>
-      buildChain((from = 0, to?: number) => {
-        const result = handlers[table]?.() ?? { data: [], error: null };
+      buildChain((from = 0, to?: number, select?: string) => {
+        const result = handlers[table]?.(select) ?? { data: [], error: null };
         if (result.error || !Array.isArray(result.data)) return result;
         // Honour .range() so fetchAll pagination terminates
         const end = typeof to === "number" ? to + 1 : undefined;

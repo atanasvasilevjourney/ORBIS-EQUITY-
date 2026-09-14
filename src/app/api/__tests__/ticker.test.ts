@@ -90,4 +90,37 @@ describe("GET /api/ticker/[ticker]", () => {
 
     expect(res.status).toBe(500);
   });
+
+  it("ignores a missing optional table", async () => {
+    mockCreateServerClient.mockReturnValue(
+      createMockSupabase({
+        trend_radar: () => ({
+          data: { symbol: "AAPL", state: 1, quality_rank: 80 },
+          error: null,
+        }),
+        fundamentals_snapshot: () => ({
+          data: { symbol: "AAPL", price: 180 },
+          error: null,
+        }),
+        universe_members: () => ({
+          data: { symbol: "AAPL", company_name: "Apple Inc." },
+          error: null,
+        }),
+        earnings_calendar: () => ({ data: [], error: null }),
+        insider_trades_snapshot: () => ({
+          data: null,
+          error: { code: "PGRST205", message: "Could not find the table in the schema cache" },
+        }),
+      })
+    );
+
+    const { GET } = await import("../ticker/[ticker]/route");
+    const req = new NextRequest("http://localhost/api/ticker/AAPL");
+    const res = await GET(req, { params: { ticker: "AAPL" } });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.universe.symbol).toBe("AAPL");
+    expect(body.insiderTrades).toEqual([]);
+  });
 });

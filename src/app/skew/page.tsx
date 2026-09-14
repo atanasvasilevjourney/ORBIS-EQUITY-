@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { parseDesk, pickNamed } from "@/lib/deskPayload";
 
 type StrikePt = {
   k: number;
@@ -165,13 +166,14 @@ function LineChart({
   );
 }
 
-function Heatmap({ cells }: { cells: SurfaceCell[] }) {
-  const dtes = Array.from(new Set(cells.map((c) => c.dte))).sort((a, b) => a - b);
-  const ks = Array.from(new Set(cells.map((c) => c.kPct))).sort((a, b) => a - b);
+function Heatmap({ cells }: { cells: SurfaceCell[] | null | undefined }) {
+  const grid = Array.isArray(cells) ? cells : [];
+  const dtes = Array.from(new Set(grid.map((c) => c.dte))).sort((a, b) => a - b);
+  const ks = Array.from(new Set(grid.map((c) => c.kPct))).sort((a, b) => a - b);
   if (!dtes.length || !ks.length) {
     return <div className="text-xs text-[var(--text-muted)] font-terminal px-3 py-8 text-center">No surface</div>;
   }
-  const ivs = cells.map((c) => c.iv);
+  const ivs = grid.map((c) => c.iv);
   const lo = Math.min(...ivs);
   const hi = Math.max(...ivs);
   const tone = (iv: number) => {
@@ -180,7 +182,7 @@ function Heatmap({ cells }: { cells: SurfaceCell[] }) {
     if (t < 0.66) return "var(--accent-warning)";
     return "var(--accent-bear)";
   };
-  const lookup = new Map(cells.map((c) => [`${c.dte}|${c.kPct}`, c.iv]));
+  const lookup = new Map(grid.map((c) => [`${c.dte}|${c.kPct}`, c.iv]));
   return (
     <div className="overflow-x-auto">
       <table className="text-[10px] font-terminal">
@@ -226,31 +228,33 @@ export default function SkewPage() {
   useEffect(() => {
     fetch("/api/skew")
       .then((r) => r.json())
-      .then((data: SkewData) => {
-        setD(data);
-        const first = data.names?.[0]?.ticker;
+      .then((data: unknown) => {
+        const desk = parseDesk<SkewData>(data, "names");
+        setD(desk);
+        const first = desk?.names?.[0]?.ticker;
         if (first) setTicker(first);
       })
       .catch(() => setD(null))
       .finally(() => setLoading(false));
   }, []);
 
-  const name = d?.names.find((n) => n.ticker === ticker) ?? d?.names[0] ?? null;
+  const name = pickNamed(d?.names, ticker);
   useEffect(() => {
     if (!name) return;
-    if (!expiry || !name.slices.some((s) => s.expiry === expiry)) {
-      setExpiry(name.slices[0]?.expiry ?? "");
+    const slices = name.slices ?? [];
+    if (!expiry || !slices.some((s) => s.expiry === expiry)) {
+      setExpiry(slices[0]?.expiry ?? "");
     }
   }, [name, expiry]);
 
-  const slice = name?.slices.find((s) => s.expiry === expiry) ?? name?.slices[0] ?? null;
+  const slice = name?.slices?.find((s) => s.expiry === expiry) ?? name?.slices?.[0] ?? null;
   const s = d?.summary;
 
   const skewSeries = useMemo(() => {
     if (!slice) return [];
-    const iv = slice.strikes.filter((p) => p.iv != null).map((p) => ({ x: p.kPct, y: p.iv }));
-    const puts = slice.strikes.filter((p) => p.ivPut != null).map((p) => ({ x: p.kPct, y: p.ivPut as number }));
-    const calls = slice.strikes.filter((p) => p.ivCall != null).map((p) => ({ x: p.kPct, y: p.ivCall as number }));
+    const iv = (slice.strikes ?? []).filter((p) => p.iv != null).map((p) => ({ x: p.kPct, y: p.iv }));
+    const puts = (slice.strikes ?? []).filter((p) => p.ivPut != null).map((p) => ({ x: p.kPct, y: p.ivPut as number }));
+    const calls = (slice.strikes ?? []).filter((p) => p.ivCall != null).map((p) => ({ x: p.kPct, y: p.ivCall as number }));
     return [
       { label: "PAYING", color: "var(--accent-info)", pts: iv },
       { label: "PUT", color: "var(--accent-bear)", pts: puts },
@@ -261,9 +265,9 @@ export default function SkewPage() {
   const termSeries = useMemo(() => {
     if (!name) return [];
     return [
-      { label: "ATM", color: "var(--accent-info)", pts: name.term.filter((t) => t.atmIv != null).map((t) => ({ x: t.dte, y: t.atmIv as number })) },
-      { label: "10% PUT", color: "var(--accent-bear)", pts: name.term.filter((t) => t.putIv != null).map((t) => ({ x: t.dte, y: t.putIv as number })) },
-      { label: "10% CALL", color: "var(--accent-bull)", pts: name.term.filter((t) => t.callIv != null).map((t) => ({ x: t.dte, y: t.callIv as number })) },
+      { label: "ATM", color: "var(--accent-info)", pts: (name.term ?? []).filter((t) => t.atmIv != null).map((t) => ({ x: t.dte, y: t.atmIv as number })) },
+      { label: "10% PUT", color: "var(--accent-bear)", pts: (name.term ?? []).filter((t) => t.putIv != null).map((t) => ({ x: t.dte, y: t.putIv as number })) },
+      { label: "10% CALL", color: "var(--accent-bull)", pts: (name.term ?? []).filter((t) => t.callIv != null).map((t) => ({ x: t.dte, y: t.callIv as number })) },
     ];
   }, [name]);
 
@@ -349,7 +353,7 @@ export default function SkewPage() {
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest">SKEW SLICE · IV vs STRIKE</h2>
                 <div className="flex flex-wrap gap-1">
-                  {name.slices.map((sl) => (
+                  {(name.slices ?? []).map((sl) => (
                     <button
                       key={sl.expiry}
                       onClick={() => setExpiry(sl.expiry)}
@@ -385,7 +389,7 @@ export default function SkewPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
             <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] p-3">
               <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">SURFACE · MONEYNESS × DTE (IV %)</h2>
-              <Heatmap cells={name.surface} />
+              <Heatmap cells={name.surface ?? []} />
               <p className="text-[10px] text-[var(--text-muted)] font-terminal mt-2">
                 Green = cheap vol vs this name&apos;s surface, red = rich. OTM puts (K% &lt; 100) are crash premium; OTM calls are upside chase.
               </p>

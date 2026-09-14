@@ -195,4 +195,45 @@ describe("GET /api/screener", () => {
     expect(res.status).toBe(200);
     expect(body).toHaveLength(1000);
   });
+
+  it("retries trend_radar without kama columns when they are missing", async () => {
+    mockCreateServerClient.mockReturnValue(
+      createMockSupabase({
+        trend_radar: (select) => {
+          if (select?.includes("kama_regime")) {
+            return {
+              data: null,
+              error: { code: "42703", message: "column trend_radar.kama_regime does not exist" },
+            };
+          }
+          return { data: [radarRow("AAPL")], error: null };
+        },
+        universe_members: () => ({
+          data: [
+            {
+              symbol: "AAPL",
+              company_name: "Apple Inc.",
+              sector: "Technology",
+              industry: "Consumer Electronics",
+              country: "US",
+              exchange: "NASDAQ",
+              tier: "us_large",
+            },
+          ],
+          error: null,
+        }),
+        fundamentals_snapshot: () => ({ data: [], error: null }),
+      })
+    );
+
+    const { GET } = await import("../screener/route");
+    const req = new NextRequest("http://localhost/api/screener");
+    const res = await GET(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toHaveLength(1);
+    expect(body[0].symbol).toBe("AAPL");
+    expect(body[0].kamaRegime).toBe(0);
+  });
 });
