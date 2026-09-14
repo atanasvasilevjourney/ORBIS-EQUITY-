@@ -139,7 +139,7 @@ export default function ScreenerPage() {
 
   const tableSectors = useMemo(() => new Set(rows.map((r) => r.sector)), [rows]);
   const tableMatchesLead = Boolean(
-    filters.sector && rows.length > 0 && [...tableSectors].every((s) => sectorsMatch(s, filters.sector))
+    filters.sector && rows.length > 0 && Array.from(tableSectors).every((s) => sectorsMatch(s, filters.sector))
   );
 
   const postureColor = (summary?.posture ?? 50) >= 55
