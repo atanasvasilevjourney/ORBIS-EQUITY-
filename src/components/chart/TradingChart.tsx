@@ -240,7 +240,11 @@ export function TradingChart({
         return;
       }
       chartRef.current = chart;
-      await sync(chart);
+      try {
+        await sync(chart);
+      } catch (err) {
+        console.error("Vela chart sync failed", err);
+      }
       if (disposed) return;
       ro = new ResizeObserver(() => chartRef.current?.resize());
       ro.observe(el);
