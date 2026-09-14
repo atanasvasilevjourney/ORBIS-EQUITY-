@@ -1,5 +1,5 @@
 {
-  "name": "KovaView Terminal",
+  "name": "Orbis Equity",
   "user": "ubuntu",
   "install": ".cursor/scripts/install.sh",
   "start": ".cursor/scripts/start.sh",

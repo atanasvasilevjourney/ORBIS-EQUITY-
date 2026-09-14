@@ -11,7 +11,7 @@ ensure_postgres
 ensure_postgrest
 ensure_nginx
 
-echo "KovaView data stack ready:"
+echo "Orbis Equity data stack ready:"
 echo "  Postgres  127.0.0.1:$PGPORT  (db=$DBNAME)"
 echo "  PostgREST 127.0.0.1:$PGREST_PORT"
 echo "  Gateway   http://127.0.0.1:$GATEWAY_PORT (Supabase REST at /rest/v1)"

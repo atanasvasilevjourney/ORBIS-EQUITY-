@@ -44,7 +44,7 @@ export function Nav() {
             className="text-lg font-bold font-terminal tracking-widest"
             style={{ color: "var(--accent-info)" }}
           >
-            KOVAVIEW
+            ORBIS EQUITY
           </Link>
           <div className="hidden md:flex items-center gap-1">
             {NAV_LINKS.map((l) => {

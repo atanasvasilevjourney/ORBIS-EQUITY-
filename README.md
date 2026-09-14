@@ -1,4 +1,4 @@
-# KovaView Terminal
+# Orbis Equity
 
 Systematic equity research terminal — momentum screener, multi-factor fundamentals, earnings & news.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Idempotent setup for the KovaView dev environment.
+# Idempotent setup for the Orbis Equity dev environment.
 # Safe to run repeatedly; preserves existing database contents.
 set -euo pipefail
 

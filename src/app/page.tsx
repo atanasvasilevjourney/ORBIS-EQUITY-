@@ -237,7 +237,7 @@ export default function Home() {
     <div className="px-4 py-12">
       <div className="text-center mb-8">
         <h1 className="text-3xl font-terminal font-bold tracking-wider mb-2" style={{ color: "var(--accent-info)" }}>
-          KOVAVIEW TERMINAL
+          ORBIS EQUITY
         </h1>
         <p className="text-sm text-[var(--text-secondary)]">
           Systematic Equity Terminal — Momentum, Multi-Factor Fundamentals, Earnings
