@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { TradingChart, type Candle, type ChartLevel } from "@/components/chart/TradingChart";
+import { TradingChart, VelaCredit, type Candle, type ChartLevel } from "@/components/chart/TradingChart";
 
 type Idea = { id: number; side: string; entry: number; target: number; stop: number; rr: number; kind: string; label: string };
 type Level = { price: number; label: string; kind: string };
@@ -133,7 +133,7 @@ export default function BiasPage() {
           DAILY BIAS
         </h1>
         <p className="text-xs text-[var(--text-secondary)]">
-          TradingView-style tape, ANALYZE vote, classic pivots / ATR — paper ideas, not GEX or order flow
+          Vela™ tape, ANALYZE vote, classic pivots / ATR — paper ideas, not GEX or order flow
         </p>
       </div>
 
@@ -225,15 +225,21 @@ export default function BiasPage() {
               </div>
 
               <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] overflow-hidden">
-                <div className="px-3 py-1 text-[10px] font-terminal text-[var(--text-muted)] tracking-widest border-b border-[var(--border)]">
-                  {name.ticker} · Daily Bias · {chart?.interval ?? interval} · {chart?.source ?? "…"}
-                  {chart?.interval === "5m"
-                    ? overlayOk
-                      ? ` · ${chart?.source === "lse" ? "LSE vault 5m" : "Yahoo 5m"} · levels from EOD book`
-                      : ` · ${chart?.source === "lse" ? "LSE vault 5m" : "Yahoo 5m"} · EOD levels hidden (price disagree)`
-                    : ""}
+                <div className="px-3 py-1 text-[10px] font-terminal text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] flex items-center justify-between gap-2">
+                  <span>
+                    {name.ticker} · Daily Bias · {chart?.interval ?? interval} · {chart?.source ?? "…"}
+                    {chart?.interval === "5m"
+                      ? overlayOk
+                        ? ` · ${chart?.source === "lse" ? "LSE vault 5m" : "Yahoo 5m"} · levels from EOD book`
+                        : ` · ${chart?.source === "lse" ? "LSE vault 5m" : "Yahoo 5m"} · EOD levels hidden (price disagree)`
+                      : ""}
+                  </span>
+                  <VelaCredit />
                 </div>
                 <TradingChart
+                  key={name.ticker}
+                  symbol={name.ticker}
+                  interval={interval}
                   candles={chart?.candles ?? []}
                   sma={chart?.interval === "1d" ? chart?.sma20 : undefined}
                   levels={levels}

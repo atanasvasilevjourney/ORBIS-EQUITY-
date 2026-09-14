@@ -14,3 +14,12 @@ body {
 .font-terminal {
   font-family: "JetBrains Mono", "Fira Code", monospace;
 }
+
+/* Vela native renderer host — keep canvases and the drawings gutter inside the card. */
+.vela-host {
+  position: relative;
+  overflow: hidden;
+}
+.vela-host canvas {
+  display: block;
+}
