@@ -27,7 +27,8 @@ def lse_stream_configured() -> bool:
 
 
 def normalize_symbol(symbol: str) -> str:
-    return (symbol or "").strip().upper().replace("/", "")
+    """Keep catalog form (AAPL, BRK.B, BTC/USD)."""
+    return (symbol or "").strip().upper()
 
 
 def tick_to_quote(tick: Any) -> dict | None:

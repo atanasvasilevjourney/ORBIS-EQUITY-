@@ -13,6 +13,7 @@ class LseLiveTests(unittest.TestCase):
     def test_normalize_crypto_pair_stays_equity_ticker(self):
         self.assertEqual(normalize_symbol("aapl"), "AAPL")
         self.assertEqual(normalize_symbol("BRK.B"), "BRK.B")
+        self.assertEqual(normalize_symbol("btc/usd"), "BTC/USD")
 
     def test_tick_to_quote_from_object(self):
         tick = SimpleNamespace(
