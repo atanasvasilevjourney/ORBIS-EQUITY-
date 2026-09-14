@@ -84,6 +84,23 @@ def vault_candle_bar(row: dict) -> dict | None:
     if not row:
         return None
     ts = row.get("timestamp") or row.get("ts") or row.get("t") or row.get("time")
+    time_val: str | int | None
+    if isinstance(ts, (int, float)) and ts > 1e9:
+        time_val = int(ts if ts < 1e12 else ts / 1000)
+    elif isinstance(ts, str) and len(ts) >= 10:
+        raw = ts.strip()
+        if len(raw) == 10 and raw[4] == "-":
+            time_val = raw
+        else:
+            iso = raw.replace(" ", "T", 1)
+            if not (iso.endswith("Z") or "+" in iso[10:] or iso.count("-") > 2):
+                iso = iso + "Z"
+            try:
+                time_val = int(datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp())
+            except ValueError:
+                return None
+    else:
+        return None
     try:
         o = float(row.get("open") if row.get("open") is not None else row.get("o"))
         h = float(row.get("high") if row.get("high") is not None else row.get("h"))
@@ -96,13 +113,6 @@ def vault_candle_bar(row: dict) -> dict | None:
     high = max(h, o, c)
     lo = min(low, o, c)
     vol = row.get("volume") if row.get("volume") is not None else row.get("v")
-    time_val: str | int | None
-    if isinstance(ts, (int, float)) and ts > 1e9:
-        time_val = int(ts)
-    elif ts:
-        time_val = str(ts)
-    else:
-        return None
     bar = {"time": time_val, "open": o, "high": high, "low": lo, "close": c}
     if vol is not None:
         try:

@@ -50,7 +50,8 @@ class LseLiveTests(unittest.TestCase):
         self.assertEqual(bar["high"], 101)
         self.assertEqual(bar["low"], 99)
         self.assertEqual(bar["close"], 100.5)
-        self.assertEqual(bar["time"], "2026-09-11T14:30:00Z")
+        self.assertIsInstance(bar["time"], int)
+        self.assertGreater(bar["time"], 1_700_000_000)
 
     def test_five_minute_is_a_live_timeframe(self):
         self.assertIn("5m", LIVE_TIMEFRAMES)

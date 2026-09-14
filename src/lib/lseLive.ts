@@ -25,7 +25,24 @@ function clampBar(o: number, h: number, l: number, c: number, vol?: number, time
   const high = Math.max(h, o, c);
   const low = Math.min(l, o, c);
   if (low > high) return null;
-  return { time: time as string | number, open: o, high, low, close: c, volume: vol };
+  const t = toChartTime(time);
+  if (t == null) return null;
+  return { time: t, open: o, high, low, close: c, volume: vol };
+}
+
+/** Lightweight-charts: daily `YYYY-MM-DD`, intraday unix seconds. */
+export function toChartTime(ts: unknown): string | number | undefined {
+  if (typeof ts === "number" && Number.isFinite(ts)) {
+    return Math.floor(ts > 1e12 ? ts / 1000 : ts);
+  }
+  if (typeof ts !== "string") return undefined;
+  const s = ts.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const iso = s.includes("T") ? s : s.replace(" ", "T");
+  const stamped = /Z$|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
+  const ms = Date.parse(stamped);
+  if (!Number.isFinite(ms)) return undefined;
+  return Math.floor(ms / 1000);
 }
 
 export async function fetchLseVaultCandles(
