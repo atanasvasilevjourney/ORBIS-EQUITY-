@@ -47,7 +47,7 @@ type VelaChart = {
       }
     ): { id: string } | null;
     remove(id: string): void;
-    setLocked(id: string, v: boolean): void;
+    lock(id: string, v?: boolean): void;
   };
   renderer: { set(key: string, value: unknown): void };
 };
@@ -109,6 +109,7 @@ function pickLevels(levels: ChartLevel[]): ChartLevel[] {
 function applySkin(chart: VelaChart, themeName: string) {
   const skin = readTheme();
   const glow = glowForTheme(themeName);
+  chart.setTheme(themeName === "paper" ? "light" : "dark");
   chart.setTheme(skin);
   chart.renderer.set("upColor", skin.upColor);
   chart.renderer.set("downColor", skin.downColor);
@@ -151,7 +152,11 @@ function applyLevels(chart: VelaChart, bars: { time: number }[], levels: ChartLe
       text: { value: lv.title, size: "tiny", hAlign: "left", vAlign: "center" },
     });
     if (!d) continue;
-    chart.drawings.setLocked(d.id, true);
+    try {
+      chart.drawings.lock(d.id, true);
+    } catch {
+      /* lock is best-effort — the hline still paints */
+    }
     ids.push(d.id);
   }
 }
@@ -270,6 +275,9 @@ export function TradingChart({
         applySma(chart, sma, smaRef);
         applyLevels(chart, bars, levels, levelIdsRef.current);
         chart.resize();
+      })
+      .catch((err) => {
+        console.error("Vela setMarket failed", err);
       });
   }, [candles, sma, levels, interval, symbol, hasData, theme]);
 
