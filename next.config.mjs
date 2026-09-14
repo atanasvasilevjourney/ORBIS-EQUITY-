@@ -1,5 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  transpilePackages: [
+    "@luxalgo/vela",
+    "@zag-js/core",
+    "@zag-js/dialog",
+    "@zag-js/dom-query",
+    "@zag-js/menu",
+    "@zag-js/tooltip",
+    "@zag-js/types",
+    "@zag-js/vanilla",
+  ],
   experimental: {
     serverActions: {
       allowedOrigins: [

@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { BiasChip } from "@/components/scoreboard/BiasChip";
 import { AgreementDots } from "@/components/scoreboard/AgreementDots";
-import { TradingChart, type Candle, type ChartLevel } from "@/components/chart/TradingChart";
+import { TradingChart, VelaCredit, type Candle, type ChartLevel } from "@/components/chart/TradingChart";
 
 type TickerData = {
   radar: any;
@@ -436,16 +436,22 @@ export default function TickerPage() {
             </div>
           </div>
           <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] overflow-hidden">
-            <div className="px-3 py-1 text-[10px] font-terminal text-[var(--text-muted)] tracking-widest border-b border-[var(--border)]">
-              {ticker} · Daily Bias · {chart?.interval ?? chartTf} · {chart?.source ?? "…"}
-              {liveQuote ? ` · LSE last ${liveQuote.last}` : ""}
-              {chart?.interval === "5m"
-                ? overlayOk
-                  ? ` · ${chart?.source === "lse" ? "LSE vault 5m" : "Yahoo 5m"} · levels from EOD book`
-                  : ` · ${chart?.source === "lse" ? "LSE vault 5m" : "Yahoo 5m"} · EOD levels hidden (price disagree)`
-                : ""}
+            <div className="px-3 py-1 text-[10px] font-terminal text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] flex items-center justify-between gap-2">
+              <span>
+                {ticker} · Daily Bias · {chart?.interval ?? chartTf} · {chart?.source ?? "…"}
+                {liveQuote ? ` · LSE last ${liveQuote.last}` : ""}
+                {chart?.interval === "5m"
+                  ? overlayOk
+                    ? ` · ${chart?.source === "lse" ? "LSE vault 5m" : "Yahoo 5m"} · levels from EOD book`
+                    : ` · ${chart?.source === "lse" ? "LSE vault 5m" : "Yahoo 5m"} · EOD levels hidden (price disagree)`
+                  : ""}
+              </span>
+              <VelaCredit />
             </div>
             <TradingChart
+              key={ticker}
+              symbol={ticker}
+              interval={chartTf}
               candles={chart?.candles ?? []}
               sma={chart?.interval === "1d" ? chart?.sma20 : undefined}
               levels={chartLevels}
