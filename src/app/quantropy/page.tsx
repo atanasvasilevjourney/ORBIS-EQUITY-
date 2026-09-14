@@ -112,7 +112,7 @@ export default function QuantropyPage() {
           QUANTROPY
         </h1>
         <p className="text-xs text-[var(--text-secondary)]">
-          Risk, CAPM, Altman Z, Markowitz allocation — Quantropy/Matilda on the KovaView book
+          Risk, CAPM, Altman Z, Markowitz allocation — Quantropy/Matilda on the Orbis Equity book
         </p>
       </div>
 

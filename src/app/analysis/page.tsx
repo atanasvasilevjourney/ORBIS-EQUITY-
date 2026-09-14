@@ -260,7 +260,7 @@ export default function AnalysisPage() {
       </div>
 
       <p className="text-[10px] text-[var(--text-muted)] font-terminal mt-3">
-        Technical stack from MorcilloSanz/stockanalysis on daily bars. Fundamentals from the existing KovaView snapshot.
+        Technical stack from MorcilloSanz/stockanalysis on daily bars. Fundamentals from the existing Orbis Equity snapshot.
         Heuristic signals — not investment advice.
       </p>
     </div>
