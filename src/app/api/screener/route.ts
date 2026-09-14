@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { isMissingColumn } from "@/lib/supabase/errors";
 
 export const revalidate = 900;
 
@@ -81,17 +82,37 @@ export async function GET(req: NextRequest) {
 
     const allowedSymbols = new Set(filteredUniverse.map((u) => u.symbol));
 
-    const allRadar = await fetchAll<RadarRow>(
-      sb,
-      "trend_radar",
-      "symbol, state, quality_rank, z_mom, f_ewmac, z_52, breakout_active, volume_confirmed, kama_regime, adx, entry_timing, convergence_count, state_changed_at, computed_at",
-      (q) => {
-        let query = q.gte("quality_rank", minRank).order("quality_rank", { ascending: false });
-        if (direction === "bull") query = query.eq("state", 1);
-        else if (direction === "bear") query = query.eq("state", -1);
-        return query;
-      }
-    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const radarFilter = (q: any) => {
+      let query = q.gte("quality_rank", minRank).order("quality_rank", { ascending: false });
+      if (direction === "bull") query = query.eq("state", 1);
+      else if (direction === "bear") query = query.eq("state", -1);
+      return query;
+    };
+
+    const radarFull =
+      "symbol, state, quality_rank, z_mom, f_ewmac, z_52, breakout_active, volume_confirmed, kama_regime, adx, entry_timing, convergence_count, state_changed_at, computed_at";
+    const radarBase =
+      "symbol, state, quality_rank, z_mom, f_ewmac, z_52, breakout_active, volume_confirmed, convergence_count, state_changed_at, computed_at";
+
+    let allRadar: RadarRow[];
+    try {
+      allRadar = await fetchAll<RadarRow>(sb, "trend_radar", radarFull, radarFilter);
+    } catch (err) {
+      if (!isMissingColumn(err)) throw err;
+      const slim = await fetchAll<Omit<RadarRow, "kama_regime" | "adx" | "entry_timing">>(
+        sb,
+        "trend_radar",
+        radarBase,
+        radarFilter
+      );
+      allRadar = slim.map((r) => ({
+        ...r,
+        kama_regime: null,
+        adx: null,
+        entry_timing: null,
+      }));
+    }
 
     const rows = allRadar
       .filter((r) => allowedSymbols.has(r.symbol))

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { isIgnorableReadError } from "@/lib/supabase/errors";
 
 export const dynamic = 'force-dynamic';
 
@@ -25,9 +26,8 @@ export async function GET(
     sb.from("insider_trades_snapshot").select("*").eq("symbol", ticker).order("filing_date", { ascending: false }).limit(10),
   ]);
 
-  // Check for query errors
   const queryError = [radarRes, fundRes, universeRes, earningsRes, insiderRes].find(
-    (r) => r.error && r.error.code !== "PGRST116" // PGRST116 = "not found" for .single()
+    (r) => r.error && !isIgnorableReadError(r.error)
   );
   if (queryError?.error) {
     console.error("Supabase ticker query error:", queryError.error);

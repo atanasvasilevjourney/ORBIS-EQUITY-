@@ -125,6 +125,11 @@ export async function GET() {
     });
   } catch (err) {
     console.error("Skew API error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({
+      summary: null,
+      names: [],
+      headline: null,
+      stale: true,
+    });
   }
 }
