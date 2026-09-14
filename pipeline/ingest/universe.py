@@ -127,7 +127,14 @@ def main() -> None:
     # 1. Fetch all stocks from LSE screener
     lse = LSEClient()
     logger.info("Fetching all screener data from LSE API...")
-    stocks = lse.get_all_screener_data()
+    try:
+        stocks = lse.get_all_screener_data()
+    except requests.HTTPError as err:
+        logger.error(
+            "LSE screener failed (%s) — keeping existing universe_members and continuing",
+            err,
+        )
+        return
     logger.info("Received %d stocks from screener", len(stocks))
 
     if not stocks:

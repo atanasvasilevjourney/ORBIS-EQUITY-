@@ -23,8 +23,11 @@ class LSEClient:
     def __init__(self, config: LSEConfig | None = None):
         self.cfg = config or LSEConfig()
         self.session = requests.Session()
+        key = self.cfg.api_key
         self.session.headers.update({
-            "x-api-key": self.cfg.api_key,
+            "x-api-key": key,
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
             "Content-Type": "application/json",
             "Accept-Encoding": "gzip, deflate, br",
         })
