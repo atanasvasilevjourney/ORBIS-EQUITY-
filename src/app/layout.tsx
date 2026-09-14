@@ -5,7 +5,7 @@ import { DataHonestyBar } from "@/components/cards/DataHonestyBar";
 import { Nav } from "@/components/nav/Nav";
 
 export const metadata: Metadata = {
-  title: "KovaView Terminal",
+  title: "Orbis Equity",
   description: "Equity swing terminal — momentum, fundamentals, earnings & news",
 };
 
