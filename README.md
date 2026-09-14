@@ -215,7 +215,7 @@ Surfaced at `/bias`, ticker **CHART** tab, `GET /api/bias`, and `GET /api/chart/
 
 Cash EOD ingest copies QMIE's *ingestion shape* (public REST, provider fallback, drop the in-progress session bar, ~300 daily closes) onto **Yahoo → Stooq**. It does **not** pull USDT-M klines or vendor QMIE's exchange clients.
 
-**LSE is not a live stream.** London Strategic Edge is weekday batch REST (screener, filings, last 5 daily candles). There is no LSE websocket. Near-real-time in the UI is **on-demand Yahoo 5m** on the chart/BIAS pages only. Nightly compute is Mon–Fri ~19:30 UTC. Weekend views the last closed cash session (typically Friday).
+**LSE live tape** uses the official `lse-data` websocket (`wss://data-ws.londonstrategicedge.com`) and vault 5m candles. Set `LSE_API_KEY` and run `python -m pipeline.ingest.lse_live`. Ticks land in `quotes_last` only — never in `prices_daily`. Chart/BIAS 5m prefers LSE vault, then Yahoo. The PostgREST catalog (screener/filings) is still batch. Nightly EOD books stay Mon–Fri ~19:30 UTC. Weekend views the last closed cash session.
 
 | Sleeve | Signal | Book | Cash size |
 |---|---|---|---|

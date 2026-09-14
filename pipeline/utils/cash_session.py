@@ -1,11 +1,11 @@
 """US cash-equity session helpers (NYSE regular hours).
 
-KovaView is an EOD / delayed terminal. There is no LSE websocket.
-Use these rules so weekday books do not treat a weekend or an
-in-progress Friday print as a closed cash session.
+EOD books (radar, CASH, ROTATE) use the last closed cash session.
+Live LSE ticks go to quotes_last via pipeline.ingest.lse_live — not here.
 """
 from __future__ import annotations
 
+import os
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -56,5 +56,9 @@ def last_closed_session(now: datetime | None = None) -> date:
 
 
 def lse_is_streaming() -> bool:
-    """London Strategic Edge is batch REST + daily candles. Not a live tape."""
-    return False
+    """True only when a live LSE websocket key is configured.
+
+    The PostgREST catalog is still batch. Ticks require LSE_API_KEY and
+    ``python -m pipeline.ingest.lse_live``.
+    """
+    return bool((os.getenv("LSE_API_KEY") or "").strip())

@@ -1,3 +1,4 @@
+import os
 import unittest
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -32,8 +33,17 @@ class CashSessionTests(unittest.TestCase):
         self.assertEqual(session_state(now), "PRE")
         self.assertEqual(last_closed_session(now).isoformat(), "2026-09-11")
 
-    def test_lse_is_not_a_stream(self):
-        self.assertFalse(lse_is_streaming())
+    def test_lse_stream_follows_api_key(self):
+        prev = os.environ.pop("LSE_API_KEY", None)
+        try:
+            self.assertFalse(lse_is_streaming())
+            os.environ["LSE_API_KEY"] = "lse_test"
+            self.assertTrue(lse_is_streaming())
+        finally:
+            if prev is None:
+                os.environ.pop("LSE_API_KEY", None)
+            else:
+                os.environ["LSE_API_KEY"] = prev
 
 
 if __name__ == "__main__":

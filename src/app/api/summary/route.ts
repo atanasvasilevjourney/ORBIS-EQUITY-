@@ -3,6 +3,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { lastClosedSession, sessionLabel, sessionState } from "@/lib/cashSession";
 import { liveTape } from "@/lib/sectorBreadth";
+import { lseStreamConfigured } from "@/lib/lseLive";
 
 export const revalidate = 0;
 export const dynamic = "force-dynamic";
@@ -86,6 +87,25 @@ export async function GET() {
     const sess = sessionState();
     const closed = lastClosedSession();
     const storedBrief = typeof brief?.brief === "string" ? brief.brief : null;
+    const lseConfigured = lseStreamConfigured();
+    let lseStreaming = false;
+    let lseQuoteNames = 0;
+    try {
+      const { data: liveQuotes } = await sb
+        .from("quotes_last")
+        .select("symbol, updated_at")
+        .order("updated_at", { ascending: false })
+        .limit(40);
+      const now = Date.now();
+      const fresh = (liveQuotes ?? []).filter((r) => {
+        const t = r.updated_at ? new Date(r.updated_at).getTime() : 0;
+        return now - t < 45_000;
+      });
+      lseStreaming = fresh.length > 0;
+      lseQuoteNames = (liveQuotes ?? []).length;
+    } catch {
+      lseStreaming = false;
+    }
 
     return NextResponse.json({
       asOfDate: tapeDate ?? brief?.asof_date ?? null,
@@ -123,8 +143,11 @@ export async function GET() {
         label: sessionLabel(sess),
         lastClosedSession: closed,
         workday: sess !== "CLOSED_WEEKEND",
-        lseStreaming: false,
-        yahoo5mOnDemand: true,
+        lseConfigured,
+        lseStreaming,
+        lseQuoteNames,
+        lseWs: "wss://data-ws.londonstrategicedge.com",
+        yahoo5mOnDemand: !lseConfigured,
       },
     });
   } catch (err) {

@@ -364,7 +364,7 @@ export default function ScreenerPage() {
 
       <div className="flex items-center justify-between mt-3">
         <p className="text-xs text-[var(--text-muted)] font-terminal">
-          {rows.length} names · LAST $ = cash EOD ({summary?.tape?.source ?? "yahoo"}) · {summary?.asOfDate ?? "—"} · not an LSE stream
+          {rows.length} names · LAST $ = cash EOD ({summary?.tape?.source ?? "yahoo"}) · {summary?.asOfDate ?? "—"} · live LSE last is quotes_last, not this board
         </p>
       </div>
     </div>

@@ -244,7 +244,7 @@ export default function Home() {
         </p>
         {d?.asOfDate && (
           <p className="text-xs text-[var(--text-muted)] mt-1 font-terminal">
-            Last cash close: {d.asOfDate} EOD · LSE is batch REST, not a live stream
+            Last cash close: {d.asOfDate} EOD · LSE ticks need LSE_API_KEY + python -m pipeline.ingest.lse_live
           </p>
         )}
       </div>

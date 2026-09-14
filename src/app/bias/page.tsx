@@ -99,20 +99,27 @@ export default function BiasPage() {
     if (!name?.ticker) return;
     const ac = new AbortController();
     setChart(null);
-    fetch(`/api/chart/${name.ticker}?interval=${interval}`, { signal: ac.signal })
-      .then(async (r) => {
-        if (!r.ok) throw new Error("chart");
-        return r.json();
-      })
-      .then((x) => {
-        if (x?.interval && x.interval !== interval) setInterval(x.interval);
-        setChart(x);
-      })
-      .catch((err) => {
-        if (err?.name === "AbortError") return;
-        setChart(null);
-      });
-    return () => ac.abort();
+    const load = () => {
+      fetch(`/api/chart/${name.ticker}?interval=${interval}`, { signal: ac.signal })
+        .then(async (r) => {
+          if (!r.ok) throw new Error("chart");
+          return r.json();
+        })
+        .then((x) => {
+          if (x?.interval && x.interval !== interval) setInterval(x.interval);
+          setChart(x);
+        })
+        .catch((err) => {
+          if (err?.name === "AbortError") return;
+          setChart(null);
+        });
+    };
+    load();
+    const id = interval === "5m" ? window.setInterval(load, 20000) : 0;
+    return () => {
+      ac.abort();
+      if (id) window.clearInterval(id);
+    };
   }, [name?.ticker, interval]);
 
   const overlayOk = eodOverlayOk(chart, name?.last ?? null);
@@ -222,8 +229,8 @@ export default function BiasPage() {
                   {name.ticker} · Daily Bias · {chart?.interval ?? interval} · {chart?.source ?? "…"}
                   {chart?.interval === "5m"
                     ? overlayOk
-                      ? " · live Yahoo 5m, levels from EOD book"
-                      : " · live Yahoo 5m · EOD levels hidden (price disagree)"
+                      ? ` · ${chart?.source === "lse" ? "LSE vault 5m" : "Yahoo 5m"} · levels from EOD book`
+                      : ` · ${chart?.source === "lse" ? "LSE vault 5m" : "Yahoo 5m"} · EOD levels hidden (price disagree)`
                     : ""}
                 </div>
                 <TradingChart
