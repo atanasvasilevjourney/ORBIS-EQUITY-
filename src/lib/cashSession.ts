@@ -1,4 +1,4 @@
-/** US cash-equity session (NYSE regular hours). No LSE stream. */
+/** US cash-equity session (NYSE regular hours). LSE ticks live in quotes_last. */
 
 const CASH_OPEN_MIN = 9 * 60 + 30;
 const CASH_CLOSE_MIN = 16 * 60;

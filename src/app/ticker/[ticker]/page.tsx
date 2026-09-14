@@ -241,6 +241,7 @@ export default function TickerPage() {
   const [bias, setBias] = useState<any>(null);
   const [chartTf, setChartTf] = useState<"1d" | "5m">("1d");
   const [chart, setChart] = useState<{ candles: Candle[]; sma20: (number | null)[]; source: string; interval: string } | null>(null);
+  const [liveQuote, setLiveQuote] = useState<{ last: number; source: string; ts: string | null } | null>(null);
 
   useEffect(() => {
     fetch(`/api/ticker/${ticker}`)
@@ -262,20 +263,39 @@ export default function TickerPage() {
 
   useEffect(() => {
     const ac = new AbortController();
-    fetch(`/api/chart/${ticker}?interval=${chartTf}`, { signal: ac.signal })
-      .then(async (r) => {
-        if (!r.ok) throw new Error("chart");
-        return r.json();
-      })
-      .then((x) => {
-        if (x?.interval && x.interval !== chartTf) setChartTf(x.interval);
-        setChart(x);
-      })
-      .catch((err) => {
-        if (err?.name === "AbortError") return;
-        setChart(null);
-      });
-    return () => ac.abort();
+    const load = () => {
+      fetch(`/api/chart/${ticker}?interval=${chartTf}`, { signal: ac.signal })
+        .then(async (r) => {
+          if (!r.ok) throw new Error("chart");
+          return r.json();
+        })
+        .then((x) => {
+          if (x?.interval && x.interval !== chartTf) setChartTf(x.interval);
+          setChart(x);
+        })
+        .catch((err) => {
+          if (err?.name === "AbortError") return;
+          setChart(null);
+        });
+    };
+    load();
+    const pullQuote = () => {
+      fetch(`/api/quotes?symbols=${encodeURIComponent(ticker)}`)
+        .then((r) => r.json())
+        .then((d) => {
+          const q = (d?.quotes ?? []).find((x: { symbol: string }) => x.symbol === ticker);
+          if (q?.last != null) setLiveQuote({ last: q.last, source: q.source ?? "lse_ws", ts: q.ts ?? q.updated_at ?? null });
+        })
+        .catch(() => {});
+    };
+    pullQuote();
+    const id = chartTf === "5m" ? window.setInterval(load, 20000) : 0;
+    const qid = window.setInterval(pullQuote, 5000);
+    return () => {
+      ac.abort();
+      if (id) window.clearInterval(id);
+      window.clearInterval(qid);
+    };
   }, [ticker, chartTf]);
 
   if (loading) {
@@ -418,10 +438,11 @@ export default function TickerPage() {
           <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] overflow-hidden">
             <div className="px-3 py-1 text-[10px] font-terminal text-[var(--text-muted)] tracking-widest border-b border-[var(--border)]">
               {ticker} · Daily Bias · {chart?.interval ?? chartTf} · {chart?.source ?? "…"}
+              {liveQuote ? ` · LSE last ${liveQuote.last}` : ""}
               {chart?.interval === "5m"
                 ? overlayOk
-                  ? " · live Yahoo 5m, levels from EOD book"
-                  : " · live Yahoo 5m · EOD levels hidden (price disagree)"
+                  ? ` · ${chart?.source === "lse" ? "LSE vault 5m" : "Yahoo 5m"} · levels from EOD book`
+                  : ` · ${chart?.source === "lse" ? "LSE vault 5m" : "Yahoo 5m"} · EOD levels hidden (price disagree)`
                 : ""}
             </div>
             <TradingChart
