@@ -107,8 +107,10 @@ jobs:
     needs: [validate-secrets, universe-sync]
     if: >-
       always()
+      && needs.validate-secrets.result == 'success'
       && (needs.universe-sync.result == 'success'
-          || needs.universe-sync.result == 'skipped')
+          || needs.universe-sync.result == 'skipped'
+          || needs.universe-sync.result == 'failure')
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
