@@ -14,9 +14,8 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from supabase import Client
 
-from pipeline.config.settings import SupabaseConfig
 from pipeline.clients.gdelt import fetch_news_for_ticker
 
 load_dotenv()
@@ -28,10 +27,9 @@ ARTICLES_PER_TICKER = 5
 
 
 def _get_supabase_client() -> Client:
-    cfg = SupabaseConfig()
-    if not cfg.url or not cfg.service_key:
-        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
-    return create_client(cfg.url, cfg.service_key)
+    from pipeline.utils.client import get_supabase
+    return get_supabase()
+
 
 
 def _get_priority_tickers(sb: Client) -> list[str]:

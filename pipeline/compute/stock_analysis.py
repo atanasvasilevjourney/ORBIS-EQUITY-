@@ -16,7 +16,6 @@ from datetime import date, datetime, timezone
 
 import numpy as np
 from dotenv import load_dotenv
-from supabase import create_client
 
 from pipeline.compute.tech_signals import (
     CODE_BUY,
@@ -44,11 +43,9 @@ CODE_LABEL = {CODE_BUY: "BUY", CODE_SELL: "SELL", CODE_HOLD: "HOLD"}
 
 
 def _sb():
-    url = os.getenv("SUPABASE_URL", "")
-    key = os.getenv("SUPABASE_SERVICE_KEY", "")
-    if not url or not key:
-        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
-    return create_client(url, key)
+    from pipeline.utils.client import get_supabase
+    return get_supabase()
+
 
 
 def _last(arr: np.ndarray) -> float | None:

@@ -20,9 +20,8 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from supabase import Client
 
-from pipeline.config.settings import SupabaseConfig
 
 load_dotenv()
 
@@ -33,12 +32,8 @@ CANDLE_LIMIT = 5  # last 5 daily bars
 
 def _get_supabase_client() -> Client:
     """Create and return a Supabase client from env config."""
-    cfg = SupabaseConfig()
-    if not cfg.url or not cfg.service_key:
-        raise RuntimeError(
-            "SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in environment"
-        )
-    return create_client(cfg.url, cfg.service_key)
+    from pipeline.utils.client import get_supabase
+    return get_supabase()
 
 
 from pipeline.utils.supabase import fetch_all
@@ -61,55 +56,20 @@ def _fetch_universe(sb: Client) -> list[dict]:
 
 
 def _ingest_lse_prices(symbols: list[str]) -> list[dict]:
-    """Fetch last 5 daily candles from the lse-data SDK for each symbol.
+    """Fetch recent daily candles via London Strategic Edge (lse-data SDK).
 
-    Uses: from lse import LSE; client.candles(symbol, '1d', limit=5)
+    Requires ``LSE_API_KEY`` (``lse_live_…``). Uses authenticated
+    ``client.candles(symbol, '1d', start=…)``.
     """
-    rows: list[dict] = []
-    try:
-        from lse import LSE
-        client = LSE()
-    except ImportError:
-        logger.error("lse-data SDK not installed — run: pip install lse-data")
-        return rows
-    except Exception:
-        logger.exception("Failed to initialize LSE data client")
-        return rows
+    if not symbols:
+        return []
+    from pipeline.clients.lse_data import fetch_daily_candles, has_lse_data_key
 
-    total = len(symbols)
-    success = 0
-    failed = 0
+    if not has_lse_data_key():
+        logger.warning("LSE_API_KEY not set — skipping LSE candle path")
+        return []
 
-    for idx, symbol in enumerate(symbols, 1):
-        try:
-            candles = client.candles(symbol, "1d", limit=CANDLE_LIMIT)
-            if not candles:
-                logger.debug("No candles returned for %s", symbol)
-                continue
-
-            for c in candles:
-                rows.append({
-                    "symbol": symbol,
-                    "date": c.get("date") or c.get("t") or c.get("timestamp"),
-                    "open": c.get("open") or c.get("o"),
-                    "high": c.get("high") or c.get("h"),
-                    "low": c.get("low") or c.get("l"),
-                    "close": c.get("close") or c.get("c"),
-                    "volume": c.get("volume") or c.get("v"),
-                    "source": "lse",
-                })
-            success += 1
-        except Exception:
-            logger.warning("Failed to fetch LSE candles for %s", symbol, exc_info=True)
-            failed += 1
-
-        if idx % 100 == 0:
-            logger.info("LSE prices: %d/%d processed (%d ok, %d fail)", idx, total, success, failed)
-
-    logger.info(
-        "LSE price fetch complete: %d/%d succeeded, %d rows", success, total, len(rows)
-    )
-    return rows
+    return fetch_daily_candles(symbols, lookback_days=14, limit=max(CANDLE_LIMIT, 10))
 
 
 def _ingest_yfinance_prices(symbols: list[str]) -> list[dict]:
@@ -218,30 +178,53 @@ def main() -> None:
         logger.error("No universe members found — run universe sync first.")
         return
 
-    # Split by price_source
-    lse_symbols = [m["symbol"] for m in members if m.get("data_source") == "lse"]
-    yf_symbols = [m["symbol"] for m in members if m.get("data_source") in ("yfinance", "both")]
+    # Prefer London Strategic Edge candles when LSE_API_KEY (lse_live_…) is set.
+    from pipeline.clients.lse_data import has_lse_data_key
+
+    use_lse = has_lse_data_key()
+    lse_symbols: list[str] = []
+    yf_symbols: list[str] = []
+
+    for m in members:
+        symbol = m.get("symbol")
+        if not symbol:
+            continue
+        src = (m.get("data_source") or "").lower()
+        country = (m.get("country") or "").upper()
+        is_eu_uk = country in ("GB", "UK", "DE", "FR", "NL", "CH", "IT", "ES", "SE", "BE")
+        # Prefer LSE for US / unspecified; keep explicit EU/UK on yfinance
+        if use_lse and not is_eu_uk:
+            lse_symbols.append(symbol)
+        else:
+            yf_symbols.append(symbol)
+
+    # De-dupe
+    seen: set[str] = set()
+    lse_symbols = [s for s in lse_symbols if not (s in seen or seen.add(s))]
+    yf_seen = set(lse_symbols)
+    yf_symbols = [s for s in yf_symbols if s not in yf_seen]
 
     logger.info(
-        "Price sources: %d LSE, %d yfinance", len(lse_symbols), len(yf_symbols)
+        "Price sources: %d LSE%s, %d yfinance",
+        len(lse_symbols),
+        " (key present)" if use_lse else "",
+        len(yf_symbols),
     )
 
-    # Fetch prices from each source
     all_rows: list[dict] = []
 
-    if lse_symbols:
+    if lse_symbols and use_lse:
         all_rows.extend(_ingest_lse_prices(lse_symbols))
+
+    # Anything LSE missed falls through to yfinance
+    got = {r.get("symbol") for r in all_rows if r.get("symbol")}
+    yf_symbols = list(dict.fromkeys(yf_symbols + [m["symbol"] for m in members if m.get("symbol") not in got]))
 
     if yf_symbols:
         all_rows.extend(_ingest_yfinance_prices(yf_symbols))
 
     got = {r.get("symbol") for r in all_rows if r.get("symbol")}
-    leftover = [
-        m
-        for m in members
-        if m.get("symbol") not in got
-        and m.get("data_source") in (None, "", "seed_demo")
-    ]
+    leftover = [m for m in members if m.get("symbol") not in got]
     if leftover:
         from pipeline.clients.cash_eod import bars_to_rows, fetch_daily_bars
 

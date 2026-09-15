@@ -16,10 +16,9 @@ import os
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from supabase import Client
 
 from pipeline.clients.clinicaltrials import fetch_trials_for_sponsor
-from pipeline.config.settings import SupabaseConfig
 from pipeline.utils.supabase import fetch_all
 
 load_dotenv()
@@ -49,10 +48,9 @@ SPONSOR_MAP: dict[str, str] = {
 
 
 def _get_supabase_client() -> Client:
-    cfg = SupabaseConfig()
-    if not cfg.url or not cfg.service_key:
-        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
-    return create_client(cfg.url, cfg.service_key)
+    from pipeline.utils.client import get_supabase
+    return get_supabase()
+
 
 
 def _health_members(sb: Client) -> list[dict]:

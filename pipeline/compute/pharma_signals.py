@@ -15,9 +15,8 @@ import os
 from datetime import date, datetime, timezone
 
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from supabase import Client
 
-from pipeline.config.settings import SupabaseConfig
 from pipeline.utils.supabase import fetch_all
 
 load_dotenv()
@@ -42,10 +41,9 @@ ACTIVE_STATUSES = {"RECRUITING", "ACTIVE_NOT_RECRUITING", "ENROLLING_BY_INVITATI
 
 
 def _get_supabase_client() -> Client:
-    cfg = SupabaseConfig()
-    if not cfg.url or not cfg.service_key:
-        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
-    return create_client(cfg.url, cfg.service_key)
+    from pipeline.utils.client import get_supabase
+    return get_supabase()
+
 
 
 def _classify(trial: dict, today: date) -> dict | None:

@@ -25,7 +25,6 @@ from datetime import date, datetime, timezone
 import numpy as np
 from dotenv import load_dotenv
 from scipy.optimize import Bounds, minimize
-from supabase import create_client
 
 from pipeline.utils.supabase import fetch_all
 from pipeline.compute.corr_math import corr_from_returns
@@ -45,11 +44,9 @@ ALLOC_MAX_NAMES = int(os.getenv("QUANTROPY_MAX_NAMES", "40"))
 
 
 def _sb():
-    url = os.getenv("SUPABASE_URL", "")
-    key = os.getenv("SUPABASE_SERVICE_KEY", "")
-    if not url or not key:
-        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
-    return create_client(url, key)
+    from pipeline.utils.client import get_supabase
+    return get_supabase()
+
 
 
 def max_drawdown(returns: np.ndarray) -> float:

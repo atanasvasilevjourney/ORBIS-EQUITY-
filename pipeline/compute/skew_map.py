@@ -29,7 +29,6 @@ import time
 from datetime import date, datetime, timezone
 
 from dotenv import load_dotenv
-from supabase import create_client
 
 from pipeline.clients.option_chain import fetch_symbol, skew_universe
 from pipeline.utils.supabase import fetch_all
@@ -42,11 +41,9 @@ TRADING_DAY_SCALE = math.sqrt(365.0 / 252.0)
 
 
 def _sb():
-    url = os.getenv("SUPABASE_URL", "")
-    key = os.getenv("SUPABASE_SERVICE_KEY", "")
-    if not url or not key:
-        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
-    return create_client(url, key)
+    from pipeline.utils.client import get_supabase
+    return get_supabase()
+
 
 
 def weekend_from_term(term: list[dict]) -> dict | None:

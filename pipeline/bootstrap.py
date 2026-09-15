@@ -15,7 +15,6 @@ import pandas as pd
 import requests
 import yfinance as yf
 from dotenv import load_dotenv
-from supabase import create_client
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -51,15 +50,13 @@ def main():
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
 
-    sb_url = os.getenv("SUPABASE_URL", "")
-    sb_key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv(
-        "SUPABASE_SERVICE_ROLE_KEY", ""
-    )
-    if not sb_url or not sb_key:
-        logger.error("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
+    try:
+        from pipeline.utils.client import get_supabase, require_supabase_env
+        require_supabase_env()
+        sb = get_supabase()
+    except RuntimeError as exc:
+        logger.error("%s", exc)
         return
-
-    sb = create_client(sb_url, sb_key)
 
     # ── Step 1: Universe ──────────────────────────────────────────
     logger.info("=== Step 1: Scraping S&P 500 from Wikipedia ===")

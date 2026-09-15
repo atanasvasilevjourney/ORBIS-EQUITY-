@@ -23,7 +23,6 @@ from datetime import date, datetime, timezone
 
 import numpy as np
 from dotenv import load_dotenv
-from supabase import create_client
 
 from pipeline.compute.tech_signals import MACD, RSI
 from pipeline.utils.supabase import fetch_all
@@ -38,11 +37,9 @@ RR_MIN = 1.2
 
 
 def _sb():
-    url = os.getenv("SUPABASE_URL", "")
-    key = os.getenv("SUPABASE_SERVICE_KEY", "")
-    if not url or not key:
-        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
-    return create_client(url, key)
+    from pipeline.utils.client import get_supabase
+    return get_supabase()
+
 
 
 def _px(v: float) -> float:
