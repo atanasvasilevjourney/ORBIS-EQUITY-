@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { EMPTY_QUANT, liteQuantPayload, parseCorr } from "@/lib/liteDeskApi";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -49,8 +50,9 @@ export async function GET() {
       (q) => q.order("computed_at", { ascending: false })
     );
     const latest = runs[0] ?? null;
-    if (!latest) {
-      return NextResponse.json({ summary: null, names: [], allocations: null, frontier: [], headline: null, stale: true });
+    if (!latest || !latest.names) {
+      const lite = await liteQuantPayload(sb);
+      return NextResponse.json(lite);
     }
     const rows = await fetchAll<NameRow>(
       sb,
@@ -91,6 +93,9 @@ export async function GET() {
     }
     const distressed = names.filter((n) => n.altmanZone === "distress").length;
     const alloc = latest.allocations && typeof latest.allocations === "object" ? latest.allocations : {};
+    const corr = parseCorr((alloc as { corr?: unknown }).corr);
+    const books = { ...alloc };
+    delete (books as { corr?: unknown }).corr;
 
     return NextResponse.json({
       summary: {
@@ -103,13 +108,15 @@ export async function GET() {
         minVol: (alloc as { minVar?: { annVol?: number } }).minVar?.annVol ?? null,
       },
       names,
-      allocations: alloc,
+      allocations: books,
       frontier: Array.isArray(latest.frontier) ? latest.frontier : [],
       headline: latest.headline,
+      corr,
       stale,
+      lite: false,
     });
   } catch (err) {
     console.error("Quantropy API error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ ...EMPTY_QUANT, headline: "Quantropy desk unavailable" });
   }
 }

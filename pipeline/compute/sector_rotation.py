@@ -28,6 +28,7 @@ from pipeline.compute.canary_math import (
     group_aligned,
     tema_ensemble,
 )
+from pipeline.compute.corr_math import corr_from_equities
 from pipeline.compute.perps_math import drawdown_scalar, peak_drawdown_current
 from pipeline.compute.rotate_carver import NameInput, build_carver_book
 from pipeline.compute.sector_math import (
@@ -327,6 +328,8 @@ def run() -> dict:
         "marketR4": _round(market_r4, 5),
         "names": len(closes),
         "proxyCanaries": True,
+        "canaryTapes": {v.name: list(v.tape) for v in canaries.votes},
+        "corr": corr_from_equities(sector_eq),
     }
     sb.table("sector_rotation_runs").upsert({
         "run_id": run_id,

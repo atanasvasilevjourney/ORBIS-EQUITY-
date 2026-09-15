@@ -28,6 +28,7 @@ from scipy.optimize import Bounds, minimize
 from supabase import create_client
 
 from pipeline.utils.supabase import fetch_all
+from pipeline.compute.corr_math import corr_from_returns
 
 load_dotenv()
 load_dotenv(".env.local")
@@ -327,6 +328,7 @@ def run() -> dict:
         b["annReturn"] = round(b["annReturn"], 6)
         b["annVol"] = round(b["annVol"], 6)
         b["sharpe"] = round(b["sharpe"], 4)
+    books["corr"] = corr_from_returns(symbols, rets)
 
     rows = []
     for i, sym in enumerate(symbols):

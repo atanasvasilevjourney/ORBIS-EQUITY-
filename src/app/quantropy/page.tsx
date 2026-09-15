@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { CorrHeatmap } from "@/components/charts/CorrHeatmap";
+import { deskList, parseDesk } from "@/lib/deskPayload";
+import type { CorrMatrix } from "@/lib/corr";
 
-type Book = { label: string; annReturn: number; annVol: number; sharpe: number };
+type Book = { label: string; annReturn: number | null; annVol: number | null; sharpe: number | null };
 type FrontierPt = { annReturn: number; annVol: number; sharpe: number };
 type Name = {
   ticker: string;
@@ -40,6 +43,8 @@ type Data = {
   frontier: FrontierPt[];
   headline: string | null;
   stale: boolean;
+  corr?: CorrMatrix | null;
+  lite?: boolean;
 };
 
 const pct = (v: number | null | undefined, d = 1) => (v == null ? "—" : `${(v * 100).toFixed(d)}%`);
@@ -64,9 +69,9 @@ function Frontier({ pts, books }: { pts: FrontierPt[]; books: Record<string, Boo
   const Y = (y: number) => h - pad - ((y - yMin) / (yMax - yMin || 1)) * (h - pad * 2);
   const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${X(p.annVol).toFixed(1)},${Y(p.annReturn).toFixed(1)}`).join(" ");
   const marks: { x: number; y: number; c: string; l: string }[] = [];
-  if (books?.minVar) marks.push({ x: books.minVar.annVol, y: books.minVar.annReturn, c: "var(--accent-info)", l: "MIN VOL" });
-  if (books?.maxSharpe) marks.push({ x: books.maxSharpe.annVol, y: books.maxSharpe.annReturn, c: "var(--accent-warning)", l: "MAX SHARPE" });
-  if (books?.equal) marks.push({ x: books.equal.annVol, y: books.equal.annReturn, c: "var(--text-muted)", l: "1/N" });
+  if (books?.minVar && books.minVar.annVol != null && books.minVar.annReturn != null) marks.push({ x: books.minVar.annVol, y: books.minVar.annReturn, c: "var(--accent-info)", l: "MIN VOL" });
+  if (books?.maxSharpe && books.maxSharpe.annVol != null && books.maxSharpe.annReturn != null) marks.push({ x: books.maxSharpe.annVol, y: books.maxSharpe.annReturn, c: "var(--accent-warning)", l: "MAX SHARPE" });
+  if (books?.equal && books.equal.annVol != null && books.equal.annReturn != null) marks.push({ x: books.equal.annVol, y: books.equal.annReturn, c: "var(--text-muted)", l: "1/N" });
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-52">
       <path d={line} fill="none" stroke="var(--accent-info)" strokeWidth="1.6" />
@@ -89,7 +94,21 @@ export default function QuantropyPage() {
   useEffect(() => {
     fetch("/api/quantropy")
       .then((r) => r.json())
-      .then(setD)
+      .then((raw: unknown) => {
+        const parsed = parseDesk<Data>(raw, "names");
+        if (parsed) setD(parsed);
+        else {
+          setD({
+            summary: null,
+            names: deskList<Name>(raw, "names"),
+            allocations: null,
+            frontier: [],
+            headline: null,
+            stale: true,
+            corr: null,
+          });
+        }
+      })
       .catch(() => setD(null))
       .finally(() => setLoading(false));
   }, []);
@@ -113,6 +132,7 @@ export default function QuantropyPage() {
         </h1>
         <p className="text-xs text-[var(--text-secondary)]">
           Risk, CAPM, Altman Z, Markowitz allocation — Quantropy/Matilda on the Orbis Equity book
+          {d?.lite ? " · lite correlation from prices_daily (snapshot pending)" : ""}
         </p>
       </div>
 
@@ -174,6 +194,10 @@ export default function QuantropyPage() {
         </div>
       </div>
 
+      <div className="mb-6">
+        <CorrHeatmap corr={d?.corr} title="CORRELATION MATRIX · DAILY RETURNS" />
+      </div>
+
       <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">
         NAME RISK · WEIGHTS ({book === "wMaxSharpe" ? "MAX SHARPE" : book === "wMinVar" ? "MIN VAR" : book === "wInvVol" ? "INV VOL" : "1/N"})
       </h2>
@@ -199,7 +223,7 @@ export default function QuantropyPage() {
             {loading ? (
               <tr><td colSpan={12} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
             ) : !d?.names?.length ? (
-              <tr><td colSpan={12} className="px-3 py-8 text-center text-[var(--text-muted)]">No snapshot. Run: python -m pipeline.compute.quantropy</td></tr>
+              <tr><td colSpan={12} className="px-3 py-8 text-center text-[var(--text-muted)]">No snapshot yet. Correlation matrix above still uses overlapping prices_daily when available.</td></tr>
             ) : (
               d.names.map((r) => (
                 <tr key={r.ticker} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">

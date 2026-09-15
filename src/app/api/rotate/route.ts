@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
+import {
+  EMPTY_ROTATE,
+  canaryTapesFromConfig,
+  liteRotatePayload,
+  parseCorr,
+  tapePoints,
+} from "@/lib/liteDeskApi";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -131,17 +138,8 @@ export async function GET() {
     );
     const latest = runs[0] ?? null;
     if (!latest) {
-      return NextResponse.json({
-        summary: null,
-        sectors: [],
-        industries: [],
-        canaries: [],
-        triggers: [],
-        carver: [],
-        headline: null,
-        config: null,
-        stale: true,
-      });
+      const lite = await liteRotatePayload(sb);
+      return NextResponse.json(lite);
     }
     const [rows, canaryRows, triggerRows, carverRows] = await Promise.all([
       fetchAll<GroupRow>(sb, "sector_rotation_groups", "*"),
@@ -156,6 +154,7 @@ export async function GET() {
     const industries = groups
       .filter((g) => g.groupType === "industry")
       .sort((a, b) => Number(b.aligned) - Number(a.aligned) || (b.score ?? 0) - (a.score ?? 0));
+    const tapes = canaryTapesFromConfig(latest.config);
     const canaries = canaryRows
       .filter((r) => r.run_id === latest.run_id)
       .map((r) => ({
@@ -166,6 +165,7 @@ export async function GET() {
         vote: r.vote ?? 0,
         implication: r.implication ?? "",
         proxy: Boolean(r.proxy),
+        tape: tapePoints(tapes[r.name] ?? []),
       }));
     const triggers = triggerRows
       .filter((r) => r.run_id === latest.run_id)
@@ -213,6 +213,14 @@ export async function GET() {
     }
     const leading = sectors.filter((s) => s.label === "LEAD" || s.label === "ACCEL").length;
     const fading = sectors.filter((s) => s.label === "FADE" || s.label === "LAG").length;
+    const corr = parseCorr((latest.config as { corr?: unknown } | null)?.corr);
+    if (!canaries.length && !sectors.length) {
+      const lite = await liteRotatePayload(sb);
+      return NextResponse.json({
+        ...lite,
+        headline: latest.headline || lite.headline,
+      });
+    }
     return NextResponse.json({
       summary: {
         names: latest.names,
@@ -237,10 +245,12 @@ export async function GET() {
       carver,
       headline: latest.headline,
       config: latest.config,
+      corr,
       stale,
+      lite: false,
     });
   } catch (err) {
     console.error("Rotate API error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ ...EMPTY_ROTATE, headline: "Rotate desk unavailable" });
   }
 }

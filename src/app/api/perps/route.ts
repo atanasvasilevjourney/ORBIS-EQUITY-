@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { EMPTY_PERPS } from "@/lib/liteDeskApi";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -186,6 +187,6 @@ export async function GET() {
     });
   } catch (err) {
     console.error("Perps API error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ ...EMPTY_PERPS, headline: "Cash TEMA desk unavailable" });
   }
 }
