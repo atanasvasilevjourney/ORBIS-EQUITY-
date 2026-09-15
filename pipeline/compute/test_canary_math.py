@@ -51,6 +51,7 @@ class CanaryVoteTests(unittest.TestCase):
         self.assertIn(reg.regime, {"RISK-ON", "STRONG RISK-ON"})
         qqq = next(v for v in reg.votes if v.name == "QQQ/SPY")
         self.assertEqual(qqq.vote, 1)
+        self.assertGreater(len(qqq.tape), 10)
 
 
 class TemaEnsembleTests(unittest.TestCase):

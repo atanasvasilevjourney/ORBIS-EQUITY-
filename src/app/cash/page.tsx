@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { TemaRibbon } from "@/components/charts/TemaRibbon";
+import { deskList, parseDesk } from "@/lib/deskPayload";
+import { temaTape, type TemaBar, type TemaReadout } from "@/lib/tema";
 
 type Name = {
   ticker: string;
@@ -54,6 +57,8 @@ type Data = {
   config: Record<string, number | string> | null;
 };
 
+const DEFAULT_TEMA_NAMES = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "JPM", "XOM"];
+
 const usd = (v: number | null | undefined, d = 0) =>
   v == null ? "—" : v.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: d });
 const px = (v: number | null | undefined, d = 2) => (v == null ? "—" : v.toFixed(d));
@@ -82,14 +87,78 @@ function macdColor(a: string | null) {
 export default function CashPage() {
   const [d, setD] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
+  const [vizTicker, setVizTicker] = useState("AAPL");
+  const [tape, setTape] = useState<{ bars: TemaBar[]; readout: TemaReadout | null }>({ bars: [], readout: null });
+  const [tapeNote, setTapeNote] = useState("Loading listed closes…");
 
   useEffect(() => {
     fetch("/api/perps")
       .then((r) => r.json())
-      .then(setD)
+      .then((raw: unknown) => {
+        const parsed = parseDesk<Data>(raw, "temaBook") ?? parseDesk<Data>(raw, "names");
+        if (parsed) {
+          setD(parsed);
+          const first = parsed.temaBook?.[0]?.ticker || parsed.names?.[0]?.ticker;
+          if (first) setVizTicker((cur) => cur || first);
+        } else {
+          setD({
+            summary: null,
+            names: deskList<Name>(raw, "names"),
+            temaBook: deskList<Name>(raw, "temaBook"),
+            macdClosed: deskList<Name>(raw, "macdClosed"),
+            carverBook: deskList<Name>(raw, "carverBook"),
+            headline: null,
+            config: null,
+          });
+        }
+      })
       .catch(() => setD(null))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setTapeNote(`Loading ${vizTicker} cash tape…`);
+    fetch(`/api/chart/${encodeURIComponent(vizTicker)}`)
+      .then((r) => r.json())
+      .then((raw: { candles?: { time: string | number; high: number; low: number; close: number }[] }) => {
+        if (cancelled) return;
+        const candles = Array.isArray(raw?.candles) ? raw.candles : [];
+        const next = temaTape(candles);
+        setTape(next);
+        if (!candles.length) setTapeNote(`${vizTicker} has no prices_daily bars yet.`);
+        else if (!next.readout) setTapeNote(`${vizTicker}: ${candles.length} bars — TEMA 199 needs ≥220 daily closes.`);
+        else setTapeNote(`${vizTicker} · ${candles.length} listed daily closes`);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTape({ bars: [], readout: null });
+          setTapeNote(`${vizTicker} chart failed.`);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [vizTicker]);
+
+  const chips = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const t of [
+      vizTicker,
+      ...(d?.temaBook ?? []).map((n) => n.ticker),
+      ...(d?.carverBook ?? []).map((n) => n.ticker),
+      ...(d?.names ?? []).map((n) => n.ticker),
+      ...DEFAULT_TEMA_NAMES,
+    ]) {
+      const u = (t || "").toUpperCase();
+      if (!u || seen.has(u)) continue;
+      seen.add(u);
+      out.push(u);
+      if (out.length >= 16) break;
+    }
+    return out;
+  }, [d, vizTicker]);
 
   const s = d?.summary;
   const regimeColor = s?.regime === "CASH" ? "var(--accent-bear)" : s?.regime === "REDUCE" ? "var(--accent-warning)" : "var(--accent-bull)";
@@ -125,9 +194,10 @@ export default function CashPage() {
         </p>
       </div>
 
-      {d?.headline && (
+      {(d?.headline || d?.summary == null) && (
         <div className="px-4 py-2 mb-4 rounded border border-[var(--border)] bg-[var(--card-bg)] text-sm text-[var(--text-secondary)] font-terminal">
-          <span style={{ color: "var(--accent-info)" }}>CASH:</span> {d.headline}
+          <span style={{ color: "var(--accent-info)" }}>CASH:</span>{" "}
+          {d?.headline ?? "Paper TEMA ribbon on listed closes. Book slots fill after python -m pipeline.compute.perps_desk."}
         </div>
       )}
 
@@ -140,6 +210,27 @@ export default function CashPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        {chips.map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setVizTicker(t)}
+            className="px-2 py-1 rounded border border-[var(--border)] text-xs font-terminal"
+            style={{
+              background: t === vizTicker ? "rgba(56, 189, 248, 0.18)" : "var(--card-bg)",
+              color: t === vizTicker ? "var(--accent-info)" : "var(--text-secondary)",
+            }}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--text-muted)] font-terminal mb-2">{tapeNote}</p>
+      <div className="mb-6">
+        <TemaRibbon bars={tape.bars} readout={tape.readout} title={`TEMA RIBBON · ${vizTicker} · 9 / 99 / 199`} />
       </div>
 
       <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">TEMA BOOK · CASH SHARES · MACD HOLD · B+ · 3L/3S</h2>
@@ -163,12 +254,12 @@ export default function CashPage() {
             {loading ? (
               <tr><td colSpan={10} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
             ) : !d?.temaBook?.length ? (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-[var(--text-muted)]">No TEMA slots. Run: python -m pipeline.compute.perps_desk</td></tr>
+              <tr><td colSpan={10} className="px-3 py-8 text-center text-[var(--text-muted)]">No TEMA slots yet (nightly perps_desk has not written a book). Ribbon above still plots 9/99/199 on listed closes.</td></tr>
             ) : (
               d.temaBook.map((r) => (
                 <tr key={`t-${r.ticker}`} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">
                   <td className="px-3 py-2">
-                    <Link href={`/ticker/${r.ticker}`} className="font-bold hover:text-[var(--accent-info)]">{r.ticker}</Link>
+                    <Link href={`/ticker/${r.ticker}`} className="font-bold hover:text-[var(--accent-info)]" onClick={() => setVizTicker(r.ticker)}>{r.ticker}</Link>
                     <span className="text-[var(--text-muted)] ml-2 text-xs hidden lg:inline">{r.companyName}</span>
                   </td>
                   <td className="px-3 py-2 text-right">{px(r.last)}</td>
@@ -214,7 +305,7 @@ export default function CashPage() {
               d.macdClosed.map((r) => (
                 <tr key={`m-${r.ticker}`} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">
                   <td className="px-3 py-2">
-                    <Link href={`/ticker/${r.ticker}`} className="font-bold hover:text-[var(--accent-info)]">{r.ticker}</Link>
+                    <Link href={`/ticker/${r.ticker}`} className="font-bold hover:text-[var(--accent-info)]" onClick={() => setVizTicker(r.ticker)}>{r.ticker}</Link>
                   </td>
                   <td className="px-3 py-2 font-bold" style={{ color: sideColor(r.temaSide) }}>{r.temaSide}</td>
                   <td className="px-3 py-2 font-bold" style={{ color: gradeColor(r.temaGrade) }}>{r.temaGrade} {num(r.temaScore, 0)}</td>
@@ -255,7 +346,7 @@ export default function CashPage() {
               d.carverBook.map((r) => (
                 <tr key={`c-${r.ticker}`} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">
                   <td className="px-3 py-2">
-                    <Link href={`/ticker/${r.ticker}`} className="font-bold hover:text-[var(--accent-info)]">{r.ticker}</Link>
+                    <Link href={`/ticker/${r.ticker}`} className="font-bold hover:text-[var(--accent-info)]" onClick={() => setVizTicker(r.ticker)}>{r.ticker}</Link>
                   </td>
                   <td className="px-3 py-2 text-right">{px(r.last)}</td>
                   <td className="px-3 py-2 font-bold" style={{ color: sideColor(r.carverSide) }}>{r.carverSide}</td>

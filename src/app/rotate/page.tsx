@@ -2,6 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { CanaryBoard } from "@/components/charts/CanaryBoard";
+import { CorrHeatmap } from "@/components/charts/CorrHeatmap";
+import { deskList, parseDesk } from "@/lib/deskPayload";
+import type { CorrMatrix } from "@/lib/corr";
 
 type Group = {
   groupType: string;
@@ -34,6 +38,7 @@ type Canary = {
   vote: number;
   implication: string;
   proxy: boolean;
+  tape?: { ratio: number | null; z: number | null; smooth: number | null }[];
 };
 
 type Trigger = {
@@ -93,6 +98,8 @@ type Data = {
   carver: Carver[];
   headline: string | null;
   stale: boolean;
+  corr?: CorrMatrix | null;
+  lite?: boolean;
 };
 
 const pct = (v: number | null | undefined, d = 0) =>
@@ -278,10 +285,25 @@ export default function RotatePage() {
   useEffect(() => {
     fetch("/api/rotate")
       .then((r) => r.json())
-      .then((data: Data) => {
-        setD(data);
-        const add = (data.carver ?? []).find((c) => c.action === "ADD");
-        if (add) setSector(add.sector);
+      .then((raw: unknown) => {
+        const parsed = parseDesk<Data>(raw, "canaries") ?? parseDesk<Data>(raw, "sectors");
+        if (parsed) {
+          setD(parsed);
+          const add = (parsed.carver ?? []).find((c) => c.action === "ADD");
+          if (add) setSector(add.sector);
+        } else {
+          setD({
+            summary: null,
+            sectors: deskList<Group>(raw, "sectors"),
+            industries: deskList<Group>(raw, "industries"),
+            canaries: deskList<Canary>(raw, "canaries"),
+            triggers: deskList<Trigger>(raw, "triggers"),
+            carver: deskList<Carver>(raw, "carver"),
+            headline: null,
+            stale: true,
+            corr: null,
+          });
+        }
       })
       .catch(() => setD(null))
       .finally(() => setLoading(false));
@@ -425,7 +447,17 @@ export default function RotatePage() {
         ))}
       </div>
 
-      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">1 · MACRO CONTEXT · CANARY VOTES</h2>
+      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">1 · MACRO CONTEXT · CANARY RATIOS</h2>
+      <div className="mb-4">
+        {loading ? (
+          <p className="text-xs text-[var(--text-muted)] font-terminal px-3 py-8 text-center">Loading canaries…</p>
+        ) : (
+          <CanaryBoard canaries={d?.canaries ?? []} />
+        )}
+      </div>
+      <div className="mb-6">
+        <CorrHeatmap corr={d?.corr} title="SECTOR BASKET CORRELATION · DAILY RETURNS" />
+      </div>
       <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
         <table className="w-full text-sm font-terminal">
           <thead>
@@ -442,7 +474,7 @@ export default function RotatePage() {
             {loading ? (
               <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
             ) : !d?.canaries?.length ? (
-              <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--text-muted)]">No canaries. Re-run sector_rotation after migration 016.</td></tr>
+              <tr><td colSpan={6} className="px-3 py-8 text-center text-[var(--text-muted)]">No canary snapshot. Ratio cards above still vote from sector-basket proxies on prices_daily when history exists.</td></tr>
             ) : (
               d.canaries.map((c) => (
                 <tr key={c.name} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">

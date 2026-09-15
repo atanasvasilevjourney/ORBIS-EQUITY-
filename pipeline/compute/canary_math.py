@@ -14,7 +14,7 @@ Paper diagnostic. Not investment advice.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -49,6 +49,7 @@ class CanaryVote:
     vote: int  # +1 / 0 / -1
     implication: str
     proxy: bool
+    tape: tuple[float, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)
@@ -150,6 +151,7 @@ def ratio_canary(
     sm_last = float(sm[-1]) if math.isfinite(sm[-1]) else float("nan")
     vote = vote_from_smooth(sm_last, invert=invert)
     impl = implication_on if vote > 0 else (implication_off if vote < 0 else "flat")
+    tape = tuple(float(x) for x in sm[-80:] if math.isfinite(x))
     return CanaryVote(
         name=name,
         pair=pair,
@@ -158,6 +160,7 @@ def ratio_canary(
         vote=vote,
         implication=impl,
         proxy=True,
+        tape=tape,
     )
 
 
@@ -171,6 +174,11 @@ def trend_canary(eq: np.ndarray) -> CanaryVote:
         return CanaryVote("SPY/200DMA", "UNIV vs SMA200", None, None, 0, "flat", True)
     z = (last / sma) - 1.0
     vote = 1 if last > sma else -1
+    tape = []
+    for i in range(max(0, eq.size - 80), eq.size):
+        w = eq[max(0, i - SMA_TREND + 1) : i + 1]
+        m = float(np.mean(w))
+        tape.append((float(eq[i]) / m - 1.0) if m > 0 else 0.0)
     return CanaryVote(
         name="SPY/200DMA",
         pair="UNIV vs SMA200",
@@ -179,6 +187,7 @@ def trend_canary(eq: np.ndarray) -> CanaryVote:
         vote=vote,
         implication="broad trend up" if vote > 0 else "broad trend down",
         proxy=True,
+        tape=tuple(tape),
     )
 
 
