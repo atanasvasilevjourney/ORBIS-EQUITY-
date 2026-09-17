@@ -215,7 +215,7 @@ export default function PlayPage() {
   const asOf = d?.summary?.asOfDate ?? "—";
 
   return (
-    <div className="flex flex-col h-[calc(100vh-72px)] min-h-[560px]">
+    <div className="flex flex-col min-h-[560px] lg:h-[calc(100vh-72px)]">
       <div className="shrink-0 px-3 py-2 border-b border-[var(--border)] flex flex-wrap items-center gap-x-4 gap-y-1">
         <div>
           <h1 className="text-sm font-terminal font-bold tracking-wider" style={{ color: "var(--accent-warning)" }}>
@@ -277,7 +277,7 @@ export default function PlayPage() {
           </div>
         </aside>
 
-        <section className="flex-1 min-w-0 flex flex-col min-h-0 border-b lg:border-b-0 lg:border-r border-[var(--border)]">
+        <section className="flex-1 min-w-0 flex flex-col min-h-[320px] lg:min-h-0 border-b lg:border-b-0 lg:border-r border-[var(--border)]">
           <div className="shrink-0 px-3 py-1.5 flex items-center gap-2 border-b border-[var(--border)] bg-[var(--surface-alt)]">
             <span className="text-[10px] font-terminal tracking-widest text-[var(--text-muted)]">
               {SCANS.find((s) => s.id === scan)?.label.toUpperCase()} · {shown.length} RESULTS
@@ -371,7 +371,7 @@ export default function PlayPage() {
           </div>
         </section>
 
-        <aside className="lg:w-[440px] xl:w-[500px] shrink-0 flex flex-col min-h-0 bg-[var(--card-bg)]">
+        <aside className="lg:w-[440px] xl:w-[500px] shrink-0 flex flex-col min-h-[420px] lg:min-h-0 bg-[var(--card-bg)]">
           {selected ? (
             <>
               <div className="shrink-0 px-3 py-2 border-b border-[var(--border)]">
