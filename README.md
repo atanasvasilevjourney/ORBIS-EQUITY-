@@ -22,6 +22,7 @@ Systematic equity research terminal — momentum screener, multi-factor fundamen
 10. **Daily Bias** — TradingView-style chart, key levels, paper trade ideas (ANALYZE vote + ATR pivots)
 11. **TEMA + Carver Cash** — TEMA 9/99/199 swing with MACD(12,26,9) close, and Carver EWMAC, sized as fully funded cash shares at the listed close
 12. **Beta Rotation** — macro canaries → GICS sector → nested sub-sectors → TEMA ensemble, then Carver D-rungs (DCA on the bigger trend) rotate into the leading sleeve / names
+13. **Stocks in Play** — last-session ranked movers (gainers, decliners, ≥4% open gappers, dollar volume) with selected chart and news. EOD/delayed — not live pre-market. ORB remains its own strategy tab.
 
 ## Setup
 
@@ -161,6 +162,17 @@ python -m pipeline.compute.opening_range
 ```
 
 Surfaced at `/orb` and `GET /api/orb`. Paper harness only — no live broker orders. Not investment advice.
+
+## Stocks in Play (session movers)
+
+Ranked last-session board from the latest two `prices_daily` prints — not a live Level-1 / pre-market feed:
+
+1. **Session Gainers / Decliners** — close vs prior close
+2. **Gappers ≥4%** — `|open / prev_close − 1| ≥ 4%` (same gap math as ORB, ranked only)
+3. **Most Active $** — close × volume
+4. **ORB Watch** — the paper opening-range book (`GET /api/orb`), not mixed into LOOP/BIAS
+
+Selected name loads `/api/chart` (daily from `prices_daily`, optional Yahoo 5m delayed tape) and `/api/earnings-news?ticker=`. Surfaced at `/play` and `GET /api/play`.
 
 ## Stock Analysis (technical + fundamental)
 
