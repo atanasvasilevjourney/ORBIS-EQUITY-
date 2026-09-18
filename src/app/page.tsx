@@ -46,7 +46,7 @@ type DashData = {
   playNames: number;
   playGainers: number;
   playOvernight: number;
-  playOvernightLead: string | null;
+  playBreakouts: number;
 };
 
 export default function Home() {
@@ -117,7 +117,7 @@ export default function Home() {
           playNames: play?.summary?.names ?? 0,
           playGainers: play?.summary?.nGainers ?? 0,
           playOvernight: play?.summary?.nOvernight ?? 0,
-          playOvernightLead: play?.summary?.overnightLead ?? null,
+          playBreakouts: play?.summary?.nBreakouts ?? 0,
         });
       })
       .catch(() => setError(true))
@@ -372,10 +372,10 @@ export default function Home() {
           },
           {
             href: "/play", title: "STOCKS IN PLAY", badge: "PLAY",
-            subtitle: "Overnight gaps · last-session movers", accent: "var(--accent-warning)", source: "YAHOO DELAYED",
+            subtitle: "Overnight gaps · 100-bar close breakouts", accent: "var(--accent-warning)", source: "YAHOO DELAYED",
             metrics: [
               { label: "AH/PRE", value: d?.playOvernight ? String(d.playOvernight) : "—", color: "var(--accent-warning)" },
-              { label: "LEAD", value: d?.playOvernightLead ?? "—", color: "var(--accent-bull)" },
+              { label: "BRK 100", value: String(d?.playBreakouts ?? 0), color: "var(--accent-info)" },
               { label: "EOD UP", value: String(d?.playGainers ?? 0), color: "var(--accent-bull)" },
             ],
           },

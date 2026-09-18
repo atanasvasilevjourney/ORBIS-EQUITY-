@@ -22,7 +22,7 @@ Systematic equity research terminal — momentum screener, multi-factor fundamen
 10. **Daily Bias** — TradingView-style chart, key levels, paper trade ideas (ANALYZE vote + ATR pivots)
 11. **TEMA + Carver Cash** — TEMA 9/99/199 swing with MACD(12,26,9) close, and Carver EWMAC, sized as fully funded cash shares at the listed close
 12. **Beta Rotation** — macro canaries → GICS sector → nested sub-sectors → TEMA ensemble, then Carver D-rungs (DCA on the bigger trend) rotate into the leading sleeve / names
-13. **Stocks in Play** — overnight/premarket gap-ups from delayed Yahoo spark (AH/pre last vs prior close), plus last-session ranked movers. Not live Level-1. At 07:00 ET rank gap-ups; 09:25 lock 3–5 names; 09:30–09:45 mark the 15-minute OR; 09:45 first 5m close above OR high is the paper long. ORB remains its own strategy tab.
+13. **Stocks in Play** — overnight/premarket gap-ups from delayed Yahoo spark (AH/pre last vs prior close), last-session ranked movers, and a paper `close > Highest(close, 100)[1]` breakout scan (daily from `prices_daily`, 5m from delayed spark). Volume ≥ 1M and last ≥ $1. Not live Level-1 / Thinkorswim. At 07:00 ET rank gap-ups; 09:25 lock 3–5 names; 09:30–09:45 mark the 15-minute OR; 09:45 first 5m close above OR high is the paper long. ORB remains its own strategy tab.
 
 ## Setup
 
@@ -163,9 +163,11 @@ python -m pipeline.compute.opening_range
 
 Surfaced at `/orb` and `GET /api/orb`. Paper harness only — no live broker orders. Not investment advice.
 
-## Stocks in Play (session movers + overnight gaps)
+## Stocks in Play (session movers + overnight gaps + 100-bar breakouts)
 
 `/play` is the 7:00 ET pre-open desk. Ranked last-session movers still come from the latest two `prices_daily` prints. **Overnight Gaps** is a separate tape: delayed Yahoo spark 5-minute pre/post last vs `chartPreviousClose`. Not a live Level-1 / SCANZ pre-market feed.
+
+**Breakout 100D** is the Thinkorswim study `close > Highest(close, 100)[1]` on EOD closes: current close above the highest of the prior 100 daily closes (current bar excluded). Default stock filters match the video: last ≥ $1 and session volume ≥ 1M shares. Sub-$1 runners (e.g. TRUG) are excluded. Sort the result list by volume or Wilder RSI(14). **Breakout 100·5m** applies the same study to delayed Yahoo 5-minute spark (pre/post included), capped to overnight leaders plus liquid names so `/api/play` stays fast. The selected chart draws a cyan `HH 100` line at that prior high. This is delayed tape, not Thinkorswim live L1.
 
 Morning watch (US cash, paper only):
 
@@ -174,7 +176,7 @@ Morning watch (US cash, paper only):
 3. **09:30–09:45 ET** — Mark the 15-minute opening range on `/orb`.
 4. **09:45 ET** — First 5m close above OR high = paper long 1R (stop = entry − OR).
 
-Selected name loads `/api/chart` (daily from `prices_daily`, 5m Yahoo with pre/post) and `/api/earnings-news?ticker=`. `GET /api/play` returns `overnight` plus the EOD scans.
+Selected name loads `/api/chart` (daily from `prices_daily`, 5m Yahoo with pre/post) and `/api/earnings-news?ticker=`. `GET /api/play` returns `overnight`, `breakouts`, `breakouts5m`, plus the EOD scans.
 
 ## Stock Analysis (technical + fundamental)
 

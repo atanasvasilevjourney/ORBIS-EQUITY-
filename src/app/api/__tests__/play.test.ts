@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockCreateServerClient = vi.fn();
-const sparkMock = vi.hoisted(() => vi.fn(async () => [] as unknown[]));
+const sparkMock = vi.hoisted(() => vi.fn(async (_syms?: string[], _range?: string) => [] as unknown[]));
 
 vi.mock("@/lib/supabase/server", () => ({
   createServerClient: () => mockCreateServerClient(),
@@ -20,6 +20,9 @@ function createFilterMock(tables: Record<string, Row[]>) {
       const state = {
         eq: [] as [string, unknown][],
         lt: [] as [string, unknown][],
+        gte: [] as [string, unknown][],
+        lte: [] as [string, unknown][],
+        in: [] as [string, unknown[]][],
         orderCol: null as string | null,
         ascending: true,
         limitN: null as number | null,
@@ -34,6 +37,18 @@ function createFilterMock(tables: Record<string, Row[]>) {
       };
       chain.lt = (k: string, v: unknown) => {
         state.lt.push([k, v]);
+        return chain;
+      };
+      chain.gte = (k: string, v: unknown) => {
+        state.gte.push([k, v]);
+        return chain;
+      };
+      chain.lte = (k: string, v: unknown) => {
+        state.lte.push([k, v]);
+        return chain;
+      };
+      chain.in = (k: string, vals: unknown[]) => {
+        state.in.push([k, vals]);
         return chain;
       };
       chain.order = (k: string, opts?: { ascending?: boolean }) => {
@@ -62,6 +77,18 @@ function createFilterMock(tables: Record<string, Row[]>) {
           for (let i = 0; i < state.lt.length; i++) {
             const [k, v] = state.lt[i];
             if (!(String(r[k]) < String(v))) return false;
+          }
+          for (let i = 0; i < state.gte.length; i++) {
+            const [k, v] = state.gte[i];
+            if (!(String(r[k]) >= String(v))) return false;
+          }
+          for (let i = 0; i < state.lte.length; i++) {
+            const [k, v] = state.lte[i];
+            if (!(String(r[k]) <= String(v))) return false;
+          }
+          for (let i = 0; i < state.in.length; i++) {
+            const [k, vals] = state.in[i];
+            if (!vals.includes(r[k])) return false;
           }
           return true;
         });
@@ -109,7 +136,44 @@ const UNI = [
   { symbol: "SNSE", company_name: "Sensei Biotherapeutics", is_active: true },
   { symbol: "DOWN", company_name: "Decliner Co", is_active: true },
   { symbol: "GAP", company_name: "Gap Name", is_active: true },
+  { symbol: "BRK", company_name: "Breakout Corp", is_active: true },
+  { symbol: "TRUG", company_name: "TBGtech Inc", is_active: true },
 ];
+
+function histDates(n: number, last = AS_OF): string[] {
+  const out: string[] = [];
+  const d = new Date(`${last}T00:00:00Z`);
+  for (let i = n - 1; i >= 0; i--) {
+    const x = new Date(d);
+    x.setUTCDate(x.getUTCDate() - i);
+    out.push(x.toISOString().slice(0, 10));
+  }
+  return out;
+}
+
+function rampSeries(symbol: string, lastClose: number, volume: number, n = 101) {
+  const dates = histDates(n);
+  return dates.map((date, i) => {
+    const c = lastClose - (n - 1 - i);
+    return bar(symbol, date, c, c, c, c, volume);
+  });
+}
+
+function sparkRamp(symbol: string, n = 101, start = 10) {
+  const close = Array.from({ length: n }, (_, i) => start + i);
+  return {
+    symbol,
+    response: [
+      {
+        meta: { symbol, chartPreviousClose: start, regularMarketPrice: start + n - 1 },
+        timestamp: close.map((_, i) => i),
+        indicators: {
+          quote: [{ open: close, high: close, low: close, close, volume: close.map(() => 1) }],
+        },
+      },
+    ],
+  };
+}
 
 describe("GET /api/play", () => {
   beforeEach(() => {
@@ -142,6 +206,8 @@ describe("GET /api/play", () => {
     expect(body.gainers.every((r: { ticker: string }) => r.ticker !== "NEW")).toBe(true);
     expect(body.overnight).toEqual([]);
     expect(body.clock).toBeTruthy();
+    expect(Array.isArray(body.breakouts)).toBe(true);
+    expect(Array.isArray(body.breakouts5m)).toBe(true);
   });
 
   it("ranks delayed overnight gap-ups from Yahoo spark", async () => {
@@ -174,6 +240,36 @@ describe("GET /api/play", () => {
     expect(body.overnight[0].orbEligible).toBe(true);
     expect(body.summary.overnightLead).toBe("RXT");
     expect(body.headline).toContain("RXT");
+  });
+
+  it("flags a 100-bar close breakout and drops sub-$1 names", async () => {
+    const trug = histDates(101).map((date, i) => {
+      const c = 0.4 + i * 0.002;
+      return bar("TRUG", date, c, c, c, c, 25_000_000);
+    });
+    sparkMock.mockImplementation(async (_syms?: string[], range?: string) => {
+      if (range === "5d") return [sparkRamp("BRK")];
+      return [];
+    });
+    mockCreateServerClient.mockReturnValue(
+      createFilterMock({
+        prices_daily: [...PRICES, ...rampSeries("BRK", 110, 2_000_000), ...trug],
+        universe_members: UNI,
+      })
+    );
+    const { GET } = await import("../play/route");
+    const res = await GET();
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.breakouts.map((r: { ticker: string }) => r.ticker)).toEqual(["BRK"]);
+    expect(body.breakouts[0].priorHigh).toBe(109);
+    expect(body.breakouts[0].last).toBe(110);
+    expect(body.breakouts[0].lookback).toBe(100);
+    expect(body.summary.nBreakouts).toBe(1);
+    expect(body.headline).toContain("brk BRK");
+    expect(body.breakouts5m[0].ticker).toBe("BRK");
+    expect(body.breakouts5m[0].tf).toBe("5m");
+    expect(sparkMock.mock.calls.some((c) => c[1] === "5d")).toBe(true);
   });
 
   it("returns an empty desk when prices_daily has no dates", async () => {

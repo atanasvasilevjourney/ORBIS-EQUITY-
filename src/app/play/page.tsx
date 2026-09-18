@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { TradingChart, type Candle } from "@/components/chart/TradingChart";
+import type { OvernightMover } from "@/lib/overnightGaps";
+import type { BreakoutHit } from "@/lib/breakoutScan";
+import { TradingChart, type Candle, type ChartLevel } from "@/components/chart/TradingChart";
 import { parseDesk } from "@/lib/deskPayload";
 import { recordRecentTicker } from "@/components/command/CommandPalette";
 import type { SessionMover } from "@/lib/sessionMovers";
 import { cashClock, overnightWatchStep, type CashClock } from "@/lib/cashSession";
-import type { OvernightMover } from "@/lib/overnightGaps";
 
 type PlaySummary = {
   asOfDate: string;
@@ -19,6 +20,8 @@ type PlaySummary = {
   nOvernight?: number;
   overnightLead?: string | null;
   overnightLeadGap?: number | null;
+  nBreakouts?: number;
+  nBreakouts5m?: number;
 };
 
 type PlayData = {
@@ -28,6 +31,8 @@ type PlayData = {
   gappers: SessionMover[];
   liquid: SessionMover[];
   overnight?: OvernightMover[];
+  breakouts?: BreakoutHit[];
+  breakouts5m?: BreakoutHit[];
   clock?: CashClock;
   headline: string | null;
   stale: boolean;
@@ -45,7 +50,7 @@ type OrbWatch = {
   last: number | null;
 };
 
-type ScanId = "overnight" | "gainers" | "losers" | "gappers" | "liquid" | "orb";
+type ScanId = "overnight" | "breakout" | "breakout5m" | "gainers" | "losers" | "gappers" | "liquid" | "orb";
 
 type NewsItem = {
   id: string;
@@ -58,6 +63,8 @@ type NewsItem = {
 
 const SCANS: { id: ScanId; label: string; hint: string }[] = [
   { id: "overnight", label: "Overnight Gaps", hint: "AH/pre vs prior close" },
+  { id: "breakout", label: "Breakout 100D", hint: "close > HH(close,100)[1]" },
+  { id: "breakout5m", label: "Breakout 100·5m", hint: "same logic on delayed 5m" },
   { id: "gainers", label: "Session Gainers", hint: "Close vs prior" },
   { id: "losers", label: "Session Decliners", hint: "Close vs prior" },
   { id: "gappers", label: "Gappers ≥4%", hint: "Yesterday open gap" },
@@ -123,6 +130,13 @@ function orbToMover(w: OrbWatch): SessionMover {
   };
 }
 
+function rankClientBreakouts(rows: BreakoutHit[], sort: "volume" | "rsi"): BreakoutHit[] {
+  const copy = [...rows];
+  if (sort === "rsi") copy.sort((a, b) => (b.rsi ?? -1) - (a.rsi ?? -1));
+  else copy.sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0));
+  return copy;
+}
+
 export default function PlayPage() {
   const [d, setD] = useState<PlayData | null>(null);
   const [orb, setOrb] = useState<OrbWatch[]>([]);
@@ -131,6 +145,7 @@ export default function PlayPage() {
   const [scan, setScan] = useState<ScanId>(() => (cashClock().watchOvernight ? "overnight" : "gainers"));
   const [sel, setSel] = useState("");
   const [filter, setFilter] = useState("");
+  const [brkSort, setBrkSort] = useState<"volume" | "rsi">("volume");
   const [chartTf, setChartTf] = useState<"1d" | "5m">(() => (cashClock().watchOvernight ? "5m" : "1d"));
   const [chart, setChart] = useState<{
     candles: Candle[];
@@ -196,11 +211,13 @@ export default function PlayPage() {
     if (scan === "orb") return orb.map(orbToMover);
     if (!d) return [];
     if (scan === "overnight") return d.overnight ?? [];
+    if (scan === "breakout") return rankClientBreakouts(d.breakouts ?? [], brkSort);
+    if (scan === "breakout5m") return rankClientBreakouts(d.breakouts5m ?? [], brkSort);
     if (scan === "losers") return d.losers;
     if (scan === "gappers") return d.gappers;
     if (scan === "liquid") return d.liquid;
     return d.gainers;
-  }, [d, orb, scan]);
+  }, [d, orb, scan, brkSort]);
 
   const shown = useMemo(() => {
     const q = filter.trim().toUpperCase();
@@ -251,10 +268,14 @@ export default function PlayPage() {
 
   useEffect(() => {
     if (scan === "overnight") setChartTf("5m");
+    if (scan === "breakout") setChartTf("1d");
+    if (scan === "breakout5m") setChartTf("5m");
   }, [scan]);
 
   const counts: Record<ScanId, number> = {
     overnight: d?.overnight?.length ?? 0,
+    breakout: d?.breakouts?.length ?? 0,
+    breakout5m: d?.breakouts5m?.length ?? 0,
     gainers: d?.gainers?.length ?? 0,
     losers: d?.losers?.length ?? 0,
     gappers: d?.gappers?.length ?? 0,
@@ -266,6 +287,12 @@ export default function PlayPage() {
   const asOf = d?.summary?.asOfDate ?? "—";
   const step = overnightWatchStep(clock);
   const n4 = (d?.overnight ?? []).filter((r) => r.orbEligible).length;
+  const isBrk = scan === "breakout" || scan === "breakout5m";
+  const brkSel = selected && "priorHigh" in selected ? (selected as BreakoutHit) : null;
+  const chartLevels: ChartLevel[] =
+    brkSel != null && Number.isFinite(brkSel.priorHigh)
+      ? [{ price: brkSel.priorHigh, title: `HH ${brkSel.lookback}`, color: "var(--accent-info)" }]
+      : [];
 
   return (
     <div className="flex flex-col min-h-[560px] lg:h-[calc(100vh-72px)]">
@@ -275,7 +302,7 @@ export default function PlayPage() {
             STOCKS IN PLAY
           </h1>
           <p className="text-[10px] text-[var(--text-muted)] font-terminal">
-            Overnight gaps = delayed Yahoo AH/pre vs prior close · not live Level-1 · paper watch only
+            Overnight gaps = delayed Yahoo AH/pre · Breakout 100 = close {'>'} highest prior 100 closes · not TOS live L1
           </p>
         </div>
         <div className="text-[10px] font-terminal text-[var(--text-secondary)]">
@@ -356,6 +383,24 @@ export default function PlayPage() {
             <span className="text-[10px] font-terminal tracking-widest text-[var(--text-muted)]">
               {SCANS.find((s) => s.id === scan)?.label.toUpperCase()} · {shown.length} RESULTS
             </span>
+            {isBrk && (
+              <div className="flex gap-1">
+                {(["volume", "rsi"] as const).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setBrkSort(k)}
+                    className={`px-2 py-0.5 text-[10px] font-terminal rounded border ${
+                      brkSort === k
+                        ? "border-[var(--accent-info)] text-[var(--accent-info)] bg-[var(--badge-bg)]"
+                        : "border-[var(--border)] text-[var(--text-muted)]"
+                    }`}
+                  >
+                    {k === "volume" ? "SORT VOL" : "SORT RSI"}
+                  </button>
+                ))}
+              </div>
+            )}
             <input
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
@@ -376,22 +421,30 @@ export default function PlayPage() {
                   <th className="text-right px-2 py-1.5">HIGH</th>
                   <th className="text-right px-2 py-1.5">LOW</th>
                   <th className="text-right px-2 py-1.5">VOL</th>
+                  {isBrk ? (
+                    <>
+                      <th className="text-right px-2 py-1.5">RSI</th>
+                      <th className="text-right px-2 py-1.5">HH100</th>
+                    </>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={9} className="px-3 py-10 text-center text-[var(--text-muted)]">
+                    <td colSpan={isBrk ? 11 : 9} className="px-3 py-10 text-center text-[var(--text-muted)]">
                       Loading session movers…
                     </td>
                   </tr>
                 ) : !shown.length ? (
                   <tr>
-                    <td colSpan={9} className="px-3 py-10 text-center text-[var(--text-muted)]">
+                    <td colSpan={isBrk ? 11 : 9} className="px-3 py-10 text-center text-[var(--text-muted)]">
                       {scan === "orb"
                         ? "No ORB watch this session. Run: python -m pipeline.compute.opening_range"
                         : scan === "overnight"
                           ? "No delayed overnight prints yet. Premarket 04:00–09:30 ET. Yahoo spark, not live L1."
+                          : isBrk
+                          ? "No close above the prior 100-bar high with last ≥ $1 and volume ≥ 1M. Sub-$1 runners (TRUG) are excluded. Delayed tape, not Thinkorswim."
                           : "No names on this scan. Need two daily prints in prices_daily."}
                     </td>
                   </tr>
@@ -440,6 +493,14 @@ export default function PlayPage() {
                             ? fmtVol(r.dollarVol)
                             : fmtVol(r.volume)}
                         </td>
+                        {isBrk ? (
+                          <>
+                            <td className="px-2 py-1.5 text-right">
+                              {(r as BreakoutHit).rsi == null ? "—" : (r as BreakoutHit).rsi?.toFixed(0)}
+                            </td>
+                            <td className="px-2 py-1.5 text-right">{fmtPx((r as BreakoutHit).priorHigh)}</td>
+                          </>
+                        ) : null}
                       </tr>
                     );
                   })
@@ -467,13 +528,19 @@ export default function PlayPage() {
                     </div>
                   </div>
                 </div>
-                <div className="mt-2 grid grid-cols-5 gap-1 text-center">
+                <div className={`mt-2 grid gap-1 text-center ${isBrk && brkSel ? "grid-cols-7" : "grid-cols-5"}`}>
                   {[
                     ["OPEN", fmtPx(selected.open)],
                     ["HIGH", fmtPx(selected.high)],
                     ["LOW", fmtPx(selected.low)],
                     ["GAP", fmtPct(selected.gapPct)],
                     ["VOL", fmtVol(selected.volume)],
+                    ...(isBrk && brkSel
+                      ? [
+                          ["RSI", brkSel.rsi == null ? "—" : brkSel.rsi.toFixed(0)],
+                          ["HH100", fmtPx(brkSel.priorHigh)],
+                        ]
+                      : []),
                   ].map(([k, v]) => (
                     <div key={k} className="rounded border border-[var(--border)] px-1 py-1">
                       <div className="text-[9px] font-terminal text-[var(--text-muted)] tracking-widest">{k}</div>
@@ -508,7 +575,7 @@ export default function PlayPage() {
                 <TradingChart
                   candles={chart?.candles ?? []}
                   sma={chart?.interval === "1d" ? chart?.sma20 : undefined}
-                  levels={[]}
+                  levels={chartLevels}
                   height={260}
                 />
               </div>

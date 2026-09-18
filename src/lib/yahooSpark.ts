@@ -23,29 +23,29 @@ export type SparkItem = {
   }>;
 };
 
-async function sparkChunk(symbols: string[]): Promise<SparkItem[]> {
+async function sparkChunk(symbols: string[], range: string): Promise<SparkItem[]> {
   if (!symbols.length) return [];
   if (symbols.length > CHUNK) {
     const out: SparkItem[] = [];
     for (let i = 0; i < symbols.length; i += CHUNK) {
-      const part = await sparkChunk(symbols.slice(i, i + CHUNK));
+      const part = await sparkChunk(symbols.slice(i, i + CHUNK), range);
       for (let j = 0; j < part.length; j++) out.push(part[j]);
     }
     return out;
   }
   const url =
     `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${symbols.map(encodeURIComponent).join(",")}` +
-    `&range=1d&interval=5m&includePrePost=true`;
+    `&range=${encodeURIComponent(range)}&interval=5m&includePrePost=true`;
   const res = await fetch(url, {
     headers: { "User-Agent": UA },
     cache: "no-store",
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(12000),
   });
   if (!res.ok) {
     if (symbols.length > 1) {
       const mid = Math.ceil(symbols.length / 2);
-      const a = await sparkChunk(symbols.slice(0, mid));
-      const b = await sparkChunk(symbols.slice(mid));
+      const a = await sparkChunk(symbols.slice(0, mid), range);
+      const b = await sparkChunk(symbols.slice(mid), range);
       return a.concat(b);
     }
     return [];
@@ -56,7 +56,7 @@ async function sparkChunk(symbols: string[]): Promise<SparkItem[]> {
 }
 
 /** Delayed Yahoo spark (pre/post 5m). Not live Level-1. */
-export async function fetchYahooSpark(symbols: string[]): Promise<SparkItem[]> {
+export async function fetchYahooSpark(symbols: string[], range = "1d"): Promise<SparkItem[]> {
   const seen = new Set<string>();
   const uniq: string[] = [];
   for (let i = 0; i < symbols.length; i++) {
@@ -69,7 +69,7 @@ export async function fetchYahooSpark(symbols: string[]): Promise<SparkItem[]> {
   for (let i = 0; i < uniq.length; i += CHUNK) {
     const chunk = uniq.slice(i, i + CHUNK);
     try {
-      const rows = await sparkChunk(chunk);
+      const rows = await sparkChunk(chunk, range);
       for (let j = 0; j < rows.length; j++) out.push(rows[j]);
     } catch (err) {
       console.warn("yahoo spark chunk failed", err);

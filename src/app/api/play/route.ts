@@ -11,6 +11,14 @@ import {
   sessionMovers,
   type SessionBar,
 } from "@/lib/sessionMovers";
+import {
+  BREAKOUT_MIN_PRICE,
+  BREAKOUT_MIN_VOLUME,
+  dailyCloseBreakouts,
+  rankBreakouts,
+  sparkCloseBreakouts,
+  type BreakoutHit,
+} from "@/lib/breakoutScan";
 import { fetchYahooSpark } from "@/lib/yahooSpark";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +43,8 @@ const EMPTY = {
   gappers: [] as ReturnType<typeof rankGappers>,
   liquid: [] as ReturnType<typeof rankLiquid>,
   overnight: [] as ReturnType<typeof rankOvernightUps>,
+  breakouts: [] as BreakoutHit[],
+  breakouts5m: [] as BreakoutHit[],
   clock: cashClock(),
   headline: null as string | null,
   stale: true,
@@ -72,6 +82,32 @@ async function latestTwoDates(sb: ReturnType<typeof createServerClient>): Promis
   return [lastDate, prevDate];
 }
 
+function histFrom(asOf: string, days = 220): string {
+  const d = new Date(`${asOf}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+async function histForSymbols(
+  sb: ReturnType<typeof createServerClient>,
+  symbols: string[],
+  asOf: string
+): Promise<PxRow[]> {
+  if (!symbols.length) return [];
+  const from = histFrom(asOf);
+  const cols = "symbol, date, open, high, low, close, volume";
+  const out: PxRow[] = [];
+  const CHUNK = 40;
+  for (let i = 0; i < symbols.length; i += CHUNK) {
+    const chunk = symbols.slice(i, i + CHUNK);
+    const rows = await fetchAll<PxRow>(sb, "prices_daily", cols, (q) =>
+      q.in("symbol", chunk).gte("date", from).lte("date", asOf)
+    );
+    for (let j = 0; j < rows.length; j++) out.push(rows[j]);
+  }
+  return out;
+}
+
 export async function GET() {
   try {
     const sb = createServerClient();
@@ -96,13 +132,41 @@ export async function GET() {
     const liquid = rankLiquid(book);
     const clock = cashClock();
     let overnight: ReturnType<typeof rankOvernightUps> = [];
+    let breakouts5m: BreakoutHit[] = [];
+    const candidates = today
+      .filter((b) => b.close >= BREAKOUT_MIN_PRICE && (b.volume ?? 0) >= BREAKOUT_MIN_VOLUME)
+      .map((b) => b.symbol);
+    const histRows = await histForSymbols(sb, candidates, asOf).catch(() => [] as PxRow[]);
+    const histBars = histRows
+      .map((r) => {
+        const b = asBar(r);
+        if (!b) return null;
+        return { ...b, volume: b.volume };
+      })
+      .filter((r): r is { symbol: string; date: string; open: number; high: number; low: number; close: number; volume: number | null } => r != null);
+    const breakouts = rankBreakouts(dailyCloseBreakouts(histBars, names), "volume");
     try {
       const sparkSyms = Object.keys(names);
       if (sparkSyms.length === 0) {
         for (let i = 0; i < book.length; i++) sparkSyms.push(book[i].ticker);
       }
-      const spark = await fetchYahooSpark(sparkSyms.slice(0, 80));
+      const spark = await fetchYahooSpark(sparkSyms.slice(0, 80), "1d");
       overnight = rankOvernightUps(overnightFromSpark(spark, names));
+      const fiveSyms: string[] = [];
+      const seen = new Set<string>();
+      const add = (t: string) => {
+        if (seen.has(t)) return;
+        seen.add(t);
+        fiveSyms.push(t);
+      };
+      for (let i = 0; i < overnight.length && fiveSyms.length < 12; i++) add(overnight[i].ticker);
+      for (let i = 0; i < liquid.length && fiveSyms.length < 20; i++) add(liquid[i].ticker);
+      if (fiveSyms.length) {
+        const spark5 = await fetchYahooSpark(fiveSyms, "5d");
+        const dailyVol: Record<string, number | null> = {};
+        for (let i = 0; i < book.length; i++) dailyVol[book[i].ticker] = book[i].volume;
+        breakouts5m = rankBreakouts(sparkCloseBreakouts(spark5, names, dailyVol), "volume");
+      }
     } catch (err) {
       console.warn("overnight spark failed", err);
     }
@@ -116,6 +180,7 @@ export async function GET() {
         `${clock.phase} ${overnightLead.ticker} ${(overnightLead.gapPct * 100).toFixed(1)}% · Yahoo delayed`
       );
     }
+    if (breakouts[0]) bits.push(`brk ${breakouts[0].ticker} HH${breakouts[0].lookback}`);
     bits.push(clock.et);
     const headline = bits.join(" · ");
     return NextResponse.json({
@@ -129,12 +194,16 @@ export async function GET() {
         nOvernight: overnight.length,
         overnightLead: overnight[0]?.ticker ?? null,
         overnightLeadGap: overnight[0]?.gapPct ?? null,
+        nBreakouts: breakouts.length,
+        nBreakouts5m: breakouts5m.length,
       },
       gainers,
       losers,
       gappers,
       liquid,
       overnight,
+      breakouts,
+      breakouts5m,
       clock,
       headline,
       stale,
