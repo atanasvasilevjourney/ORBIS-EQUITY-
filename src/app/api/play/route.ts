@@ -160,7 +160,8 @@ export async function GET() {
         fiveSyms.push(t);
       };
       for (let i = 0; i < overnight.length && fiveSyms.length < 12; i++) add(overnight[i].ticker);
-      for (let i = 0; i < liquid.length && fiveSyms.length < 20; i++) add(liquid[i].ticker);
+      for (let i = 0; i < breakouts.length && fiveSyms.length < 20; i++) add(breakouts[i].ticker);
+      for (let i = 0; i < liquid.length && fiveSyms.length < 24; i++) add(liquid[i].ticker);
       if (fiveSyms.length) {
         const spark5 = await fetchYahooSpark(fiveSyms, "5d");
         const dailyVol: Record<string, number | null> = {};
