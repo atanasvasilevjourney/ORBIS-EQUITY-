@@ -1,9 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockCreateServerClient = vi.fn();
+const sparkMock = vi.hoisted(() => vi.fn(async () => [] as unknown[]));
 
 vi.mock("@/lib/supabase/server", () => ({
   createServerClient: () => mockCreateServerClient(),
+}));
+
+vi.mock("@/lib/yahooSpark", () => ({
+  fetchYahooSpark: sparkMock,
 }));
 
 type Row = Record<string, unknown>;
@@ -110,6 +115,8 @@ describe("GET /api/play", () => {
   beforeEach(() => {
     vi.resetModules();
     mockCreateServerClient.mockReset();
+    sparkMock.mockReset();
+    sparkMock.mockResolvedValue([]);
   });
 
   it("ranks last-session gainers from two daily prints", async () => {
@@ -133,6 +140,40 @@ describe("GET /api/play", () => {
     expect(body.liquid[0].ticker).toBe("RXT");
     expect(body.headline).toContain("RXT");
     expect(body.gainers.every((r: { ticker: string }) => r.ticker !== "NEW")).toBe(true);
+    expect(body.overnight).toEqual([]);
+    expect(body.clock).toBeTruthy();
+  });
+
+  it("ranks delayed overnight gap-ups from Yahoo spark", async () => {
+    sparkMock.mockResolvedValue([
+      {
+        symbol: "RXT",
+        response: [
+          {
+            meta: { symbol: "RXT", chartPreviousClose: 0.42, regularMarketPrice: 0.9 },
+            timestamp: [1, 2],
+            indicators: {
+              quote: [{ open: [0.5, 0.88], high: [0.6, 0.95], low: [0.45, 0.8], close: [0.55, 0.9], volume: [10, 20] }],
+            },
+          },
+        ],
+      },
+    ]);
+    mockCreateServerClient.mockReturnValue(
+      createFilterMock({
+        prices_daily: PRICES,
+        universe_members: UNI,
+      })
+    );
+    const { GET } = await import("../play/route");
+    const res = await GET();
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.overnight[0].ticker).toBe("RXT");
+    expect(body.overnight[0].gapPct).toBeCloseTo(0.9 / 0.42 - 1, 6);
+    expect(body.overnight[0].orbEligible).toBe(true);
+    expect(body.summary.overnightLead).toBe("RXT");
+    expect(body.headline).toContain("RXT");
   });
 
   it("returns an empty desk when prices_daily has no dates", async () => {

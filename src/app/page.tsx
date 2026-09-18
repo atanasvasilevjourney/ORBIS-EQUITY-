@@ -45,6 +45,8 @@ type DashData = {
   rotateLeading: number;
   playNames: number;
   playGainers: number;
+  playOvernight: number;
+  playOvernightLead: string | null;
 };
 
 export default function Home() {
@@ -114,6 +116,8 @@ export default function Home() {
           rotateLeading: rotate?.summary?.leading ?? 0,
           playNames: play?.summary?.names ?? 0,
           playGainers: play?.summary?.nGainers ?? 0,
+          playOvernight: play?.summary?.nOvernight ?? 0,
+          playOvernightLead: play?.summary?.overnightLead ?? null,
         });
       })
       .catch(() => setError(true))
@@ -368,11 +372,11 @@ export default function Home() {
           },
           {
             href: "/play", title: "STOCKS IN PLAY", badge: "PLAY",
-            subtitle: "Last-session movers · chart + news", accent: "var(--accent-warning)", source: "EOD TAPE",
+            subtitle: "Overnight gaps · last-session movers", accent: "var(--accent-warning)", source: "YAHOO DELAYED",
             metrics: [
-              { label: "NAMES", value: d?.playNames ? String(d.playNames) : "—" },
-              { label: "UP", value: String(d?.playGainers ?? 0), color: "var(--accent-bull)" },
-              { label: "TAPE", value: "EOD", color: "var(--accent-info)" },
+              { label: "AH/PRE", value: d?.playOvernight ? String(d.playOvernight) : "—", color: "var(--accent-warning)" },
+              { label: "LEAD", value: d?.playOvernightLead ?? "—", color: "var(--accent-bull)" },
+              { label: "EOD UP", value: String(d?.playGainers ?? 0), color: "var(--accent-bull)" },
             ],
           },
           {

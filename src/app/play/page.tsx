@@ -6,6 +6,8 @@ import { TradingChart, type Candle } from "@/components/chart/TradingChart";
 import { parseDesk } from "@/lib/deskPayload";
 import { recordRecentTicker } from "@/components/command/CommandPalette";
 import type { SessionMover } from "@/lib/sessionMovers";
+import { cashClock, overnightWatchStep, type CashClock } from "@/lib/cashSession";
+import type { OvernightMover } from "@/lib/overnightGaps";
 
 type PlaySummary = {
   asOfDate: string;
@@ -14,6 +16,9 @@ type PlaySummary = {
   nGainers: number;
   nLosers: number;
   nGappers: number;
+  nOvernight?: number;
+  overnightLead?: string | null;
+  overnightLeadGap?: number | null;
 };
 
 type PlayData = {
@@ -22,6 +27,8 @@ type PlayData = {
   losers: SessionMover[];
   gappers: SessionMover[];
   liquid: SessionMover[];
+  overnight?: OvernightMover[];
+  clock?: CashClock;
   headline: string | null;
   stale: boolean;
 };
@@ -38,7 +45,7 @@ type OrbWatch = {
   last: number | null;
 };
 
-type ScanId = "gainers" | "losers" | "gappers" | "liquid" | "orb";
+type ScanId = "overnight" | "gainers" | "losers" | "gappers" | "liquid" | "orb";
 
 type NewsItem = {
   id: string;
@@ -50,11 +57,19 @@ type NewsItem = {
 };
 
 const SCANS: { id: ScanId; label: string; hint: string }[] = [
+  { id: "overnight", label: "Overnight Gaps", hint: "AH/pre vs prior close" },
   { id: "gainers", label: "Session Gainers", hint: "Close vs prior" },
   { id: "losers", label: "Session Decliners", hint: "Close vs prior" },
-  { id: "gappers", label: "Gappers ≥4%", hint: "Open vs prior close" },
+  { id: "gappers", label: "Gappers ≥4%", hint: "Yesterday open gap" },
   { id: "liquid", label: "Most Active $", hint: "Close × volume" },
   { id: "orb", label: "ORB Watch", hint: "Paper 15m OR book" },
+];
+
+const WATCH_STEPS = [
+  { n: 1, when: "07:00", text: "Rank overnight gap-ups. Read the news. Skip thin AH prints." },
+  { n: 2, when: "09:25", text: "Lock 3–5 names. Paper size only." },
+  { n: 3, when: "09:30", text: "Mark 15-minute OR (09:30–09:45 ET) on ORB." },
+  { n: 4, when: "09:45", text: "First 5m close above OR high = paper long 1R." },
 ];
 
 function fmtPx(v: number | null | undefined) {
@@ -112,10 +127,11 @@ export default function PlayPage() {
   const [d, setD] = useState<PlayData | null>(null);
   const [orb, setOrb] = useState<OrbWatch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [scan, setScan] = useState<ScanId>("gainers");
+  const [clock, setClock] = useState<CashClock>(() => cashClock());
+  const [scan, setScan] = useState<ScanId>(() => (cashClock().watchOvernight ? "overnight" : "gainers"));
   const [sel, setSel] = useState("");
   const [filter, setFilter] = useState("");
-  const [chartTf, setChartTf] = useState<"1d" | "5m">("1d");
+  const [chartTf, setChartTf] = useState<"1d" | "5m">(() => (cashClock().watchOvernight ? "5m" : "1d"));
   const [chart, setChart] = useState<{
     candles: Candle[];
     sma20?: (number | null)[];
@@ -125,31 +141,61 @@ export default function PlayPage() {
   const [news, setNews] = useState<NewsItem[]>([]);
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/play")
-        .then((r) => r.json())
-        .then((data: unknown) => parseDesk<PlayData>(data, "gainers")),
-      fetch("/api/orb")
-        .then((r) => r.json())
-        .then((data: unknown) => {
-          const rec = parseDesk<{ watch: OrbWatch[] }>(data, "watch");
-          return rec?.watch ?? [];
+    const tick = () => setClock(cashClock());
+    tick();
+    const id = window.setInterval(tick, 30000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      Promise.all([
+        fetch("/api/play")
+          .then((r) => r.json())
+          .then((data: unknown) => parseDesk<PlayData>(data, "gainers")),
+        fetch("/api/orb")
+          .then((r) => r.json())
+          .then((data: unknown) => {
+            const rec = parseDesk<{ watch: OrbWatch[] }>(data, "watch");
+            return rec?.watch ?? [];
+          })
+          .catch(() => [] as OrbWatch[]),
+      ])
+        .then(([desk, watch]) => {
+          if (cancelled) return;
+          setD(desk);
+          setOrb(watch);
+          if (!sel) {
+            const first =
+              (cashClock().watchOvernight ? desk?.overnight?.[0]?.ticker : null) ||
+              desk?.gainers?.[0]?.ticker ||
+              watch[0]?.ticker ||
+              "";
+            if (first) setSel(first);
+          }
         })
-        .catch(() => [] as OrbWatch[]),
-    ])
-      .then(([desk, watch]) => {
-        setD(desk);
-        setOrb(watch);
-        const first = desk?.gainers?.[0]?.ticker ?? watch[0]?.ticker ?? "";
-        if (first) setSel(first);
-      })
-      .catch(() => setD(null))
-      .finally(() => setLoading(false));
+        .catch(() => {
+          if (!cancelled) setD(null);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    };
+    load();
+    const id = window.setInterval(load, 60000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+    // sel is read only to avoid resetting the pick on poll
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const rows = useMemo(() => {
     if (scan === "orb") return orb.map(orbToMover);
     if (!d) return [];
+    if (scan === "overnight") return d.overnight ?? [];
     if (scan === "losers") return d.losers;
     if (scan === "gappers") return d.gappers;
     if (scan === "liquid") return d.liquid;
@@ -203,7 +249,12 @@ export default function PlayPage() {
     return () => ac.abort();
   }, [selected?.ticker, chartTf]);
 
+  useEffect(() => {
+    if (scan === "overnight") setChartTf("5m");
+  }, [scan]);
+
   const counts: Record<ScanId, number> = {
+    overnight: d?.overnight?.length ?? 0,
     gainers: d?.gainers?.length ?? 0,
     losers: d?.losers?.length ?? 0,
     gappers: d?.gappers?.length ?? 0,
@@ -211,8 +262,10 @@ export default function PlayPage() {
     orb: orb.length,
   };
 
-  const pctHeader = scan === "gappers" || scan === "orb" ? "GAP" : "% CHG";
+  const pctHeader = scan === "gappers" || scan === "orb" || scan === "overnight" ? "GAP" : "% CHG";
   const asOf = d?.summary?.asOfDate ?? "—";
+  const step = overnightWatchStep(clock);
+  const n4 = (d?.overnight ?? []).filter((r) => r.orbEligible).length;
 
   return (
     <div className="flex flex-col min-h-[560px] lg:h-[calc(100vh-72px)]">
@@ -222,19 +275,25 @@ export default function PlayPage() {
             STOCKS IN PLAY
           </h1>
           <p className="text-[10px] text-[var(--text-muted)] font-terminal">
-            Last session from daily prints · not live pre-market · Yahoo 5m is delayed tape
+            Overnight gaps = delayed Yahoo AH/pre vs prior close · not live Level-1 · paper watch only
           </p>
         </div>
         <div className="text-[10px] font-terminal text-[var(--text-secondary)]">
           {d?.headline ?? (loading ? "Loading…" : "No session tape")}
           {d?.stale ? (
             <span className="ml-2" style={{ color: "var(--accent-warning)" }}>
-              STALE
+              EOD STALE
             </span>
           ) : null}
         </div>
-        <div className="ml-auto text-[10px] font-terminal text-[var(--text-muted)]">
-          AS OF {asOf} · PRIOR {d?.summary?.priorDate ?? "—"} · {d?.summary?.names ?? 0} NAMES
+        <div className="ml-auto text-[10px] font-terminal text-[var(--text-muted)] text-right">
+          <div style={{ color: clock.watchOvernight ? "var(--accent-warning)" : "var(--text-secondary)" }}>
+            {clock.et} · {clock.phase} · {clock.next}
+          </div>
+          <div>
+            EOD {asOf} · PRIOR {d?.summary?.priorDate ?? "—"} · {d?.summary?.names ?? 0} NAMES
+            {n4 ? ` · ${n4} ≥4% overnight` : ""}
+          </div>
         </div>
       </div>
 
@@ -269,11 +328,26 @@ export default function PlayPage() {
               </button>
             );
           })}
-          <div className="px-3 py-3 text-[10px] text-[var(--text-muted)] font-terminal leading-relaxed">
-            ORB stays a strategy tab.{" "}
-            <Link href="/orb" className="text-[var(--accent-info)] hover:underline">
-              Open ORB
-            </Link>
+          <div className="px-3 py-3 text-[10px] text-[var(--text-muted)] font-terminal leading-relaxed space-y-2">
+            <div className="tracking-widest">7AM → OPEN</div>
+            {WATCH_STEPS.map((s) => (
+              <div
+                key={s.n}
+                className="pl-2 border-l-2"
+                style={{
+                  borderColor: step === s.n ? "var(--accent-warning)" : "var(--border)",
+                  color: step === s.n ? "var(--text-primary)" : "var(--text-muted)",
+                }}
+              >
+                <span className="text-[var(--accent-info)]">{s.when}</span> {s.text}
+              </div>
+            ))}
+            <div>
+              ORB stays a strategy tab.{" "}
+              <Link href="/orb" className="text-[var(--accent-info)] hover:underline">
+                Open ORB
+              </Link>
+            </div>
           </div>
         </aside>
 
@@ -316,13 +390,16 @@ export default function PlayPage() {
                     <td colSpan={9} className="px-3 py-10 text-center text-[var(--text-muted)]">
                       {scan === "orb"
                         ? "No ORB watch this session. Run: python -m pipeline.compute.opening_range"
-                        : "No names on this scan. Need two daily prints in prices_daily."}
+                        : scan === "overnight"
+                          ? "No delayed overnight prints yet. Premarket 04:00–09:30 ET. Yahoo spark, not live L1."
+                          : "No names on this scan. Need two daily prints in prices_daily."}
                     </td>
                   </tr>
                 ) : (
                   shown.map((r, i) => {
                     const active = r.ticker === selected?.ticker;
-                    const pct = scan === "gappers" || scan === "orb" ? r.gapPct : r.chgPct;
+                    const pct = scan === "gappers" || scan === "orb" || scan === "overnight" ? r.gapPct : r.chgPct;
+                    const overnight = r as OvernightMover;
                     return (
                       <tr
                         key={r.ticker}
@@ -341,9 +418,10 @@ export default function PlayPage() {
                           >
                             {r.ticker}
                           </Link>
-                          {r.companyName ? (
+                          {(r.companyName || (scan === "overnight" && overnight.orbEligible)) ? (
                             <div className="text-[10px] text-[var(--text-muted)] truncate max-w-[160px]">
                               {r.companyName}
+                              {scan === "overnight" && overnight.orbEligible ? `${r.companyName ? " · " : ""}ORB ≥4%` : ""}
                             </div>
                           ) : null}
                         </td>
@@ -407,7 +485,7 @@ export default function PlayPage() {
               <div className="shrink-0 flex items-center justify-between px-3 py-1 border-b border-[var(--border)]">
                 <span className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">
                   {selected.ticker} · {chart?.interval ?? chartTf} · {chart?.source ?? "…"}
-                  {chart?.interval === "5m" ? " · Yahoo delayed" : " · prices_daily"}
+                  {chart?.interval === "5m" ? " · Yahoo delayed pre/post" : " · prices_daily"}
                 </span>
                 <div className="flex gap-1">
                   {(["1d", "5m"] as const).map((tf) => (

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { cashClock } from "@/lib/cashSession";
+import { overnightFromSpark, rankOvernightUps } from "@/lib/overnightGaps";
 import {
   rankGainers,
   rankGappers,
@@ -9,6 +11,7 @@ import {
   sessionMovers,
   type SessionBar,
 } from "@/lib/sessionMovers";
+import { fetchYahooSpark } from "@/lib/yahooSpark";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -31,6 +34,8 @@ const EMPTY = {
   losers: [] as ReturnType<typeof rankLosers>,
   gappers: [] as ReturnType<typeof rankGappers>,
   liquid: [] as ReturnType<typeof rankLiquid>,
+  overnight: [] as ReturnType<typeof rankOvernightUps>,
+  clock: cashClock(),
   headline: null as string | null,
   stale: true,
 };
@@ -89,11 +94,30 @@ export async function GET() {
     const losers = rankLosers(book);
     const gappers = rankGappers(book);
     const liquid = rankLiquid(book);
+    const clock = cashClock();
+    let overnight: ReturnType<typeof rankOvernightUps> = [];
+    try {
+      const sparkSyms = Object.keys(names);
+      if (sparkSyms.length === 0) {
+        for (let i = 0; i < book.length; i++) sparkSyms.push(book[i].ticker);
+      }
+      const spark = await fetchYahooSpark(sparkSyms.slice(0, 80));
+      overnight = rankOvernightUps(overnightFromSpark(spark, names));
+    } catch (err) {
+      console.warn("overnight spark failed", err);
+    }
     const stale = (Date.now() - new Date(asOf).getTime()) / 86400000 > 3;
-    const top = gainers[0];
-    const headline = top
-      ? `${asOf} · ${book.length} names · ${gainers.length} up · lead ${top.ticker} ${(top.chgPct * 100).toFixed(1)}%`
-      : `${asOf} · no session movers`;
+    const sessionLead = gainers[0];
+    const overnightLead = overnight[0];
+    const bits = [`${asOf} · ${book.length} names · ${gainers.length} up`];
+    if (sessionLead) bits.push(`session ${sessionLead.ticker} ${(sessionLead.chgPct * 100).toFixed(1)}%`);
+    if (overnightLead) {
+      bits.push(
+        `${clock.phase} ${overnightLead.ticker} ${(overnightLead.gapPct * 100).toFixed(1)}% · Yahoo delayed`
+      );
+    }
+    bits.push(clock.et);
+    const headline = bits.join(" · ");
     return NextResponse.json({
       summary: {
         asOfDate: asOf,
@@ -102,11 +126,16 @@ export async function GET() {
         nGainers: gainers.length,
         nLosers: losers.length,
         nGappers: gappers.length,
+        nOvernight: overnight.length,
+        overnightLead: overnight[0]?.ticker ?? null,
+        overnightLeadGap: overnight[0]?.gapPct ?? null,
       },
       gainers,
       losers,
       gappers,
       liquid,
+      overnight,
+      clock,
       headline,
       stale,
     });
