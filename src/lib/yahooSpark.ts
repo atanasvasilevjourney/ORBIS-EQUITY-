@@ -1,5 +1,5 @@
 const UA = "Mozilla/5.0 OrbisEquity-Terminal";
-const CHUNK = 25;
+const CHUNK = 10;
 
 export type SparkItem = {
   symbol?: string;
@@ -25,15 +25,31 @@ export type SparkItem = {
 
 async function sparkChunk(symbols: string[]): Promise<SparkItem[]> {
   if (!symbols.length) return [];
+  if (symbols.length > CHUNK) {
+    const out: SparkItem[] = [];
+    for (let i = 0; i < symbols.length; i += CHUNK) {
+      const part = await sparkChunk(symbols.slice(i, i + CHUNK));
+      for (let j = 0; j < part.length; j++) out.push(part[j]);
+    }
+    return out;
+  }
   const url =
-    `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${encodeURIComponent(symbols.join(","))}` +
+    `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${symbols.map(encodeURIComponent).join(",")}` +
     `&range=1d&interval=5m&includePrePost=true`;
   const res = await fetch(url, {
     headers: { "User-Agent": UA },
     cache: "no-store",
     signal: AbortSignal.timeout(10000),
   });
-  if (!res.ok) return [];
+  if (!res.ok) {
+    if (symbols.length > 1) {
+      const mid = Math.ceil(symbols.length / 2);
+      const a = await sparkChunk(symbols.slice(0, mid));
+      const b = await sparkChunk(symbols.slice(mid));
+      return a.concat(b);
+    }
+    return [];
+  }
   const body = await res.json();
   const rows = body?.spark?.result;
   return Array.isArray(rows) ? (rows as SparkItem[]) : [];
