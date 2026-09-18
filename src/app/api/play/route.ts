@@ -214,29 +214,36 @@ export async function GET() {
         seen.add(t);
         fiveSyms.push(t);
       };
-      for (let i = 0; i < overnight.length && fiveSyms.length < 12; i++) add(overnight[i].ticker);
-      for (let i = 0; i < breakouts.length && fiveSyms.length < 20; i++) add(breakouts[i].ticker);
-      for (let i = 0; i < liquid.length && fiveSyms.length < 24; i++) add(liquid[i].ticker);
+      for (let i = 0; i < overnight.length && fiveSyms.length < 6; i++) add(overnight[i].ticker);
+      for (let i = 0; i < breakouts.length && fiveSyms.length < 8; i++) add(breakouts[i].ticker);
+      for (let i = 0; i < liquid.length && fiveSyms.length < 8; i++) add(liquid[i].ticker);
       if (fiveSyms.length) {
         const dailyVol: Record<string, number | null> = {};
         for (let i = 0; i < book.length; i++) dailyVol[book[i].ticker] = book[i].volume;
-        const vaultSeries = await poolMap(fiveSyms, 6, async (ticker) => ({
-          ticker,
-          candles: await fetchLseVaultCandles(ticker, "5m", 400).catch(() => []),
-        }));
-        const enough = vaultSeries.filter((s) => s.candles.length >= 101);
-        const fromVault = candleCloseBreakouts(enough, names, dailyVol);
-        const missing: string[] = [];
-        for (let i = 0; i < fiveSyms.length; i++) {
-          const t = fiveSyms[i];
-          if (!enough.some((s) => s.ticker === t)) missing.push(t);
-        }
-        let fromSpark: BreakoutHit[] = [];
-        if (missing.length) {
-          const spark5 = await fetchYahooSpark(missing, "5d");
-          fromSpark = sparkCloseBreakouts(spark5, names, dailyVol);
-        }
-        breakouts5m = rankBreakouts([...fromVault, ...fromSpark], "volume");
+        const vaultWork = async (): Promise<BreakoutHit[]> => {
+          const vaultSeries = await poolMap(fiveSyms, 4, async (ticker) => ({
+            ticker,
+            candles: await fetchLseVaultCandles(ticker, "5m", 160).catch(() => []),
+          }));
+          const enough = vaultSeries.filter((s) => s.candles.length >= 101);
+          const fromVault = candleCloseBreakouts(enough, names, dailyVol);
+          if (liveStreaming) return rankBreakouts(fromVault, "volume");
+          const missing: string[] = [];
+          for (let i = 0; i < fiveSyms.length; i++) {
+            const t = fiveSyms[i];
+            if (!enough.some((s) => s.ticker === t)) missing.push(t);
+          }
+          let fromSpark: BreakoutHit[] = [];
+          if (missing.length) {
+            const spark5 = await fetchYahooSpark(missing, "5d");
+            fromSpark = sparkCloseBreakouts(spark5, names, dailyVol);
+          }
+          return rankBreakouts([...fromVault, ...fromSpark], "volume");
+        };
+        breakouts5m = await Promise.race([
+          vaultWork(),
+          new Promise<BreakoutHit[]>((resolve) => setTimeout(() => resolve([]), 5000)),
+        ]);
       }
     } catch (err) {
       console.warn("overnight / 5m tape failed", err);

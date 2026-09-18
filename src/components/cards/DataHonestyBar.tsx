@@ -7,7 +7,7 @@ type Tape = { configured: boolean; streaming: boolean; names: number };
 export function DataHonestyBar() {
   const [asOfDate, setAsOfDate] = useState<string>("—");
   const [stale, setStale] = useState(false);
-  const [tape, setTape] = useState<Tape>({ configured: false, streaming: false, names: 0 });
+  const [tape, setTape] = useState<Tape | null>(null);
 
   useEffect(() => {
     const load = () => {
@@ -34,11 +34,14 @@ export function DataHonestyBar() {
     return () => window.clearInterval(id);
   }, []);
 
-  const lseLine = tape.streaming
-    ? `LSE WS TICKS${tape.names ? ` · ${tape.names} LAST $` : ""}`
-    : tape.configured
-      ? "LSE KEY SET — RUN python -m pipeline.ingest.lse_live"
-      : "LSE: KEY MISSING — NOT STREAMING";
+  const lseLine =
+    tape == null
+      ? "LSE …"
+      : tape.streaming
+        ? `LSE WS TICKS${tape.names ? ` · ${tape.names} LAST $` : ""}`
+        : tape.configured
+          ? "LSE KEY SET — RUN python -m pipeline.ingest.lse_live"
+          : "LSE: KEY MISSING — NOT STREAMING";
 
   return (
     <div className="w-full bg-[var(--badge-bg)] border-b border-[var(--border)] px-4 py-1.5 text-xs font-terminal tracking-wide text-[var(--text-muted)]">
