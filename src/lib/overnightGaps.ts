@@ -4,6 +4,22 @@ export type OvernightMover = SessionMover & {
   tape: "pre" | "post" | "regular" | "unknown";
   quoteAt: string | null;
   orbEligible: boolean;
+  bid?: number | null;
+  ask?: number | null;
+  source?: string;
+  replay?: boolean;
+};
+
+export type LastQuote = {
+  symbol: string;
+  last: number | string | null;
+  bid?: number | string | null;
+  ask?: number | string | null;
+  volume?: number | string | null;
+  ts?: string | null;
+  updated_at?: string | null;
+  source?: string | null;
+  replay?: boolean | null;
 };
 
 type SparkQuote = {
@@ -116,4 +132,49 @@ export function rankOvernightUps(rows: OvernightMover[], minGap = 0, n = 80): Ov
 
 export function rankOvernightDowns(rows: OvernightMover[], n = 80): OvernightMover[] {
   return rows.filter((r) => r.gapPct < 0).sort((a, b) => a.gapPct - b.gapPct).slice(0, n);
+}
+
+/** Map LSE `quotes_last` prints vs the last closed session close. */
+export function overnightFromQuotes(
+  quotes: LastQuote[],
+  prevCloses: Record<string, number>,
+  names: Record<string, string> = {},
+  opts?: { tape?: OvernightMover["tape"] }
+): OvernightMover[] {
+  const tape = opts?.tape ?? "unknown";
+  const out: OvernightMover[] = [];
+  for (let i = 0; i < quotes.length; i++) {
+    const q = quotes[i];
+    const ticker = String(q?.symbol || "").trim().toUpperCase();
+    const last = Number(q?.last);
+    const prevClose = prevCloses[ticker];
+    if (!ticker || !(last > 0) || !(prevClose > 0)) continue;
+    const bid = q.bid == null ? null : Number(q.bid);
+    const ask = q.ask == null ? null : Number(q.ask);
+    const vol = q.volume == null ? null : Number(q.volume);
+    const gapPct = last / prevClose - 1;
+    const quoteAt = q.ts || q.updated_at || null;
+    out.push({
+      ticker,
+      companyName: names[ticker] ?? "",
+      last,
+      prevClose,
+      open: last,
+      high: last,
+      low: last,
+      volume: vol != null && Number.isFinite(vol) ? vol : null,
+      chgPct: gapPct,
+      chgAbs: last - prevClose,
+      gapPct,
+      dollarVol: vol != null && Number.isFinite(vol) ? last * vol : 0,
+      tape,
+      quoteAt,
+      orbEligible: gapPct >= 0.04,
+      bid: bid != null && Number.isFinite(bid) ? bid : null,
+      ask: ask != null && Number.isFinite(ask) ? ask : null,
+      source: q.source ?? "lse_ws",
+      replay: Boolean(q.replay),
+    });
+  }
+  return out;
 }

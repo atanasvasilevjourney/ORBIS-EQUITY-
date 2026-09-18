@@ -180,6 +180,68 @@ export function sparkCloseBreakouts(
   return out;
 }
 
+export type CandleSeries = {
+  ticker: string;
+  candles: Array<{
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume?: number;
+  }>;
+};
+
+/** Same `close > Highest(close, 100)[1]` study on LSE vault (or any) 5m candles. */
+export function candleCloseBreakouts(
+  series: CandleSeries[],
+  names: Record<string, string> = {},
+  dailyVol: Record<string, number | null> = {},
+  opts?: { lookback?: number; minPrice?: number; minVolume?: number }
+): BreakoutHit[] {
+  const lookback = opts?.lookback ?? BREAKOUT_LOOKBACK;
+  const minPrice = opts?.minPrice ?? BREAKOUT_MIN_PRICE;
+  const minVolume = opts?.minVolume ?? BREAKOUT_MIN_VOLUME;
+  const out: BreakoutHit[] = [];
+  for (let i = 0; i < series.length; i++) {
+    const item = series[i];
+    const ticker = String(item?.ticker || "").toUpperCase();
+    if (!ticker) continue;
+    const candles = item.candles ?? [];
+    const closes: number[] = [];
+    for (let j = 0; j < candles.length; j++) {
+      const c = candles[j]?.close;
+      if (c != null && Number.isFinite(c) && c > 0) closes.push(c);
+    }
+    const hit = closeBreakout(closes, lookback);
+    if (!hit) continue;
+    if (hit.last < minPrice) continue;
+    const vol = dailyVol[ticker];
+    if (vol == null || vol < minVolume) continue;
+    const lastBar = candles[candles.length - 1];
+    const prev = closes.length >= 2 ? closes[closes.length - 2] : hit.last;
+    out.push({
+      ticker,
+      companyName: names[ticker] ?? "",
+      last: hit.last,
+      prevClose: prev,
+      open: lastBar?.open ?? hit.last,
+      high: lastBar?.high ?? hit.last,
+      low: lastBar?.low ?? hit.last,
+      volume: vol,
+      chgPct: prev > 0 ? hit.last / prev - 1 : 0,
+      chgAbs: hit.last - prev,
+      gapPct: 0,
+      dollarVol: vol * hit.last,
+      priorHigh: hit.priorHigh,
+      lookback,
+      excessPct: hit.excessPct,
+      rsi: rsiWilder(closes),
+      tf: "5m",
+    });
+  }
+  return out;
+}
+
 export function rankBreakouts(
   rows: BreakoutHit[],
   sort: "volume" | "rsi" = "volume",

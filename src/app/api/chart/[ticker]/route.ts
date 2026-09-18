@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { fetchLseVaultCandles } from "@/lib/lseLive";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -73,6 +74,15 @@ export async function GET(
 
   try {
     if (requested === "5m") {
+      const lse = await fetchLseVaultCandles(ticker, "5m", 400);
+      if (lse.length >= 20) {
+        return NextResponse.json({
+          ticker,
+          interval: "5m",
+          source: "lse",
+          candles: lse,
+        });
+      }
       const candles = await yahoo5m(ticker, prepost);
       if (candles.length >= 20) {
         return NextResponse.json({

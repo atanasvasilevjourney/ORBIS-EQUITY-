@@ -22,7 +22,7 @@ Systematic equity research terminal — momentum screener, multi-factor fundamen
 10. **Daily Bias** — TradingView-style chart, key levels, paper trade ideas (ANALYZE vote + ATR pivots)
 11. **TEMA + Carver Cash** — TEMA 9/99/199 swing with MACD(12,26,9) close, and Carver EWMAC, sized as fully funded cash shares at the listed close
 12. **Beta Rotation** — macro canaries → GICS sector → nested sub-sectors → TEMA ensemble, then Carver D-rungs (DCA on the bigger trend) rotate into the leading sleeve / names
-13. **Stocks in Play** — overnight/premarket gap-ups from delayed Yahoo spark (AH/pre last vs prior close), last-session ranked movers, and a paper `close > Highest(close, 100)[1]` breakout scan (daily from `prices_daily`, 5m from delayed spark). Volume ≥ 1M and last ≥ $1. Not live Level-1 / Thinkorswim. At 07:00 ET rank gap-ups; 09:25 lock 3–5 names; 09:30–09:45 mark the 15-minute OR; 09:45 first 5m close above OR high is the paper long. ORB remains its own strategy tab.
+13. **Stocks in Play** — overnight/premarket gap-ups from **LSE last-print** (`quotes_last` websocket) vs the last closed `prices_daily` close, last-session ranked movers, and a paper `close > Highest(close, 100)[1]` breakout scan (daily from `prices_daily`, 5m from LSE vault then Yahoo). Volume ≥ 1M and last ≥ $1. Last-print + bid/ask, not NASDAQ Level-1 / Thinkorswim. Yahoo spark is fallback only when the LSE ingest is idle. At 07:00 ET rank gap-ups; 09:25 lock 3–5 names; 09:30–09:45 mark the 15-minute OR; 09:45 first 5m close above OR high is the paper long. ORB remains its own strategy tab.
 
 ## Setup
 
@@ -65,6 +65,7 @@ supabase/migrations/017_subsector_parent.sql
 supabase/migrations/018_rotate_carver.sql
 supabase/migrations/019_cash_book.sql
 supabase/migrations/020_ingest_runs.sql
+supabase/migrations/022_quotes_last.sql
 ```
 
 ### Web
@@ -165,9 +166,9 @@ Surfaced at `/orb` and `GET /api/orb`. Paper harness only — no live broker ord
 
 ## Stocks in Play (session movers + overnight gaps + 100-bar breakouts)
 
-`/play` is the 7:00 ET pre-open desk. Ranked last-session movers still come from the latest two `prices_daily` prints. **Overnight Gaps** is a separate tape: delayed Yahoo spark 5-minute pre/post last vs `chartPreviousClose`. Not a live Level-1 / SCANZ pre-market feed.
+`/play` is the 7:00 ET pre-open desk. Ranked last-session movers still come from the latest two `prices_daily` prints. **Overnight Gaps** is the LSE last-print bus: `quotes_last.last` vs that closed session close. Ticks land from `wss://data-ws.londonstrategicedge.com` via `python -m pipeline.ingest.lse_live`. They are **never** written into `prices_daily`. This is last-print + bid/ask, not a live Level-1 / SCANZ / Thinkorswim feed.
 
-**Breakout 100D** is the Thinkorswim study `close > Highest(close, 100)[1]` on EOD closes: current close above the highest of the prior 100 daily closes (current bar excluded). Default stock filters match the video: last ≥ $1 and session volume ≥ 1M shares. Sub-$1 runners (e.g. TRUG) are excluded. Sort the result list by volume or Wilder RSI(14). **Breakout 100·5m** applies the same study to delayed Yahoo 5-minute spark (pre/post included), capped to overnight leaders plus liquid names so `/api/play` stays fast. The selected chart draws a cyan `HH 100` line at that prior high. This is delayed tape, not Thinkorswim live L1.
+**Breakout 100D** is the Thinkorswim study `close > Highest(close, 100)[1]` on EOD closes: current close above the highest of the prior 100 daily closes (current bar excluded). Default stock filters match the video: last ≥ $1 and session volume ≥ 1M shares. Sub-$1 runners (e.g. TRUG) are excluded. Sort the result list by volume or Wilder RSI(14). **Breakout 100·5m** applies the same study to LSE vault 5-minute candles first (`https://api.londonstrategicedge.com/vault/candles`), then delayed Yahoo spark for names the vault does not cover. The selected chart draws a cyan `HH 100` line at that prior high.
 
 Morning watch (US cash, paper only):
 
@@ -176,7 +177,11 @@ Morning watch (US cash, paper only):
 3. **09:30–09:45 ET** — Mark the 15-minute opening range on `/orb`.
 4. **09:45 ET** — First 5m close above OR high = paper long 1R (stop = entry − OR).
 
-Selected name loads `/api/chart` (daily from `prices_daily`, 5m Yahoo with pre/post) and `/api/earnings-news?ticker=`. `GET /api/play` returns `overnight`, `breakouts`, `breakouts5m`, plus the EOD scans.
+Selected name loads `/api/chart` (daily from `prices_daily`, 5m LSE vault then Yahoo) and `/api/earnings-news?ticker=`. `GET /api/play` returns `overnight`, `breakouts`, `breakouts5m`, `live`, plus the EOD scans. `GET /api/quotes` and `GET /api/stream` poll `quotes_last`.
+
+```bash
+LSE_API_KEY=... python -m pipeline.ingest.lse_live
+```
 
 ## Stock Analysis (technical + fundamental)
 
@@ -211,7 +216,7 @@ Surfaced at `/quantropy` and `GET /api/quantropy`. Paper analytics — not a bro
 
 Annotated tape for a selected name, in the style of a daily-bias card:
 
-- **Chart:** TradingView `lightweight-charts` candlesticks (daily from `prices_daily`, optional live 5m from Yahoo)
+- **Chart:** TradingView `lightweight-charts` candlesticks (daily from `prices_daily`, 5m from LSE vault then Yahoo)
 - **Levels:** classic floor pivots from the prior session, swing high/low, SMA 20/50, prior high/low, OR high/low when the ORB desk has them
 - **Bias:** ANALYZE majority vote (fallback: close vs SMA50 + RSI + MACD)
 - **Ideas:** fade S1/R1 and break of prior high/low, stop ≥ 0.75×ATR, skip if R:R &lt; 1.2
@@ -230,6 +235,8 @@ Surfaced at `/bias`, ticker **CHART** tab, `GET /api/bias`, and `GET /api/chart/
 [QMIE](https://github.com/atanasvasilevjourney/QMIE) is a **crypto USDT-perp scanner**. It does **not** implement TEMA or Carver. This desk maps those two ideas onto **listed cash equities** at the `prices_daily` close. No Bybit/Binance mark, no funding, no liquidation.
 
 Cash EOD ingest copies QMIE's *ingestion shape* (public REST, provider fallback, drop the in-progress session bar, ~300 daily closes) onto **Yahoo → Stooq**. It does **not** pull USDT-M klines or vendor QMIE's exchange clients.
+
+**LSE live tape** uses the official `lse-data` websocket (`wss://data-ws.londonstrategicedge.com`) and vault 5m candles. Set `LSE_API_KEY` and run `python -m pipeline.ingest.lse_live`. Ticks land in `quotes_last` only — never in `prices_daily`. Chart/PLAY/BIAS 5m prefers LSE vault, then Yahoo. The PostgREST catalog (screener/filings) is still batch.
 
 | Sleeve | Signal | Book | Cash size |
 |---|---|---|---|

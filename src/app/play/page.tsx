@@ -22,6 +22,22 @@ type PlaySummary = {
   overnightLeadGap?: number | null;
   nBreakouts?: number;
   nBreakouts5m?: number;
+  overnightSource?: "lse" | "yahoo" | null;
+};
+
+type LiveTape = {
+  configured: boolean;
+  streaming: boolean;
+  source: string;
+  names: number;
+};
+
+type LiveQuote = {
+  last: number;
+  bid: number | null;
+  ask: number | null;
+  ts: string | null;
+  replay?: boolean;
 };
 
 type PlayData = {
@@ -36,6 +52,7 @@ type PlayData = {
   clock?: CashClock;
   headline: string | null;
   stale: boolean;
+  live?: LiveTape;
 };
 
 type OrbWatch = {
@@ -62,9 +79,9 @@ type NewsItem = {
 };
 
 const SCANS: { id: ScanId; label: string; hint: string }[] = [
-  { id: "overnight", label: "Overnight Gaps", hint: "AH/pre vs prior close" },
+  { id: "overnight", label: "Overnight Gaps", hint: "LSE last vs prior close" },
   { id: "breakout", label: "Breakout 100D", hint: "close > HH(close,100)[1]" },
-  { id: "breakout5m", label: "Breakout 100·5m", hint: "same logic on delayed 5m" },
+  { id: "breakout5m", label: "Breakout 100·5m", hint: "same logic on LSE vault 5m" },
   { id: "gainers", label: "Session Gainers", hint: "Close vs prior" },
   { id: "losers", label: "Session Decliners", hint: "Close vs prior" },
   { id: "gappers", label: "Gappers ≥4%", hint: "Yesterday open gap" },
@@ -130,6 +147,19 @@ function orbToMover(w: OrbWatch): SessionMover {
   };
 }
 
+function withLiveLast<T extends SessionMover>(row: T, q: LiveQuote | undefined): T {
+  if (!q || !(q.last > 0)) return row;
+  const prev = row.prevClose > 0 ? row.prevClose : row.last;
+  const gapPct = prev > 0 ? q.last / prev - 1 : row.gapPct;
+  return {
+    ...row,
+    last: q.last,
+    chgPct: gapPct,
+    chgAbs: q.last - prev,
+    gapPct,
+  };
+}
+
 function rankClientBreakouts(rows: BreakoutHit[], sort: "volume" | "rsi"): BreakoutHit[] {
   const copy = [...rows];
   if (sort === "rsi") copy.sort((a, b) => (b.rsi ?? -1) - (a.rsi ?? -1));
@@ -154,6 +184,7 @@ export default function PlayPage() {
     interval: string;
   } | null>(null);
   const [news, setNews] = useState<NewsItem[]>([]);
+  const [liveQuotes, setLiveQuotes] = useState<Record<string, LiveQuote>>({});
 
   useEffect(() => {
     const tick = () => setClock(cashClock());
@@ -207,6 +238,51 @@ export default function PlayPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const names: string[] = [];
+    const seen = new Set<string>();
+    const add = (t?: string) => {
+      const s = (t || "").toUpperCase();
+      if (!s || seen.has(s)) return;
+      seen.add(s);
+      names.push(s);
+    };
+    add(sel);
+    const overnight = d?.overnight ?? [];
+    for (let i = 0; i < overnight.length && names.length < 40; i++) add(overnight[i].ticker);
+    if (!names.length) return;
+    let cancelled = false;
+    const load = () => {
+      fetch(`/api/quotes?symbols=${names.map(encodeURIComponent).join(",")}`)
+        .then((r) => r.json())
+        .then((body) => {
+          if (cancelled) return;
+          const next: Record<string, LiveQuote> = {};
+          const rows = Array.isArray(body?.quotes) ? body.quotes : [];
+          for (let i = 0; i < rows.length; i++) {
+            const q = rows[i];
+            const last = Number(q?.last);
+            if (!q?.symbol || !(last > 0)) continue;
+            next[String(q.symbol).toUpperCase()] = {
+              last,
+              bid: q.bid == null ? null : Number(q.bid),
+              ask: q.ask == null ? null : Number(q.ask),
+              ts: q.ts ?? q.updated_at ?? null,
+              replay: Boolean(q.replay),
+            };
+          }
+          setLiveQuotes(next);
+        })
+        .catch(() => {});
+    };
+    load();
+    const id = window.setInterval(load, 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [sel, d?.overnight]);
+
   const rows = useMemo(() => {
     if (scan === "orb") return orb.map(orbToMover);
     if (!d) return [];
@@ -221,11 +297,12 @@ export default function PlayPage() {
 
   const shown = useMemo(() => {
     const q = filter.trim().toUpperCase();
-    if (!q) return rows;
-    return rows.filter(
+    const mapped = rows.map((r) => withLiveLast(r, liveQuotes[r.ticker]));
+    if (!q) return mapped;
+    return mapped.filter(
       (r) => r.ticker.includes(q) || r.companyName.toUpperCase().includes(q)
     );
-  }, [rows, filter]);
+  }, [rows, filter, liveQuotes]);
 
   useEffect(() => {
     if (!shown.length) return;
@@ -290,6 +367,14 @@ export default function PlayPage() {
   const n4 = (d?.overnight ?? []).filter((r) => r.orbEligible).length;
   const isBrk = scan === "breakout" || scan === "breakout5m";
   const brkSel = selected && "priorHigh" in selected ? (selected as BreakoutHit) : null;
+  const liveSel = selected ? liveQuotes[selected.ticker] : undefined;
+  const extraLive = liveSel
+    ? [
+        ["BID", fmtPx(liveSel.bid)],
+        ["ASK", fmtPx(liveSel.ask)],
+      ]
+    : [];
+  const metricCols = (isBrk && brkSel ? 7 : 5) + extraLive.length;
   const chartLevels: ChartLevel[] =
     brkSel != null && Number.isFinite(brkSel.priorHigh)
       ? [{ price: brkSel.priorHigh, title: `HH ${brkSel.lookback}`, color: "var(--accent-info)" }]
@@ -303,7 +388,7 @@ export default function PlayPage() {
             STOCKS IN PLAY
           </h1>
           <p className="text-[10px] text-[var(--text-muted)] font-terminal">
-            Overnight gaps = delayed Yahoo AH/pre · Breakout 100 = close {'>'} highest prior 100 closes · not TOS live L1
+            Overnight gaps = LSE last-print vs prior close · 5m = vault then Yahoo · not TOS Level-1
           </p>
         </div>
         <div className="text-[10px] font-terminal text-[var(--text-secondary)]">
@@ -311,6 +396,15 @@ export default function PlayPage() {
           {d?.stale ? (
             <span className="ml-2" style={{ color: "var(--accent-warning)" }}>
               EOD STALE
+            </span>
+          ) : null}
+          {d?.live?.streaming ? (
+            <span className="ml-2 font-bold" style={{ color: "var(--accent-bull)" }}>
+              LIVE LSE
+            </span>
+          ) : d?.live?.configured ? (
+            <span className="ml-2" style={{ color: "var(--accent-warning)" }}>
+              LSE IDLE
             </span>
           ) : null}
         </div>
@@ -447,9 +541,9 @@ export default function PlayPage() {
                       {scan === "orb"
                         ? "No ORB watch this session. Run: python -m pipeline.compute.opening_range"
                         : scan === "overnight"
-                          ? "No delayed overnight prints yet. Premarket 04:00–09:30 ET. Yahoo spark, not live L1."
+                          ? "No LSE last-prints vs prior close yet. Run python -m pipeline.ingest.lse_live. Yahoo spark is fallback only when the websocket is idle."
                           : isBrk
-                          ? "No close above the prior 100-bar high with last ≥ $1 and volume ≥ 1M. Sub-$1 runners (TRUG) are excluded. Delayed tape, not Thinkorswim."
+                          ? "No close above the prior 100-bar high with last ≥ $1 and volume ≥ 1M. Sub-$1 runners (TRUG) are excluded. LSE vault 5m, not Thinkorswim."
                           : "No names on this scan. Need two daily prints in prices_daily."}
                     </td>
                   </tr>
@@ -533,13 +627,14 @@ export default function PlayPage() {
                     </div>
                   </div>
                 </div>
-                <div className={`mt-2 grid gap-1 text-center ${isBrk && brkSel ? "grid-cols-7" : "grid-cols-5"}`}>
+                <div className={`mt-2 grid gap-1 text-center`} style={{ gridTemplateColumns: `repeat(${metricCols}, minmax(0, 1fr))` }}>
                   {[
                     ["OPEN", fmtPx(selected.open)],
                     ["HIGH", fmtPx(selected.high)],
                     ["LOW", fmtPx(selected.low)],
                     ["GAP", fmtPct(selected.gapPct)],
                     ["VOL", fmtVol(selected.volume)],
+                    ...extraLive,
                     ...(isBrk && brkSel
                       ? [
                           ["RSI", brkSel.rsi == null ? "—" : brkSel.rsi.toFixed(0)],
@@ -557,7 +652,11 @@ export default function PlayPage() {
               <div className="shrink-0 flex items-center justify-between px-3 py-1 border-b border-[var(--border)]">
                 <span className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">
                   {selected.ticker} · {chart?.interval ?? chartTf} · {chart?.source ?? "…"}
-                  {chart?.interval === "5m" ? " · Yahoo delayed pre/post" : " · prices_daily"}
+                  {chart?.interval === "5m"
+                    ? chart?.source === "lse"
+                      ? " · LSE vault"
+                      : " · Yahoo fallback"
+                    : " · prices_daily"}
                 </span>
                 <div className="flex gap-1">
                   {(["1d", "5m"] as const).map((tf) => (
