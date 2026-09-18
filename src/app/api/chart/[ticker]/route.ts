@@ -25,8 +25,8 @@ function clampBar(o: number, h: number, l: number, c: number, vol?: number, time
   return { time: time as string | number, open: o, high, low, close: c, volume: vol };
 }
 
-async function yahoo5m(ticker: string): Promise<Candle[]> {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=5m&range=5d&includePrePost=false`;
+async function yahoo5m(ticker: string, prepost: boolean): Promise<Candle[]> {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=5m&range=5d&includePrePost=${prepost ? "true" : "false"}`;
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 OrbisEquity-Terminal" },
@@ -69,15 +69,16 @@ export async function GET(
     return NextResponse.json({ error: "Invalid ticker" }, { status: 400 });
   }
   const requested = req.nextUrl.searchParams.get("interval") === "5m" ? "5m" : "1d";
+  const prepost = req.nextUrl.searchParams.get("prepost") !== "0";
 
   try {
     if (requested === "5m") {
-      const candles = await yahoo5m(ticker);
+      const candles = await yahoo5m(ticker, prepost);
       if (candles.length >= 20) {
         return NextResponse.json({
           ticker,
           interval: "5m",
-          source: "yahoo",
+          source: prepost ? "yahoo-prepost" : "yahoo",
           candles,
         });
       }

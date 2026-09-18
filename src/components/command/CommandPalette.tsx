@@ -14,6 +14,8 @@ type PaletteItem = {
 const STATIC_ITEMS: PaletteItem[] = [
   { id: "home", label: "Home Cockpit", hint: "HOME", href: "/", group: "Navigate" },
   { id: "screener", label: "Swing Screener", hint: "SCR", href: "/screener", group: "Navigate" },
+  { id: "play", label: "Stocks in Play", hint: "PLAY", href: "/play", group: "Navigate" },
+  { id: "orb", label: "Opening Range Breakout", hint: "ORB", href: "/orb", group: "Navigate" },
   { id: "fundamentals", label: "Fundamentals", hint: "FA", href: "/fundamentals", group: "Navigate" },
   { id: "pharma", label: "Pharma Pipeline", hint: "PHAR", href: "/pharma", group: "Navigate" },
   { id: "earnings", label: "Earnings & News", hint: "ERN", href: "/earnings-news", group: "Navigate" },

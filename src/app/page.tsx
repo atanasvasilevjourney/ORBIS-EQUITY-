@@ -43,6 +43,10 @@ type DashData = {
   perpsCarver: number;
   rotateRegime: string | null;
   rotateLeading: number;
+  playNames: number;
+  playGainers: number;
+  playOvernight: number;
+  playBreakouts: number;
 };
 
 export default function Home() {
@@ -63,8 +67,9 @@ export default function Home() {
       fetch("/api/bias").then((r) => r.json()).catch(() => null),
       fetch("/api/perps").then((r) => r.json()).catch(() => null),
       fetch("/api/rotate").then((r) => r.json()).catch(() => null),
+      fetch("/api/play").then((r) => r.json()).catch(() => null),
     ])
-      .then(([summary, fund, pharma, earnings, skew, orb, analysis, quant, bias, perps, rotate]) => {
+      .then(([summary, fund, pharma, earnings, skew, orb, analysis, quant, bias, perps, rotate, play]) => {
         if (!summary && !fund) {
           setError(true);
           return;
@@ -109,6 +114,10 @@ export default function Home() {
           perpsCarver: perps?.summary?.carverSlots ?? 0,
           rotateRegime: rotate?.summary?.regime ?? null,
           rotateLeading: rotate?.summary?.leading ?? 0,
+          playNames: play?.summary?.names ?? 0,
+          playGainers: play?.summary?.nGainers ?? 0,
+          playOvernight: play?.summary?.nOvernight ?? 0,
+          playBreakouts: play?.summary?.nBreakouts ?? 0,
         });
       })
       .catch(() => setError(true))
@@ -359,6 +368,15 @@ export default function Home() {
               { label: "NAMES", value: d?.skewNames ? String(d.skewNames) : "—" },
               { label: "AVG ATM", value: d?.skewAtm == null ? "—" : `${(d.skewAtm * 100).toFixed(0)}%`, color: "var(--accent-info)" },
               { label: "WKND", value: d?.skewWeekend ?? "—", color: "var(--accent-warning)" },
+            ],
+          },
+          {
+            href: "/play", title: "STOCKS IN PLAY", badge: "PLAY",
+            subtitle: "Overnight gaps · 100-bar close breakouts", accent: "var(--accent-warning)", source: "YAHOO DELAYED",
+            metrics: [
+              { label: "AH/PRE", value: d?.playOvernight ? String(d.playOvernight) : "—", color: "var(--accent-warning)" },
+              { label: "BRK 100", value: String(d?.playBreakouts ?? 0), color: "var(--accent-info)" },
+              { label: "EOD UP", value: String(d?.playGainers ?? 0), color: "var(--accent-bull)" },
             ],
           },
           {
