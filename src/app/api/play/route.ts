@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { cashClock } from "@/lib/cashSession";
-import { overnightFromSpark, rankOvernightUps } from "@/lib/overnightGaps";
+import {
+  overnightFromQuotes,
+  overnightFromSpark,
+  rankOvernightUps,
+  type LastQuote,
+  type OvernightMover,
+} from "@/lib/overnightGaps";
 import {
   rankGainers,
   rankGappers,
@@ -14,12 +20,14 @@ import {
 import {
   BREAKOUT_MIN_PRICE,
   BREAKOUT_MIN_VOLUME,
+  candleCloseBreakouts,
   dailyCloseBreakouts,
   rankBreakouts,
   sparkCloseBreakouts,
   type BreakoutHit,
 } from "@/lib/breakoutScan";
 import { fetchYahooSpark } from "@/lib/yahooSpark";
+import { fetchLseVaultCandles, lseStreamConfigured, quoteIsFresh } from "@/lib/lseLive";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -48,6 +56,7 @@ const EMPTY = {
   clock: cashClock(),
   headline: null as string | null,
   stale: true,
+  live: { configured: false, streaming: false, source: "lse_ws", names: 0 },
 };
 
 function asBar(r: PxRow): SessionBar | null {
@@ -108,16 +117,45 @@ async function histForSymbols(
   return out;
 }
 
+function tapeFromPhase(phase: string): OvernightMover["tape"] {
+  if (phase === "PREMARKET" || phase === "OVERNIGHT") return "pre";
+  if (phase === "AFTERHOURS") return "post";
+  if (phase === "REGULAR") return "regular";
+  return "unknown";
+}
+
+async function poolMap<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next;
+      next += 1;
+      out[i] = await fn(items[i]);
+    }
+  }
+  const n = Math.max(1, Math.min(limit, items.length));
+  const workers: Promise<void>[] = [];
+  for (let i = 0; i < n; i++) workers.push(worker());
+  await Promise.all(workers);
+  return out;
+}
+
 export async function GET() {
   try {
     const sb = createServerClient();
     const dates = await latestTwoDates(sb);
     if (!dates) return NextResponse.json(EMPTY);
     const [asOf, prior] = dates;
-    const [todayRows, prevRows, uni] = await Promise.all([
+    const [todayRows, prevRows, uni, quotes] = await Promise.all([
       fetchAll<PxRow>(sb, "prices_daily", "symbol, date, open, high, low, close, volume", (q) => q.eq("date", asOf)),
       fetchAll<PxRow>(sb, "prices_daily", "symbol, date, open, high, low, close, volume", (q) => q.eq("date", prior)),
       fetchAll<UniRow>(sb, "universe_members", "symbol, company_name", (q) => q.eq("is_active", true)).catch(() => []),
+      fetchAll<LastQuote>(
+        sb,
+        "quotes_last",
+        "symbol, last, bid, ask, volume, ts, source, replay, updated_at"
+      ).catch(() => [] as LastQuote[]),
     ]);
     const names: Record<string, string> = {};
     for (const u of uni) {
@@ -145,13 +183,30 @@ export async function GET() {
       })
       .filter((r): r is { symbol: string; date: string; open: number; high: number; low: number; close: number; volume: number | null } => r != null);
     const breakouts = rankBreakouts(dailyCloseBreakouts(histBars, names), "volume");
+    const liveStreaming = quotes.some((q) => quoteIsFresh(q.updated_at));
+    const live = {
+      configured: lseStreamConfigured(),
+      streaming: liveStreaming,
+      source: "lse_ws" as const,
+      names: quotes.length,
+    };
+    const prevClose: Record<string, number> = {};
+    for (let i = 0; i < today.length; i++) prevClose[today[i].symbol] = today[i].close;
+    const fromLive = overnightFromQuotes(quotes, prevClose, names, { tape: tapeFromPhase(clock.phase) });
+    let overnightSource: "lse" | "yahoo" | null = null;
     try {
-      const sparkSyms = Object.keys(names);
-      if (sparkSyms.length === 0) {
-        for (let i = 0; i < book.length; i++) sparkSyms.push(book[i].ticker);
+      if (liveStreaming && fromLive.length) {
+        overnight = rankOvernightUps(fromLive);
+        overnightSource = "lse";
+      } else {
+        const sparkSyms = Object.keys(names);
+        if (sparkSyms.length === 0) {
+          for (let i = 0; i < book.length; i++) sparkSyms.push(book[i].ticker);
+        }
+        const spark = await fetchYahooSpark(sparkSyms.slice(0, 80), "1d");
+        overnight = rankOvernightUps(overnightFromSpark(spark, names));
+        if (overnight.length) overnightSource = "yahoo";
       }
-      const spark = await fetchYahooSpark(sparkSyms.slice(0, 80), "1d");
-      overnight = rankOvernightUps(overnightFromSpark(spark, names));
       const fiveSyms: string[] = [];
       const seen = new Set<string>();
       const add = (t: string) => {
@@ -159,17 +214,39 @@ export async function GET() {
         seen.add(t);
         fiveSyms.push(t);
       };
-      for (let i = 0; i < overnight.length && fiveSyms.length < 12; i++) add(overnight[i].ticker);
-      for (let i = 0; i < breakouts.length && fiveSyms.length < 20; i++) add(breakouts[i].ticker);
-      for (let i = 0; i < liquid.length && fiveSyms.length < 24; i++) add(liquid[i].ticker);
+      for (let i = 0; i < overnight.length && fiveSyms.length < 6; i++) add(overnight[i].ticker);
+      for (let i = 0; i < breakouts.length && fiveSyms.length < 8; i++) add(breakouts[i].ticker);
+      for (let i = 0; i < liquid.length && fiveSyms.length < 8; i++) add(liquid[i].ticker);
       if (fiveSyms.length) {
-        const spark5 = await fetchYahooSpark(fiveSyms, "5d");
         const dailyVol: Record<string, number | null> = {};
         for (let i = 0; i < book.length; i++) dailyVol[book[i].ticker] = book[i].volume;
-        breakouts5m = rankBreakouts(sparkCloseBreakouts(spark5, names, dailyVol), "volume");
+        const vaultWork = async (): Promise<BreakoutHit[]> => {
+          const vaultSeries = await poolMap(fiveSyms, 4, async (ticker) => ({
+            ticker,
+            candles: await fetchLseVaultCandles(ticker, "5m", 160).catch(() => []),
+          }));
+          const enough = vaultSeries.filter((s) => s.candles.length >= 101);
+          const fromVault = candleCloseBreakouts(enough, names, dailyVol);
+          if (liveStreaming) return rankBreakouts(fromVault, "volume");
+          const missing: string[] = [];
+          for (let i = 0; i < fiveSyms.length; i++) {
+            const t = fiveSyms[i];
+            if (!enough.some((s) => s.ticker === t)) missing.push(t);
+          }
+          let fromSpark: BreakoutHit[] = [];
+          if (missing.length) {
+            const spark5 = await fetchYahooSpark(missing, "5d");
+            fromSpark = sparkCloseBreakouts(spark5, names, dailyVol);
+          }
+          return rankBreakouts([...fromVault, ...fromSpark], "volume");
+        };
+        breakouts5m = await Promise.race([
+          vaultWork(),
+          new Promise<BreakoutHit[]>((resolve) => setTimeout(() => resolve([]), 5000)),
+        ]);
       }
     } catch (err) {
-      console.warn("overnight spark failed", err);
+      console.warn("overnight / 5m tape failed", err);
     }
     const stale = (Date.now() - new Date(asOf).getTime()) / 86400000 > 3;
     const sessionLead = gainers[0];
@@ -177,9 +254,11 @@ export async function GET() {
     const bits = [`${asOf} · ${book.length} names · ${gainers.length} up`];
     if (sessionLead) bits.push(`session ${sessionLead.ticker} ${(sessionLead.chgPct * 100).toFixed(1)}%`);
     if (overnightLead) {
-      bits.push(
-        `${clock.phase} ${overnightLead.ticker} ${(overnightLead.gapPct * 100).toFixed(1)}% · Yahoo delayed`
-      );
+      const src =
+        overnightSource === "lse" ? "LSE last-print" : overnightSource === "yahoo" ? "Yahoo delayed" : "tape";
+      bits.push(`${clock.phase} ${overnightLead.ticker} ${(overnightLead.gapPct * 100).toFixed(1)}% · ${src}`);
+    } else if (live.configured && !live.streaming) {
+      bits.push("LSE key set — run python -m pipeline.ingest.lse_live");
     }
     if (breakouts[0]) bits.push(`brk ${breakouts[0].ticker} HH${breakouts[0].lookback}`);
     bits.push(clock.et);
@@ -197,6 +276,7 @@ export async function GET() {
         overnightLeadGap: overnight[0]?.gapPct ?? null,
         nBreakouts: breakouts.length,
         nBreakouts5m: breakouts5m.length,
+        overnightSource,
       },
       gainers,
       losers,
@@ -208,6 +288,7 @@ export async function GET() {
       clock,
       headline,
       stale,
+      live,
     });
   } catch (err) {
     console.error("Play API error:", err);

@@ -7,6 +7,7 @@ import {
   rankBreakouts,
   rsiWilder,
   sparkCloseBreakouts,
+  candleCloseBreakouts,
 } from "@/lib/breakoutScan";
 
 function day(i: number) {
@@ -132,5 +133,23 @@ describe("sparkCloseBreakouts", () => {
       {},
       { THIN: 100 }
     )).toEqual([]);
+  });
+});
+
+describe("candleCloseBreakouts", () => {
+  it("uses vault 5m closes and the daily volume filter", () => {
+    const candles = ramp(101, 10, 1).map((close) => ({
+      open: close,
+      high: close,
+      low: close,
+      close,
+    }));
+    const hits = candleCloseBreakouts([{ ticker: "AAA", candles }], { AAA: "Test" }, { AAA: 2_000_000 });
+    expect(hits).toHaveLength(1);
+    expect(hits[0].tf).toBe("5m");
+    expect(hits[0].priorHigh).toBe(109);
+    expect(
+      candleCloseBreakouts([{ ticker: "THIN", candles }], {}, { THIN: 100 })
+    ).toEqual([]);
   });
 });

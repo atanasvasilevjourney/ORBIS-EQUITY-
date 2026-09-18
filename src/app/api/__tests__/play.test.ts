@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockCreateServerClient = vi.fn();
 const sparkMock = vi.hoisted(() => vi.fn(async (_syms?: string[], _range?: string) => [] as unknown[]));
+const vaultMock = vi.hoisted(() => vi.fn(async (_ticker?: string) => [] as { open: number; high: number; low: number; close: number }[]));
 
 vi.mock("@/lib/supabase/server", () => ({
   createServerClient: () => mockCreateServerClient(),
@@ -10,6 +11,15 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/yahooSpark", () => ({
   fetchYahooSpark: sparkMock,
 }));
+
+vi.mock("@/lib/lseLive", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/lseLive")>("@/lib/lseLive");
+  return {
+    ...actual,
+    fetchLseVaultCandles: vaultMock,
+    lseStreamConfigured: () => true,
+  };
+});
 
 type Row = Record<string, unknown>;
 
@@ -181,6 +191,8 @@ describe("GET /api/play", () => {
     mockCreateServerClient.mockReset();
     sparkMock.mockReset();
     sparkMock.mockResolvedValue([]);
+    vaultMock.mockReset();
+    vaultMock.mockResolvedValue([]);
   });
 
   it("ranks last-session gainers from two daily prints", async () => {
@@ -240,6 +252,55 @@ describe("GET /api/play", () => {
     expect(body.overnight[0].orbEligible).toBe(true);
     expect(body.summary.overnightLead).toBe("RXT");
     expect(body.headline).toContain("RXT");
+    expect(body.summary.overnightSource).toBe("yahoo");
+  });
+
+  it("ranks overnight gap-ups from LSE quotes_last instead of Yahoo spark", async () => {
+    sparkMock.mockResolvedValue([
+      {
+        symbol: "RXT",
+        response: [
+          {
+            meta: { symbol: "RXT", chartPreviousClose: 0.42, regularMarketPrice: 0.9 },
+            timestamp: [1, 2],
+            indicators: {
+              quote: [{ open: [0.5, 0.88], high: [0.6, 0.95], low: [0.45, 0.8], close: [0.55, 0.9], volume: [10, 20] }],
+            },
+          },
+        ],
+      },
+    ]);
+    mockCreateServerClient.mockReturnValue(
+      createFilterMock({
+        prices_daily: PRICES,
+        universe_members: UNI,
+        quotes_last: [
+          {
+            symbol: "SNSE",
+            last: 13.2,
+            bid: 13.1,
+            ask: 13.3,
+            volume: 50_000,
+            ts: new Date().toISOString(),
+            source: "lse_ws",
+            replay: false,
+            updated_at: new Date().toISOString(),
+          },
+        ],
+      })
+    );
+    const { GET } = await import("../play/route");
+    const res = await GET();
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.overnight[0].ticker).toBe("SNSE");
+    expect(body.overnight[0].gapPct).toBeCloseTo(13.2 / 12 - 1, 6);
+    expect(body.overnight[0].source).toBe("lse_ws");
+    expect(body.summary.overnightLead).toBe("SNSE");
+    expect(body.summary.overnightSource).toBe("lse");
+    expect(body.live.streaming).toBe(true);
+    expect(body.headline).toContain("LSE last-print");
+    expect(sparkMock.mock.calls.every((c) => c[1] !== "1d")).toBe(true);
   });
 
   it("flags a 100-bar close breakout and drops sub-$1 names", async () => {
@@ -270,6 +331,30 @@ describe("GET /api/play", () => {
     expect(body.breakouts5m[0].ticker).toBe("BRK");
     expect(body.breakouts5m[0].tf).toBe("5m");
     expect(sparkMock.mock.calls.some((c) => c[1] === "5d")).toBe(true);
+  });
+
+  it("uses LSE vault 5m candles for the close-breakout scan", async () => {
+    vaultMock.mockImplementation(async (ticker?: string) => {
+      if (ticker !== "BRK") return [];
+      return Array.from({ length: 101 }, (_, i) => {
+        const c = 10 + i;
+        return { time: i, open: c, high: c, low: c, close: c };
+      });
+    });
+    mockCreateServerClient.mockReturnValue(
+      createFilterMock({
+        prices_daily: [...PRICES, ...rampSeries("BRK", 110, 2_000_000)],
+        universe_members: UNI,
+      })
+    );
+    const { GET } = await import("../play/route");
+    const res = await GET();
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.breakouts5m[0].ticker).toBe("BRK");
+    expect(body.breakouts5m[0].tf).toBe("5m");
+    expect(body.breakouts5m[0].priorHigh).toBe(109);
+    expect(vaultMock).toHaveBeenCalled();
   });
 
   it("returns an empty desk when prices_daily has no dates", async () => {
