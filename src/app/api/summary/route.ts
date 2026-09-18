@@ -15,6 +15,12 @@ export async function GET() {
       .limit(1)
       .maybeSingle();
 
+    const { data: pxRows } = await sb
+      .from("prices_daily")
+      .select("date")
+      .order("date", { ascending: false })
+      .limit(1);
+
     const radar = await fetchAll<{ state: number; quality_rank: number }>(
       sb,
       "trend_radar",
@@ -32,9 +38,13 @@ export async function GET() {
       ? brief.inputs as Record<string, unknown>
       : {};
 
+    const briefAsOf = brief?.asof_date ? String(brief.asof_date).slice(0, 10) : null;
+    const priceAsOf = Array.isArray(pxRows) && pxRows[0]?.date ? String(pxRows[0].date).slice(0, 10) : null;
+    const asOfDate = priceAsOf ?? briefAsOf;
+
     let stale = false;
-    if (brief?.asof_date) {
-      const asOf = new Date(brief.asof_date);
+    if (asOfDate) {
+      const asOf = new Date(asOfDate);
       const diffDays = (Date.now() - asOf.getTime()) / (1000 * 60 * 60 * 24);
       stale = diffDays > 3;
     }
@@ -42,7 +52,9 @@ export async function GET() {
     const breadth = inputs.breadth as Record<string, unknown> | undefined;
 
     return NextResponse.json({
-      asOfDate: brief?.asof_date ?? null,
+      asOfDate,
+      priceAsOf,
+      briefAsOf,
       briefText: brief?.brief ?? null,
       posture: inputs.posture_score ?? null,
       postureLabel: inputs.posture_label ?? null,

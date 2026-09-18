@@ -52,6 +52,32 @@ describe("GET /api/summary", () => {
     expect(body.stale).toBe(false);
   });
 
+  it("uses prices_daily max date when the brief is older", async () => {
+    mockCreateServerClient.mockReturnValue(
+      createMockSupabase({
+        daily_brief: () => ({
+          data: {
+            asof_date: "2026-09-11",
+            brief: "stale brief",
+            inputs: {},
+          },
+          error: null,
+        }),
+        prices_daily: () => ({
+          data: [{ date: "2026-09-17" }],
+          error: null,
+        }),
+        trend_radar: () => ({ data: [], error: null }),
+      })
+    );
+    const { GET } = await import("../summary/route");
+    const body = await (await GET()).json();
+    expect(body.asOfDate).toBe("2026-09-17");
+    expect(body.priceAsOf).toBe("2026-09-17");
+    expect(body.briefAsOf).toBe("2026-09-11");
+    expect(body.stale).toBe(false);
+  });
+
   it("handles missing daily brief gracefully", async () => {
     mockCreateServerClient.mockReturnValue(
       createMockSupabase({

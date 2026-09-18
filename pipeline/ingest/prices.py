@@ -1,7 +1,7 @@
 """Price ingest: fetch daily candles for the universe, upsert to Supabase.
 
 For LSE-sourced tickers (US stocks): uses the lse-data Python SDK to pull
-the last 5 daily candles per symbol.
+the last 15 daily candles per symbol.
 
 For yfinance-sourced tickers (UK/EU stocks): uses yfinance batch download.
 
@@ -28,7 +28,15 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-CANDLE_LIMIT = 5  # last 5 daily bars
+
+def yfinance_window(now=None) -> tuple:
+    """yfinance `end` is exclusive — include the current UTC date."""
+    now = now or datetime.now(timezone.utc)
+    end = now.date() + timedelta(days=1)
+    start = end - timedelta(days=21)
+    return start, end
+
+CANDLE_LIMIT = 15  # catch-up window after a missed session
 
 
 def _get_supabase_client() -> Client:
@@ -61,9 +69,9 @@ def _fetch_universe(sb: Client) -> list[dict]:
 
 
 def _ingest_lse_prices(symbols: list[str]) -> list[dict]:
-    """Fetch last 5 daily candles from the lse-data SDK for each symbol.
+    """Fetch last 15 daily candles from the lse-data SDK for each symbol.
 
-    Uses: from lse import LSE; client.candles(symbol, '1d', limit=5)
+    Uses: from lse import LSE; client.candles(symbol, '1d', limit=CANDLE_LIMIT)
     """
     rows: list[dict] = []
     try:
@@ -126,9 +134,7 @@ def _ingest_yfinance_prices(symbols: list[str]) -> list[dict]:
 
     logger.info("Downloading yfinance data for %d tickers...", len(symbols))
 
-    # yfinance batch download — fetch 10 calendar days to ensure 5 trading days
-    end_date = datetime.now(timezone.utc).date()
-    start_date = end_date - timedelta(days=10)
+    start_date, end_date = yfinance_window()
 
     try:
         data = yf.download(
@@ -236,17 +242,12 @@ def main() -> None:
         all_rows.extend(_ingest_yfinance_prices(yf_symbols))
 
     got = {r.get("symbol") for r in all_rows if r.get("symbol")}
-    leftover = [
-        m
-        for m in members
-        if m.get("symbol") not in got
-        and m.get("data_source") in (None, "", "seed_demo")
-    ]
+    leftover = [m for m in members if m.get("symbol") not in got]
     if leftover:
         from pipeline.clients.cash_eod import bars_to_rows, fetch_daily_bars
 
         logger.info(
-            "Cash EOD fallback for %d seed/unknown names with no LSE/yfinance rows",
+            "Cash EOD fallback for %d names with no LSE/yfinance rows",
             len(leftover),
         )
         for m in leftover:

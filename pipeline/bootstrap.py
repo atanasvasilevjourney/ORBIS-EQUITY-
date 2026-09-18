@@ -94,7 +94,8 @@ def main():
 
     # ── Step 2: Prices ────────────────────────────────────────────
     logger.info("=== Step 2: Fetching prices via yfinance (last 400 days) ===")
-    end_date = datetime.now(timezone.utc).date()
+    # yfinance `end` is exclusive
+    end_date = datetime.now(timezone.utc).date() + timedelta(days=1)
     start_date = end_date - timedelta(days=400)
 
     # Batch download in chunks to avoid yfinance limits

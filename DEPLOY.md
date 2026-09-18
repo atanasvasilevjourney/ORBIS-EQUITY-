@@ -74,8 +74,9 @@ Optional: LSE key → `LSE_API_KEY` (production fundamentals/US prices). Without
 
 4. Approve services:
    - `orbis-equity-bootstrap` (manual)
-   - `orbis-equity-weekly` (Mon 19:00 UTC)
-   - `orbis-equity-daily` (Tue–Fri 19:30 UTC)
+   - `orbis-equity-weekly` (Mon 21:30 UTC, after 16:00 ET close)
+   - `orbis-equity-daily` (Tue–Fri 21:30 UTC)
+   - `orbis-equity-saturday` (Sat 12:00 UTC Friday-close catch-up)
 
 5. **Critical first run:** Render → `orbis-equity-bootstrap` → **Manual Trigger**.  
    Wait until it finishes (S&P history + radar). Without this, daily jobs lack ≥148 price days and radar stays empty.

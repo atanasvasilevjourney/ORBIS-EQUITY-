@@ -78,6 +78,17 @@ class ClosedBarTests(unittest.TestCase):
         self.assertEqual([b.date for b in out], ["2026-09-11", "2026-09-12"])
 
 
+class YfinanceWindowTests(unittest.TestCase):
+    def test_end_is_exclusive_so_today_is_included(self):
+        from datetime import timezone
+        from pipeline.ingest.prices import yfinance_window
+
+        now = datetime(2026, 9, 18, 11, 0, tzinfo=timezone.utc)
+        start, end = yfinance_window(now)
+        self.assertEqual(str(end), "2026-09-19")
+        self.assertEqual(str(start), "2026-08-29")
+
+
 class _Resp:
     def __init__(self, text="", json_data=None, status=200):
         self.text = text

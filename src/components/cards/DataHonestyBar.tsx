@@ -18,7 +18,7 @@ export function DataHonestyBar() {
 
   return (
     <div className="w-full bg-[var(--badge-bg)] border-b border-[var(--border)] px-4 py-1.5 text-xs font-terminal tracking-wide text-[var(--text-muted)]">
-      DATA AS OF: {asOfDate} EOD &middot; NEXT REFRESH: ~19:30 UTC &middot;
+      DATA AS OF: {asOfDate} EOD &middot; NEXT REFRESH: ~21:30 UTC &middot;
       EOD/DELAYED — NOT REAL-TIME
       {stale && (
         <span className="ml-2 text-[var(--accent-bear)] font-bold">

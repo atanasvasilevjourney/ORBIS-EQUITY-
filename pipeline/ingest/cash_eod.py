@@ -34,7 +34,6 @@ load_dotenv(".env.local")
 
 logger = logging.getLogger(__name__)
 
-REAL_SOURCES = ("yahoo", "stooq", "yfinance", "lse")
 SEED_SOURCE = "seed_demo"
 
 
@@ -63,16 +62,6 @@ def _float_env(name: str, default: float) -> float:
         return float(raw)
     except ValueError:
         return default
-
-
-def _count_real_bars(sb: Client, symbol: str) -> int:
-    rows = fetch_all(
-        sb,
-        "prices_daily",
-        "date,source",
-        filters=lambda q: q.eq("symbol", symbol).in_("source", list(REAL_SOURCES)),
-    )
-    return len(rows)
 
 
 def _delete_seed_rows(sb: Client, symbol: str) -> None:
@@ -147,9 +136,8 @@ def ingest_symbol(
     replace_seed: bool,
 ) -> tuple[int, str]:
     """Fetch and upsert one name. Returns (rows, source)."""
-    existing = _count_real_bars(sb, symbol)
-    want = 10 if existing >= min_real else bars
-    series, source = fetch_daily_bars(symbol, country=country, bars=want, sleep_s=0.0)
+    _ = min_real
+    series, source = fetch_daily_bars(symbol, country=country, bars=bars, sleep_s=0.0)
     rows = bars_to_rows(series)
     if not rows:
         raise RuntimeError("no rows after close filter")
