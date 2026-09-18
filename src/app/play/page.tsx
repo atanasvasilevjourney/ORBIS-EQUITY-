@@ -241,6 +241,7 @@ export default function PlayPage() {
       return;
     }
     recordRecentTicker(selected.ticker);
+    setChart(null);
     const ac = new AbortController();
     fetch(`/api/chart/${encodeURIComponent(selected.ticker)}?interval=${chartTf}`, {
       signal: ac.signal,
@@ -335,7 +336,11 @@ export default function PlayPage() {
               <button
                 key={s.id}
                 type="button"
-                onClick={() => setScan(s.id)}
+                onClick={() => {
+                  setScan(s.id);
+                  if (s.id === "overnight" || s.id === "breakout5m") setChartTf("5m");
+                  if (s.id === "breakout") setChartTf("1d");
+                }}
                 className={`w-full text-left px-3 py-2 border-l-2 ${
                   active
                     ? "bg-[var(--badge-bg)] border-[var(--accent-warning)]"
