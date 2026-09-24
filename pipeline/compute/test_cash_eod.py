@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime
+from datetime import date, datetime
 from unittest.mock import patch
 
 from pipeline.clients.cash_eod import (
@@ -8,8 +8,10 @@ from pipeline.clients.cash_eod import (
     fetch_daily_bars,
     fetch_stooq_daily,
     fetch_yahoo_daily,
+    last_closed_cash_date,
     stooq_candidates,
     yahoo_ticker,
+    yfinance_window,
 )
 
 
@@ -76,6 +78,17 @@ class ClosedBarTests(unittest.TestCase):
         now = datetime(2026, 9, 12, 16, 5, tzinfo=__import__("zoneinfo").ZoneInfo("America/New_York"))
         out = drop_in_progress(bars, now=now)
         self.assertEqual([b.date for b in out], ["2026-09-11", "2026-09-12"])
+
+    def test_last_closed_cash_date_is_yesterday_before_1600_et(self):
+        now = datetime(2026, 9, 18, 15, 30, tzinfo=__import__("zoneinfo").ZoneInfo("America/New_York"))
+        self.assertEqual(last_closed_cash_date(now=now), date(2026, 9, 17))
+        after = datetime(2026, 9, 18, 16, 1, tzinfo=__import__("zoneinfo").ZoneInfo("America/New_York"))
+        self.assertEqual(last_closed_cash_date(now=after), date(2026, 9, 18))
+
+    def test_yfinance_end_is_exclusive_next_day(self):
+        start, end = yfinance_window(today=date(2026, 9, 18), lookback_days=10)
+        self.assertEqual(start, date(2026, 9, 8))
+        self.assertEqual(end, date(2026, 9, 19))
 
 
 class _Resp:

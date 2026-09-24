@@ -22,7 +22,7 @@ import io
 import logging
 import time
 from dataclasses import dataclass
-from datetime import date, datetime, time as dtime, timezone
+from datetime import date, datetime, time as dtime, timedelta, timezone
 from typing import Iterable
 from zoneinfo import ZoneInfo
 
@@ -90,6 +90,24 @@ def drop_in_progress(bars: list[DailyBar], *, now: datetime | None = None) -> li
     if last_d == now.date() and now.time() < SESSION_CLOSE:
         return bars[:-1]
     return bars
+
+
+def last_closed_cash_date(*, now: datetime | None = None) -> date:
+    """Last NYSE cash session date that is allowed into prices_daily."""
+    now = now or datetime.now(NY)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=NY)
+    else:
+        now = now.astimezone(NY)
+    if now.time() < SESSION_CLOSE:
+        return now.date() - timedelta(days=1)
+    return now.date()
+
+
+def yfinance_window(*, today: date | None = None, lookback_days: int = 10) -> tuple[date, date]:
+    """Inclusive start, exclusive end — yfinance drops the end date."""
+    today = today or datetime.now(timezone.utc).date()
+    return today - timedelta(days=lookback_days), today + timedelta(days=1)
 
 
 def _f(v) -> float | None:
