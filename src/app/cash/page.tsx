@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { TemaRibbon } from "@/components/charts/TemaRibbon";
+import { DeskHeader } from "@/components/ui/DeskHeader";
 import { deskList, parseDesk } from "@/lib/deskPayload";
 import { temaTape, type TemaBar, type TemaReadout } from "@/lib/tema";
 
@@ -55,6 +56,7 @@ type Data = {
   carverBook: Name[];
   headline: string | null;
   config: Record<string, number | string> | null;
+  stale?: boolean;
 };
 
 const DEFAULT_TEMA_NAMES = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "JPM", "XOM"];
@@ -172,14 +174,14 @@ export default function CashPage() {
 
   return (
     <div className="px-4 py-6">
-      <div className="mb-4">
-        <h1 className="text-lg font-terminal font-bold tracking-wider" style={{ color: "var(--accent-info)" }}>
-          CASH BOOK · TEMA + CARVER
-        </h1>
-        <p className="text-xs text-[var(--text-secondary)]">
-          Listed close from prices_daily (Yahoo → Stooq cash EOD) · fully funded shares · no USDT-M leverage, funding, or liquidation · paper only
-        </p>
-      </div>
+      <DeskHeader
+        title="CASH BOOK · TEMA + CARVER"
+        description="Listed close from prices_daily (Yahoo → Stooq cash EOD) · fully funded shares · no USDT-M leverage, funding, or liquidation · paper only"
+        asOf={s?.asOfDate}
+        stale={d?.stale}
+        source="CASH EOD"
+        chips={s?.regime ? [{ label: s.regime, color: regimeColor }] : []}
+      />
 
       <div className="px-4 py-3 mb-4 rounded border border-[var(--border)] bg-[var(--badge-bg)] text-xs text-[var(--text-secondary)] font-terminal space-y-1">
         <p>
@@ -197,7 +199,7 @@ export default function CashPage() {
       {(d?.headline || d?.summary == null) && (
         <div className="px-4 py-2 mb-4 rounded border border-[var(--border)] bg-[var(--card-bg)] text-sm text-[var(--text-secondary)] font-terminal">
           <span style={{ color: "var(--accent-info)" }}>CASH:</span>{" "}
-          {d?.headline ?? "Paper TEMA ribbon on listed closes. Book slots fill after python -m pipeline.compute.perps_desk."}
+          {d?.headline ?? "Paper TEMA ribbon on listed closes. Book slots fill after python -m pipeline.compute.perps_desk (cash EOD, not perps)."}
         </div>
       )}
 

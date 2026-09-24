@@ -49,6 +49,11 @@ type DashData = {
   playBreakouts: number;
   playTape: string | null;
   playLive: boolean;
+  quantLite: boolean;
+  rotateLite: boolean;
+  cashStale: boolean;
+  quantStale: boolean;
+  rotateStale: boolean;
 };
 
 export default function Home() {
@@ -122,6 +127,11 @@ export default function Home() {
           playBreakouts: play?.summary?.nBreakouts ?? 0,
           playTape: play?.summary?.overnightSource ?? null,
           playLive: Boolean(play?.live?.streaming),
+          quantLite: Boolean(quant?.lite),
+          rotateLite: Boolean(rotate?.lite),
+          cashStale: Boolean(perps?.stale),
+          quantStale: Boolean(quant?.stale),
+          rotateStale: Boolean(rotate?.stale),
         });
       })
       .catch(() => setError(true))
@@ -404,11 +414,12 @@ export default function Home() {
           },
           {
             href: "/quantropy", title: "QUANTROPY", badge: "MODULE 9",
-            subtitle: "Risk, CAPM, Markowitz", accent: "var(--module-4)", source: "QUANT",
+            subtitle: "Risk, CAPM, Markowitz", accent: "var(--module-4)",
+            source: d?.quantLite ? "LITE SIMPLEX" : d?.quantStale ? "QUANT STALE" : "QUANT",
             metrics: [
               { label: "NAMES", value: d?.quantNames ? String(d.quantNames) : "—" },
               { label: "MAX SH", value: d?.quantSharpe == null ? "—" : d.quantSharpe.toFixed(2), color: "var(--accent-warning)" },
-              { label: "MPT", value: "on", color: "var(--accent-info)" },
+              { label: "MPT", value: d?.quantLite ? "lite" : "on", color: "var(--accent-info)" },
             ],
           },
           {
@@ -422,7 +433,8 @@ export default function Home() {
           },
           {
             href: "/cash", title: "TEMA + CARVER CASH", badge: "MODULE 11",
-            subtitle: "Cash-sized TEMA & Carver", accent: "var(--module-3)", source: "CASH",
+            subtitle: "Cash-sized TEMA & Carver", accent: "var(--module-3)",
+            source: d?.cashStale ? "CASH STALE" : "CASH",
             metrics: [
               { label: "TEMA", value: String(d?.perpsTema ?? 0), color: "var(--accent-info)" },
               { label: "CARVER", value: String(d?.perpsCarver ?? 0), color: "var(--accent-warning)" },
@@ -431,7 +443,8 @@ export default function Home() {
           },
           {
             href: "/rotate", title: "BETA ROTATION", badge: "MODULE 12",
-            subtitle: "Macro → sector → Carver DCA", accent: "var(--module-4)", source: "ROTATE",
+            subtitle: "Macro → sector → Carver DCA", accent: "var(--module-4)",
+            source: d?.rotateLite ? "LITE CANARIES" : d?.rotateStale ? "ROTATE STALE" : "ROTATE",
             metrics: [
               { label: "REGIME", value: d?.rotateRegime ?? "—", color: d?.rotateRegime === "RISK-ON" ? "var(--accent-bull)" : d?.rotateRegime === "RISK-OFF" ? "var(--accent-bear)" : "var(--accent-warning)" },
               { label: "LEADING", value: String(d?.rotateLeading ?? 0), color: "var(--accent-bull)" },

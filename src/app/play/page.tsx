@@ -364,11 +364,27 @@ export default function PlayPage() {
         setScan(next.id);
         if (next.id === "overnight" || next.id === "breakout5m") setChartTf("5m");
         if (next.id === "breakout") setChartTf("1d");
+        return;
+      }
+      if (e.key === "j" || e.key === "J" || e.key === "ArrowDown") {
+        e.preventDefault();
+        if (!shown.length) return;
+        const i = Math.max(0, shown.findIndex((r) => r.ticker === sel));
+        const next = shown[Math.min(shown.length - 1, i + 1)];
+        if (next) setSel(next.ticker);
+        return;
+      }
+      if (e.key === "k" || e.key === "K" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (!shown.length) return;
+        const i = Math.max(0, shown.findIndex((r) => r.ticker === sel));
+        const next = shown[Math.max(0, i - 1)];
+        if (next) setSel(next.ticker);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [shown, sel]);
 
   const counts: Record<ScanId, number> = {
     overnight: d?.overnight?.length ?? 0,
@@ -444,7 +460,7 @@ export default function PlayPage() {
       <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
         <aside className="lg:w-48 shrink-0 border-b lg:border-b-0 lg:border-r border-[var(--border)] bg-[var(--surface)] overflow-y-auto">
           <div className="px-3 py-2 text-[10px] font-terminal tracking-widest text-[var(--text-muted)]">
-            SCANS
+            SCANS · 1–8 · J/K ROW
           </div>
           {SCANS.map((s) => {
             const active = scan === s.id;

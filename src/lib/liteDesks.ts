@@ -1,6 +1,17 @@
 import { buildCanaries, equityFromCloses } from "@/lib/canary";
 import { corrMatrix, dailyReturns } from "@/lib/corr";
 import type { CorrMatrix } from "@/lib/corr";
+import {
+  finiteMean,
+  finiteVol,
+  lastFinite,
+  listwiseReturns,
+  maxSharpeWeights,
+  minVarWeights,
+  portfolioStats,
+  sampleCov,
+  sampleMu,
+} from "@/lib/markowitz";
 
 export type PricePoint = { symbol: string; date: string; close: number; sector?: string };
 
@@ -84,6 +95,7 @@ export function liteQuantFromPrices(rows: PricePoint[]): {
   corr: CorrMatrix;
   headline: string;
   lite: true;
+  allocations: Record<string, { label: string; annReturn: number | null; annVol: number | null; sharpe: number | null }>;
 } {
   const book = bySymbol(rows);
   const symbols: string[] = [];
@@ -108,17 +120,17 @@ export function liteQuantFromPrices(rows: PricePoint[]): {
   };
   const names: LiteName[] = labels.map((ticker, i) => {
     const r = rets[i];
-    const mu = r.reduce((a, b) => a + b, 0) / (r.length || 1);
-    const vol = Math.sqrt(r.reduce((a, b) => a + (b - mu) ** 2, 0) / Math.max(r.length - 1, 1)) * Math.sqrt(252);
-    const ann = mu * 252;
-    const last = closes[i][closes[i].length - 1] ?? null;
+    const mu = finiteMean(r);
+    const vol = finiteVol(r, mu);
+    const ann = mu == null ? null : mu * 252;
+    const last = lastFinite(closes[i]);
     return {
       ticker,
       companyName: "",
       last,
       annReturn: ann,
       annVol: vol,
-      sharpe: vol > 1e-8 ? (ann - 0.04) / vol : null,
+      sharpe: vol != null && vol > 1e-8 && ann != null ? (ann - 0.04) / vol : null,
       wEqual: 1 / n,
       wInvVol: null,
       wMinVar: null,
@@ -126,19 +138,47 @@ export function liteQuantFromPrices(rows: PricePoint[]): {
       altmanZone: null,
     };
   });
-  const invRaw = names.map((n) => 1 / Math.max(n.annVol ?? 1, 1e-8));
+  const invRaw = names.map((row) => 1 / Math.max(row.annVol ?? 1, 1e-8));
   const invSum = invRaw.reduce((a, b) => a + b, 0) || 1;
-  names.forEach((n, i) => {
-    n.wInvVol = invRaw[i] / invSum;
-    n.wMaxSharpe = n.wEqual;
-    n.wMinVar = n.wInvVol;
+  names.forEach((row, i) => {
+    row.wInvVol = invRaw[i] / invSum;
+  });
+  const panel = listwiseReturns(rets);
+  const canOpt = panel.length >= 2 && (panel[0]?.length ?? 0) >= 40;
+  let wMin: number[] = names.map((row) => row.wInvVol ?? 1 / n);
+  let wMax: number[] = names.map((row) => row.wEqual ?? 1 / n);
+  let minStats = { annReturn: null as number | null, annVol: null as number | null, sharpe: null as number | null };
+  let maxStats = { ...minStats };
+  let eqStats = { ...minStats };
+  let invStats = { ...minStats };
+  if (canOpt) {
+    const mu = sampleMu(panel);
+    const cov = sampleCov(panel);
+    wMin = minVarWeights(cov);
+    wMax = maxSharpeWeights(mu, cov);
+    minStats = portfolioStats(wMin, mu, cov);
+    maxStats = portfolioStats(wMax, mu, cov);
+    eqStats = portfolioStats(names.map(() => 1 / n), mu, cov);
+    invStats = portfolioStats(names.map((row) => row.wInvVol ?? 1 / n), mu, cov);
+  }
+  names.forEach((row, i) => {
+    row.wMinVar = wMin[i] ?? null;
+    row.wMaxSharpe = wMax[i] ?? null;
   });
   names.sort((a, b) => (b.sharpe ?? -999) - (a.sharpe ?? -999));
   return {
     names,
     corr,
-    headline: `lite tape · ${labels.length} names from prices_daily · correlation + 1/N (Markowitz snapshot pending)`,
+    headline: canOpt
+      ? `lite tape · ${labels.length} names from prices_daily · long-only simplex min-var / max-Sharpe`
+      : `lite tape · ${labels.length} names from prices_daily · correlation + 1/N (book too short for Markowitz)`,
     lite: true,
+    allocations: {
+      equal: { label: "Equally weighted (lite)", ...eqStats },
+      invVol: { label: "Inverse volatility (lite)", ...invStats },
+      minVar: { label: canOpt ? "Min variance (lite simplex)" : "Min variance — need ≥40 listwise days", ...minStats },
+      maxSharpe: { label: canOpt ? "Max Sharpe (lite simplex)" : "Max Sharpe — need ≥40 listwise days", ...maxStats },
+    },
   };
 }
 

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { CanaryBoard } from "@/components/charts/CanaryBoard";
 import { CorrHeatmap } from "@/components/charts/CorrHeatmap";
+import { DeskHeader } from "@/components/ui/DeskHeader";
 import { deskList, parseDesk } from "@/lib/deskPayload";
 import type { CorrMatrix } from "@/lib/corr";
 
@@ -382,14 +383,15 @@ export default function RotatePage() {
 
   return (
     <div className="px-4 py-6">
-      <div className="mb-4">
-        <h1 className="text-lg font-terminal font-bold tracking-wider" style={{ color: "var(--accent-info)" }}>
-          MACRO → SECTOR → SUB-SECTOR → ASSET · CARVER DCA
-        </h1>
-        <p className="text-xs text-[var(--text-secondary)]">
-          Canaries decide WHERE, the nest decides WHICH sleeve, Carver D-rungs size HOW MUCH as DCA on the bigger trend · paper only
-        </p>
-      </div>
+      <DeskHeader
+        title="MACRO → SECTOR → SUB-SECTOR → ASSET · CARVER DCA"
+        description="Canaries decide WHERE, the nest decides WHICH sleeve, Carver D-rungs size HOW MUCH as DCA on the bigger trend · paper only"
+        asOf={d?.summary?.asOfDate}
+        stale={d?.stale}
+        lite={d?.lite}
+        source={d?.lite ? "LITE CANARIES" : "ROTATE SNAPSHOT"}
+        chips={d?.summary?.regime ? [{ label: d.summary.regime, color: regimeColor(d.summary.regime) }] : []}
+      />
 
       <div className="px-4 py-3 mb-4 rounded border border-[var(--border)] bg-[var(--badge-bg)] text-xs text-[var(--text-secondary)] font-terminal space-y-1">
         <p>
