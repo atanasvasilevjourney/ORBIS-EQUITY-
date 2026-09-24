@@ -17,8 +17,6 @@ Usage:
 """
 import logging
 import os
-from datetime import datetime, timedelta, timezone
-
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
@@ -28,7 +26,7 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-CANDLE_LIMIT = 5  # last 5 daily bars
+CANDLE_LIMIT = 15  # last closed daily bars (enough to patch a missed night)
 
 
 def _get_supabase_client() -> Client:
@@ -126,9 +124,9 @@ def _ingest_yfinance_prices(symbols: list[str]) -> list[dict]:
 
     logger.info("Downloading yfinance data for %d tickers...", len(symbols))
 
-    # yfinance batch download — fetch 10 calendar days to ensure 5 trading days
-    end_date = datetime.now(timezone.utc).date()
-    start_date = end_date - timedelta(days=10)
+    from pipeline.clients.cash_eod import yfinance_window
+
+    start_date, end_date = yfinance_window(lookback_days=10)
 
     try:
         data = yf.download(
@@ -235,19 +233,19 @@ def main() -> None:
     if yf_symbols:
         all_rows.extend(_ingest_yfinance_prices(yf_symbols))
 
-    got = {r.get("symbol") for r in all_rows if r.get("symbol")}
-    leftover = [
-        m
-        for m in members
-        if m.get("symbol") not in got
-        and m.get("data_source") in (None, "", "seed_demo")
-    ]
+    from pipeline.clients.cash_eod import leftover_members, last_trading_session_date
+
+    cutoff_preview = last_trading_session_date().isoformat()
+    leftover = leftover_members(members, all_rows, cutoff_preview)
+    leftover_cap = int(os.environ.get("CASH_EOD_LIMIT", "80"))
+    leftover = leftover[: max(leftover_cap, 0)]
     if leftover:
         from pipeline.clients.cash_eod import bars_to_rows, fetch_daily_bars
 
         logger.info(
-            "Cash EOD fallback for %d seed/unknown names with no LSE/yfinance rows",
+            "Cash EOD fallback for %d names missing a %s bar",
             len(leftover),
+            cutoff_preview,
         )
         for m in leftover:
             symbol = m.get("symbol")
@@ -279,6 +277,12 @@ def main() -> None:
                     except (ValueError, TypeError):
                         row[field] = None
             clean_rows.append(row)
+
+    cutoff = cutoff_preview
+    before = len(clean_rows)
+    clean_rows = [r for r in clean_rows if r["date"] <= cutoff]
+    if before != len(clean_rows):
+        logger.info("Dropped %d in-progress daily bars (cutoff %s)", before - len(clean_rows), cutoff)
 
     logger.info("Upserting %d price rows into prices_daily...", len(clean_rows))
 

@@ -244,7 +244,8 @@ def _align_returns(
     core = sorted(core)
     px = np.array([[closes[s][d] for s in core] for d in common_dates], dtype=float)
     rets = np.diff(px, axis=0) / np.where(px[:-1] == 0, np.nan, px[:-1])
-    rets = np.where(np.isfinite(rets), rets, 0.0)
+    keep = np.isfinite(rets).all(axis=1)
+    rets = rets[keep]
     logger.info(
         "Quantropy aligned %d names × %d sessions (eligible %d, pool %d)",
         len(core), len(common_dates), len(closes), len(pool),

@@ -68,4 +68,28 @@ describe("GET /api/summary", () => {
     expect(body.asOfDate).toBeNull();
     expect(body.breadth.total).toBe(0);
   });
+
+  it("prefers max prices_daily date over the brief as-of", async () => {
+    mockCreateServerClient.mockReturnValue(
+      createMockSupabase({
+        daily_brief: () => ({
+          data: { asof_date: "2026-09-16", brief: "old", inputs: {} },
+          error: null,
+        }),
+        trend_radar: () => ({ data: [], error: null }),
+        prices_daily: () => ({
+          data: [{ date: "2026-09-17" }],
+          error: null,
+        }),
+      })
+    );
+    const { GET } = await import("../summary/route");
+    const res = await GET();
+    const body = await res.json();
+    expect(body.asOfDate).toBe("2026-09-17");
+    expect(body.priceAsOf).toBe("2026-09-17");
+    expect(body.briefAsOf).toBe("2026-09-16");
+    expect(body.expectedLastClose).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(body.stale).toBe(true);
+  });
 });

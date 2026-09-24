@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { lastTradingSessionDate } from "@/lib/cashSession";
 
-export const revalidate = 900;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   try {
@@ -14,6 +16,16 @@ export async function GET() {
       .order("asof_date", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    const { data: lastPx } = await sb
+      .from("prices_daily")
+      .select("date")
+      .order("date", { ascending: false })
+      .limit(1);
+
+    const priceAsOf = lastPx?.[0]?.date ? String(lastPx[0].date).slice(0, 10) : null;
+    const briefAsOf = brief?.asof_date ? String(brief.asof_date).slice(0, 10) : null;
+    const asOfDate = priceAsOf ?? briefAsOf;
 
     const radar = await fetchAll<{ state: number; quality_rank: number }>(
       sb,
@@ -32,17 +44,20 @@ export async function GET() {
       ? brief.inputs as Record<string, unknown>
       : {};
 
-    let stale = false;
-    if (brief?.asof_date) {
-      const asOf = new Date(brief.asof_date);
-      const diffDays = (Date.now() - asOf.getTime()) / (1000 * 60 * 60 * 24);
-      stale = diffDays > 3;
+    const expectedLastClose = lastTradingSessionDate();
+    let stale = !asOfDate || asOfDate < expectedLastClose;
+    if (asOfDate) {
+      const diffDays = (Date.now() - new Date(asOfDate).getTime()) / (1000 * 60 * 60 * 24);
+      stale = stale || diffDays > 3;
     }
 
     const breadth = inputs.breadth as Record<string, unknown> | undefined;
 
     return NextResponse.json({
-      asOfDate: brief?.asof_date ?? null,
+      asOfDate,
+      briefAsOf,
+      priceAsOf,
+      expectedLastClose,
       briefText: brief?.brief ?? null,
       posture: inputs.posture_score ?? null,
       postureLabel: inputs.posture_label ?? null,

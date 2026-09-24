@@ -83,6 +83,14 @@ class CrossSectionTests(unittest.TestCase):
         score = xs_score(leader, [leader, laggard])
         self.assertGreater(score, 0.0)
 
+    def test_xs_score_excludes_self_at_the_book(self):
+        n = 80
+        leader = 100.0 * (1.01 ** np.arange(n))
+        laggard = 100.0 * (1.001 ** np.arange(n))
+        with_self = xs_score(leader, [leader, laggard])
+        ex_self = xs_score(leader, [laggard])
+        self.assertGreater(ex_self, with_self)
+
     def test_book_rotates_rungs_into_leading_sleeve(self):
         n = 220
         t = np.arange(n)

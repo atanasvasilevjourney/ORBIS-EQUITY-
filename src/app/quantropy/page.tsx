@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CorrHeatmap } from "@/components/charts/CorrHeatmap";
+import { DeskHeader } from "@/components/ui/DeskHeader";
 import { deskList, parseDesk } from "@/lib/deskPayload";
 import type { CorrMatrix } from "@/lib/corr";
 
@@ -89,14 +90,17 @@ function Frontier({ pts, books }: { pts: FrontierPt[]; books: Record<string, Boo
 export default function QuantropyPage() {
   const [d, setD] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
-  const [book, setBook] = useState<"wEqual" | "wInvVol" | "wMinVar" | "wMaxSharpe">("wMaxSharpe");
+  const [book, setBook] = useState<"wEqual" | "wInvVol" | "wMinVar" | "wMaxSharpe">("wInvVol");
 
   useEffect(() => {
     fetch("/api/quantropy")
       .then((r) => r.json())
       .then((raw: unknown) => {
         const parsed = parseDesk<Data>(raw, "names");
-        if (parsed) setD(parsed);
+        if (parsed) {
+          setD(parsed);
+          if (!parsed.lite) setBook("wMaxSharpe");
+        }
         else {
           setD({
             summary: null,
@@ -126,15 +130,14 @@ export default function QuantropyPage() {
 
   return (
     <div className="px-4 py-6">
-      <div className="mb-4">
-        <h1 className="text-lg font-terminal font-bold tracking-wider" style={{ color: "var(--accent-info)" }}>
-          QUANTROPY
-        </h1>
-        <p className="text-xs text-[var(--text-secondary)]">
-          Risk, CAPM, Altman Z, Markowitz allocation — Quantropy/Matilda on the Orbis Equity book
-          {d?.lite ? " · lite correlation from prices_daily (snapshot pending)" : ""}
-        </p>
-      </div>
+      <DeskHeader
+        title="QUANTROPY"
+        description="Risk, CAPM, Altman Z, Markowitz allocation — Quantropy/Matilda on the Orbis Equity book"
+        asOf={s?.asOfDate}
+        stale={d?.stale}
+        lite={d?.lite}
+        source={d?.lite ? "LITE SIMPLEX" : "MPT SLSQP"}
+      />
 
       {d?.headline && (
         <div className="px-4 py-2 mb-4 rounded border border-[var(--border)] bg-[var(--badge-bg)] text-sm text-[var(--text-secondary)] font-terminal">
@@ -189,7 +192,7 @@ export default function QuantropyPage() {
             </tbody>
           </table>
           <p className="text-[10px] text-[var(--text-muted)] font-terminal mt-2">
-            Click a regime to highlight weights. Long-only, Σw=1, SLSQP. Cash proxy 4%. Not a live book.
+            Click a regime to highlight weights. Long-only, Σw=1, {d?.lite ? "lite projected-gradient simplex (not SciPy SLSQP)" : "SLSQP"}. Cash proxy 4%. Not a live book.
           </p>
         </div>
       </div>

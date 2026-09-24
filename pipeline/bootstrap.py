@@ -94,8 +94,9 @@ def main():
 
     # ── Step 2: Prices ────────────────────────────────────────────
     logger.info("=== Step 2: Fetching prices via yfinance (last 400 days) ===")
-    end_date = datetime.now(timezone.utc).date()
-    start_date = end_date - timedelta(days=400)
+    from pipeline.clients.cash_eod import yfinance_window
+
+    start_date, end_date = yfinance_window(lookback_days=400)
 
     # Batch download in chunks to avoid yfinance limits
     chunk_size = 100

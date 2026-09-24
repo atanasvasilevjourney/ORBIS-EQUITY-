@@ -45,6 +45,8 @@ describe("GET /api/quantropy", () => {
     expect(body.lite).toBe(true);
     expect(body.corr.labels.length).toBeGreaterThanOrEqual(2);
     expect(body.names.length).toBeGreaterThanOrEqual(2);
+    expect(body.allocations.maxSharpe.label).toMatch(/simplex|need/);
+    expect(body.summary.maxSharpe).toBe(body.allocations.maxSharpe.sharpe);
   });
 
   it("returns an empty desk on unexpected errors instead of 500 JSON", async () => {
