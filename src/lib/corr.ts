@@ -62,7 +62,12 @@ export function dailyReturns(close: number[]): number[] {
   const out: number[] = [];
   for (let i = 1; i < close.length; i++) {
     const prev = close[i - 1];
-    out.push(prev > 0 && Number.isFinite(close[i]) ? close[i] / prev - 1 : 0);
+    const cur = close[i];
+    if (prev > 0 && Number.isFinite(prev) && Number.isFinite(cur) && cur > 0) {
+      out.push(cur / prev - 1);
+    } else {
+      out.push(Number.NaN);
+    }
   }
   return out;
 }

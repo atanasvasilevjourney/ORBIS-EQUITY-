@@ -1,6 +1,8 @@
 import unittest
 from datetime import date, datetime, timedelta, timezone
 
+import numpy as np
+
 from pipeline.compute.quantropy import _align_returns, _as_iso_date
 
 
@@ -64,6 +66,16 @@ class AlignReturnsTests(unittest.TestCase):
         symbols, rets = _align_returns({"AAA": a, "BBB": b}, min_obs=60, max_names=40)
         self.assertEqual(set(symbols), {"AAA", "BBB"})
         self.assertGreaterEqual(rets.shape[0], 60)
+
+    def test_zero_price_day_is_dropped_not_zero_filled(self):
+        start = date(2024, 1, 1)
+        a = _series(start, 80, 10)
+        b = _series(start, 80, 20)
+        a[40] = (a[40][0], 0.0)
+        symbols, rets = _align_returns({"AAA": a, "BBB": b}, min_obs=60, max_names=40)
+        self.assertEqual(set(symbols), {"AAA", "BBB"})
+        self.assertTrue(np.isfinite(rets).all())
+        self.assertLess(rets.shape[0], 79)
 
 
 if __name__ == "__main__":

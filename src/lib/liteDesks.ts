@@ -32,34 +32,34 @@ function pickPerSector(meta: Map<string, { sector: string }>, maxPer = 4): strin
   return out;
 }
 
-function alignCloses(book: Map<string, { dates: string[]; close: number[] }>, symbols: string[]): {
+export function alignCloses(book: Map<string, { dates: string[]; close: number[] }>, symbols: string[]): {
   labels: string[];
   closes: number[][];
 } {
-  const datesSets = symbols
-    .map((s) => book.get(s))
-    .filter((s): s is { dates: string[]; close: number[] } => !!s && s.dates.length >= 60)
-    .map((s) => new Set(s.dates));
-  if (datesSets.length < 2) return { labels: [], closes: [] };
-  // Use dates that appear in at least 2 names, then keep symbols covering ≥60 of the densest calendar.
+  const eligible = symbols
+    .map((s) => ({ sym: s, row: book.get(s) }))
+    .filter((x): x is { sym: string; row: { dates: string[]; close: number[] } } => !!x.row && x.row.dates.length >= 60);
+  if (eligible.length < 2) return { labels: [], closes: [] };
   const freq = new Map<string, number>();
-  datesSets.forEach((set) => {
-    set.forEach((d) => freq.set(d, (freq.get(d) ?? 0) + 1));
-  });
+  for (let i = 0; i < eligible.length; i++) {
+    const seen = new Set(eligible[i].row.dates);
+    seen.forEach((d) => freq.set(d, (freq.get(d) ?? 0) + 1));
+  }
   const popular: string[] = [];
   freq.forEach((n, d) => {
     if (n >= 2) popular.push(d);
   });
   popular.sort();
   const window = popular.slice(-252);
+  if (window.length < 60) return { labels: [], closes: [] };
   const labels: string[] = [];
   const closes: number[][] = [];
-  for (const sym of symbols) {
-    const row = book.get(sym);
-    if (!row) continue;
-    const lookup = new Map(row.dates.map((d, i) => [d, row.close[i]]));
-    const series = window.map((d) => lookup.get(d)).filter((v): v is number => v != null);
-    if (series.length >= 60) {
+  for (let i = 0; i < eligible.length; i++) {
+    const { sym, row } = eligible[i];
+    const lookup = new Map(row.dates.map((d, j) => [d, row.close[j]]));
+    const series = window.map((d) => lookup.get(d) ?? Number.NaN);
+    const finite = series.filter((v) => Number.isFinite(v)).length;
+    if (finite >= 60) {
       labels.push(sym);
       closes.push(series);
     }

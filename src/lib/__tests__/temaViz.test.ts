@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { corrMatrix, dailyReturns, parseCorr, pearson } from "@/lib/corr";
 import { buildCanaries, equityFromCloses, voteFromSmooth } from "@/lib/canary";
-import { liteQuantFromPrices, liteRotateFromPrices } from "@/lib/liteDesks";
+import { alignCloses, liteQuantFromPrices, liteRotateFromPrices } from "@/lib/liteDesks";
 
 describe("correlation", () => {
   it("identical series correlate at 1", () => {
@@ -20,6 +20,13 @@ describe("correlation", () => {
     expect(labels).toEqual(["A", "B"]);
     expect(matrix[0][0]).toBe(1);
     expect(matrix[0][1]).toBe(matrix[1][0]);
+  });
+
+  it("does not treat a missing close as a zero return", () => {
+    const rets = dailyReturns([10, 11, Number.NaN, 12]);
+    expect(rets[0]).toBeCloseTo(0.1, 8);
+    expect(Number.isNaN(rets[1])).toBe(true);
+    expect(Number.isNaN(rets[2])).toBe(true);
   });
 
   it("parseCorr reads a JSON matrix", () => {
@@ -78,6 +85,28 @@ describe("lite desks", () => {
     expect(lite.names.length).toBe(2);
     expect(lite.corr.labels).toEqual(["AAA", "BBB"]);
     expect(lite.lite).toBe(true);
+  });
+
+  it("aligns lite corr on a shared calendar instead of compressing gaps", () => {
+    const book = new Map<string, { dates: string[]; close: number[] }>();
+    const mk = (skip: Set<number>) => {
+      const dates: string[] = [];
+      const close: number[] = [];
+      for (let i = 0; i < 80; i++) {
+        if (skip.has(i)) continue;
+        dates.push(new Date(Date.UTC(2024, 0, 1 + i)).toISOString().slice(0, 10));
+        close.push(10 + i);
+      }
+      return { dates, close };
+    };
+    book.set("AAA", mk(new Set()));
+    book.set("BBB", mk(new Set([20, 21, 22, 23, 24, 25, 26, 27, 28, 29])));
+    book.set("CCC", mk(new Set()));
+    const { labels, closes } = alignCloses(book, ["AAA", "BBB", "CCC"]);
+    expect(labels).toEqual(["AAA", "BBB", "CCC"]);
+    expect(closes[0]).toHaveLength(closes[1].length);
+    expect(closes[1].some((v) => Number.isNaN(v))).toBe(true);
+    expect(closes[0].every((v) => Number.isFinite(v))).toBe(true);
   });
 
   it("rotate lite votes canaries from sector baskets", () => {

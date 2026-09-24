@@ -194,9 +194,9 @@ def build_carver_book(
         for m in members:
             by_ind.setdefault(m.industry, []).append(m)
         for industry, sleeve_names in by_ind.items():
-            peers = [m.close for m in sleeve_names]
             scored: list[tuple[str, float]] = []
             for m in sleeve_names:
+                peers = [p.close for p in sleeve_names if p.ticker != m.ticker]
                 sc = xs_score(m.close, peers)
                 xs_scores[m.ticker] = sc
                 scored.append((m.ticker, sc if math.isfinite(sc) else float("-inf")))
