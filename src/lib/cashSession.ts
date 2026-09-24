@@ -83,6 +83,31 @@ export function cashClock(nowMs = Date.now()): CashClock {
   };
 }
 
+/** Last NYSE weekday that is allowed into the closed EOD book. */
+export function lastTradingSessionDate(nowMs = Date.now()): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: NY,
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(nowMs));
+  const y = Number(part(parts, "year"));
+  const mo = Number(part(parts, "month"));
+  const d = Number(part(parts, "day"));
+  const hour = Number(part(parts, "hour"));
+  const minute = Number(part(parts, "minute"));
+  let dt = new Date(Date.UTC(y, mo - 1, d));
+  if (hour * 60 + minute < 16 * 60) dt = new Date(dt.getTime() - 86_400_000);
+  while (dt.getUTCDay() === 0 || dt.getUTCDay() === 6) {
+    dt = new Date(dt.getTime() - 86_400_000);
+  }
+  return dt.toISOString().slice(0, 10);
+}
+
 export function overnightWatchStep(clock: CashClock): number {
   if (clock.phase === "WEEKEND" || clock.phase === "CLOSED") return 0;
   if (clock.phase === "OVERNIGHT" || (clock.phase === "PREMARKET" && clock.minutes < 9 * 60 + 25)) return 1;

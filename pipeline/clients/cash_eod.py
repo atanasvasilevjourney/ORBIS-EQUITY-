@@ -93,7 +93,7 @@ def drop_in_progress(bars: list[DailyBar], *, now: datetime | None = None) -> li
 
 
 def last_closed_cash_date(*, now: datetime | None = None) -> date:
-    """Last NYSE cash session date that is allowed into prices_daily."""
+    """Calendar NY date of the last print that *could* be a closed cash bar."""
     now = now or datetime.now(NY)
     if now.tzinfo is None:
         now = now.replace(tzinfo=NY)
@@ -104,9 +104,44 @@ def last_closed_cash_date(*, now: datetime | None = None) -> date:
     return now.date()
 
 
+def last_trading_session_date(*, now: datetime | None = None) -> date:
+    """Last weekday cash session — skip Sat/Sun after the calendar cutoff."""
+    d = last_closed_cash_date(now=now)
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d
+
+
+def leftover_members(
+    members: list[dict],
+    rows: list[dict],
+    cutoff: str,
+) -> list[dict]:
+    """Names with no ingest rows, or whose newest bar is older than cutoff."""
+    latest: dict[str, str] = {}
+    for r in rows:
+        sym = r.get("symbol")
+        day = r.get("date")
+        if not sym or not day:
+            continue
+        day_s = str(day)[:10]
+        prev = latest.get(sym)
+        if prev is None or day_s > prev:
+            latest[sym] = day_s
+    out: list[dict] = []
+    for m in members:
+        sym = m.get("symbol")
+        if not sym:
+            continue
+        mx = latest.get(sym)
+        if mx is None or mx < cutoff:
+            out.append(m)
+    return out
+
+
 def yfinance_window(*, today: date | None = None, lookback_days: int = 10) -> tuple[date, date]:
     """Inclusive start, exclusive end — yfinance drops the end date."""
-    today = today or datetime.now(timezone.utc).date()
+    today = today or datetime.now(NY).date()
     return today - timedelta(days=lookback_days), today + timedelta(days=1)
 
 

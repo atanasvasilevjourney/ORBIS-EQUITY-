@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cashClock, overnightWatchStep } from "@/lib/cashSession";
+import { cashClock, lastTradingSessionDate, overnightWatchStep } from "@/lib/cashSession";
 
 describe("cashClock", () => {
   it("is PREMARKET at 07:00 ET on a weekday", () => {
@@ -27,5 +27,14 @@ describe("cashClock", () => {
     const c = cashClock(Date.parse("2026-09-19T11:00:00Z"));
     expect(c.phase).toBe("WEEKEND");
     expect(c.watchOvernight).toBe(false);
+  });
+
+  it("walks last trading session back across the weekend", () => {
+    // Saturday 17:00 ET = 2026-09-19 21:00 UTC
+    expect(lastTradingSessionDate(Date.parse("2026-09-19T21:00:00Z"))).toBe("2026-09-18");
+    // Monday 10:00 ET = 2026-09-21 14:00 UTC
+    expect(lastTradingSessionDate(Date.parse("2026-09-21T14:00:00Z"))).toBe("2026-09-18");
+    // Friday 16:01 ET = 2026-09-18 20:01 UTC
+    expect(lastTradingSessionDate(Date.parse("2026-09-18T20:01:00Z"))).toBe("2026-09-18");
   });
 });

@@ -46,6 +46,19 @@ services:
         value: "3.12.0"
       - fromGroup: orbis-equity-pipeline
 
+  # Saturday catch-up for a Friday close the weekday job missed
+  - type: cron
+    name: orbis-equity-saturday
+    runtime: python
+    plan: starter
+    schedule: "0 12 * * 6"  # Sat 12:00 UTC
+    buildCommand: pip install -r pipeline/requirements.txt
+    startCommand: bash pipeline/scripts/run_daily.sh
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - fromGroup: orbis-equity-pipeline
+
 envVarGroups:
   - name: orbis-equity-pipeline
     envVars:

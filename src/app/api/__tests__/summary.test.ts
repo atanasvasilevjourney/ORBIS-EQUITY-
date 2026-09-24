@@ -89,5 +89,7 @@ describe("GET /api/summary", () => {
     expect(body.asOfDate).toBe("2026-09-17");
     expect(body.priceAsOf).toBe("2026-09-17");
     expect(body.briefAsOf).toBe("2026-09-16");
+    expect(body.expectedLastClose).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(body.stale).toBe(true);
   });
 });

@@ -233,14 +233,19 @@ def main() -> None:
     if yf_symbols:
         all_rows.extend(_ingest_yfinance_prices(yf_symbols))
 
-    got = {r.get("symbol") for r in all_rows if r.get("symbol")}
-    leftover = [m for m in members if m.get("symbol") not in got]
+    from pipeline.clients.cash_eod import leftover_members, last_trading_session_date
+
+    cutoff_preview = last_trading_session_date().isoformat()
+    leftover = leftover_members(members, all_rows, cutoff_preview)
+    leftover_cap = int(os.environ.get("CASH_EOD_LIMIT", "80"))
+    leftover = leftover[: max(leftover_cap, 0)]
     if leftover:
         from pipeline.clients.cash_eod import bars_to_rows, fetch_daily_bars
 
         logger.info(
-            "Cash EOD fallback for %d names with no LSE/yfinance rows",
+            "Cash EOD fallback for %d names missing a %s bar",
             len(leftover),
+            cutoff_preview,
         )
         for m in leftover:
             symbol = m.get("symbol")
@@ -273,9 +278,7 @@ def main() -> None:
                         row[field] = None
             clean_rows.append(row)
 
-    from pipeline.clients.cash_eod import last_closed_cash_date
-
-    cutoff = last_closed_cash_date().isoformat()
+    cutoff = cutoff_preview
     before = len(clean_rows)
     clean_rows = [r for r in clean_rows if r["date"] <= cutoff]
     if before != len(clean_rows):

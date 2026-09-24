@@ -9,6 +9,8 @@ from pipeline.clients.cash_eod import (
     fetch_stooq_daily,
     fetch_yahoo_daily,
     last_closed_cash_date,
+    last_trading_session_date,
+    leftover_members,
     stooq_candidates,
     yahoo_ticker,
     yfinance_window,
@@ -89,6 +91,21 @@ class ClosedBarTests(unittest.TestCase):
         start, end = yfinance_window(today=date(2026, 9, 18), lookback_days=10)
         self.assertEqual(start, date(2026, 9, 8))
         self.assertEqual(end, date(2026, 9, 19))
+
+    def test_weekend_cutoff_is_friday(self):
+        sat = datetime(2026, 9, 19, 17, 0, tzinfo=__import__("zoneinfo").ZoneInfo("America/New_York"))
+        self.assertEqual(last_trading_session_date(now=sat), date(2026, 9, 18))
+        mon_pre = datetime(2026, 9, 21, 10, 0, tzinfo=__import__("zoneinfo").ZoneInfo("America/New_York"))
+        self.assertEqual(last_trading_session_date(now=mon_pre), date(2026, 9, 18))
+
+    def test_leftover_includes_stale_max_date(self):
+        members = [{"symbol": "AAA"}, {"symbol": "BBB"}, {"symbol": "CCC"}]
+        rows = [
+            {"symbol": "AAA", "date": "2026-09-18"},
+            {"symbol": "BBB", "date": "2026-09-10"},
+        ]
+        leftover = leftover_members(members, rows, "2026-09-18")
+        self.assertEqual([m["symbol"] for m in leftover], ["BBB", "CCC"])
 
 
 class _Resp:
