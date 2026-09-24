@@ -297,12 +297,14 @@ export default function PlayPage() {
 
   const shown = useMemo(() => {
     const q = filter.trim().toUpperCase();
-    const mapped = rows.map((r) => withLiveLast(r, liveQuotes[r.ticker]));
+    const mapped = rows.map((r) =>
+      scan === "overnight" ? withLiveLast(r, liveQuotes[r.ticker]) : r
+    );
     if (!q) return mapped;
     return mapped.filter(
       (r) => r.ticker.includes(q) || r.companyName.toUpperCase().includes(q)
     );
-  }, [rows, filter, liveQuotes]);
+  }, [rows, filter, liveQuotes, scan]);
 
   useEffect(() => {
     if (!shown.length) return;
@@ -350,6 +352,24 @@ export default function PlayPage() {
     if (scan === "breakout5m") setChartTf("5m");
   }, [scan]);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      const idx = Number(e.key);
+      if (idx >= 1 && idx <= SCANS.length) {
+        e.preventDefault();
+        const next = SCANS[idx - 1];
+        setScan(next.id);
+        if (next.id === "overnight" || next.id === "breakout5m") setChartTf("5m");
+        if (next.id === "breakout") setChartTf("1d");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const counts: Record<ScanId, number> = {
     overnight: d?.overnight?.length ?? 0,
     breakout: d?.breakouts?.length ?? 0,
@@ -368,12 +388,13 @@ export default function PlayPage() {
   const isBrk = scan === "breakout" || scan === "breakout5m";
   const brkSel = selected && "priorHigh" in selected ? (selected as BreakoutHit) : null;
   const liveSel = selected ? liveQuotes[selected.ticker] : undefined;
-  const extraLive = liveSel
-    ? [
-        ["BID", fmtPx(liveSel.bid)],
-        ["ASK", fmtPx(liveSel.ask)],
-      ]
-    : [];
+  const extraLive =
+    scan === "overnight" && liveSel
+      ? [
+          ["BID", fmtPx(liveSel.bid)],
+          ["ASK", fmtPx(liveSel.ask)],
+        ]
+      : [];
   const metricCols = (isBrk && brkSel ? 7 : 5) + extraLive.length;
   const chartLevels: ChartLevel[] =
     brkSel != null && Number.isFinite(brkSel.priorHigh)
@@ -415,6 +436,7 @@ export default function PlayPage() {
           <div>
             EOD {asOf} · PRIOR {d?.summary?.priorDate ?? "—"} · {d?.summary?.names ?? 0} NAMES
             {n4 ? ` · ${n4} ≥4% overnight` : ""}
+            {d?.summary?.overnightSource ? ` · TAPE ${d.summary.overnightSource.toUpperCase()}` : ""}
           </div>
         </div>
       </div>
@@ -513,6 +535,7 @@ export default function PlayPage() {
                 <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)]">
                   <th className="text-right px-2 py-1.5 w-8">#</th>
                   <th className="text-left px-2 py-1.5">TICKER</th>
+                  <th className="text-left px-2 py-1.5">SRC</th>
                   <th className="text-right px-2 py-1.5">LAST</th>
                   <th className="text-right px-2 py-1.5">{pctHeader}</th>
                   <th className="text-right px-2 py-1.5">$ CHG</th>
@@ -531,13 +554,13 @@ export default function PlayPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={isBrk ? 11 : 9} className="px-3 py-10 text-center text-[var(--text-muted)]">
+                    <td colSpan={isBrk ? 12 : 10} className="px-3 py-10 text-center text-[var(--text-muted)]">
                       Loading session movers…
                     </td>
                   </tr>
                 ) : !shown.length ? (
                   <tr>
-                    <td colSpan={isBrk ? 11 : 9} className="px-3 py-10 text-center text-[var(--text-muted)]">
+                    <td colSpan={isBrk ? 12 : 10} className="px-3 py-10 text-center text-[var(--text-muted)]">
                       {scan === "orb"
                         ? "No ORB watch this session. Run: python -m pipeline.compute.opening_range"
                         : scan === "overnight"
@@ -576,6 +599,13 @@ export default function PlayPage() {
                               {scan === "overnight" && overnight.orbEligible ? `${r.companyName ? " · " : ""}ORB ≥4%` : ""}
                             </div>
                           ) : null}
+                        </td>
+                        <td className="px-2 py-1.5 text-[10px] text-[var(--text-muted)]">
+                          {scan === "overnight"
+                            ? (overnight.source ?? d?.summary?.overnightSource ?? "tape").toUpperCase()
+                            : isBrk && (r as BreakoutHit).tf === "5m"
+                              ? "5M"
+                              : "EOD"}
                         </td>
                         <td className="px-2 py-1.5 text-right">{fmtPx(r.last)}</td>
                         <td className="px-2 py-1.5 text-right font-bold" style={{ color: tone(pct) }}>

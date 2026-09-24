@@ -14,9 +14,17 @@ type PaletteItem = {
 const STATIC_ITEMS: PaletteItem[] = [
   { id: "home", label: "Home Cockpit", hint: "HOME", href: "/", group: "Navigate" },
   { id: "screener", label: "Swing Screener", hint: "SCR", href: "/screener", group: "Navigate" },
-  { id: "play", label: "Stocks in Play", hint: "PLAY", href: "/play", group: "Navigate" },
+  { id: "play", label: "Stocks in Play", hint: "PLA", href: "/play", group: "Navigate" },
+  { id: "loop", label: "Loop Book", hint: "LOP", href: "/loop", group: "Navigate" },
   { id: "orb", label: "Opening Range Breakout", hint: "ORB", href: "/orb", group: "Navigate" },
+  { id: "skew", label: "Skew Map", hint: "SKW", href: "/skew", group: "Navigate" },
+  { id: "analysis", label: "Stock Analysis", hint: "ANL", href: "/analysis", group: "Navigate" },
+  { id: "bias", label: "Daily Bias", hint: "BIA", href: "/bias", group: "Navigate" },
+  { id: "cash", label: "TEMA + Carver Cash", hint: "CAS", href: "/cash", group: "Navigate" },
+  { id: "rotate", label: "Beta Rotation", hint: "ROT", href: "/rotate", group: "Navigate" },
+  { id: "quantropy", label: "Quantropy", hint: "QUA", href: "/quantropy", group: "Navigate" },
   { id: "fundamentals", label: "Fundamentals", hint: "FA", href: "/fundamentals", group: "Navigate" },
+  { id: "health", label: "Health Catalyst", hint: "HLT", href: "/health", group: "Navigate" },
   { id: "pharma", label: "Pharma Pipeline", hint: "PHAR", href: "/pharma", group: "Navigate" },
   { id: "earnings", label: "Earnings & News", hint: "ERN", href: "/earnings-news", group: "Navigate" },
 ];
