@@ -4,7 +4,10 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 export PYTHONUNBUFFERED=1
 
-echo "[weekly] universe sync"
+echo "[weekly] US index universe (S&P 500 + Nasdaq-100, no pharma)"
+python -m pipeline.ingest.us_index_universe
+
+echo "[weekly] universe sync (LSE catalog tiers)"
 python -m pipeline.ingest.universe
 
 echo "[weekly] fundamentals"

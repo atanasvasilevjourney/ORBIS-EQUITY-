@@ -4,13 +4,16 @@ from __future__ import annotations
 import os
 import re
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 import pandas as pd
 from supabase import Client, create_client
 
+from pipeline.universe_filters import is_pharma_stock
 from pipeline.utils.supabase import fetch_all
+
+BENCHMARK_ETFS = ("SPY", "QQQ")  # S&P 500 & Nasdaq-100 proxies
 
 EQUITY_START = 100_000.0
 
@@ -21,6 +24,87 @@ def get_client() -> Client:
     if not url or not key:
         raise RuntimeError("Set SUPABASE_URL and SUPABASE_SERVICE_KEY")
     return create_client(url, key)
+
+
+def load_universe_map(sb: Client | None = None) -> dict[str, dict]:
+    sb = sb or get_client()
+    rows = fetch_all(
+        sb,
+        "universe_members",
+        "symbol, sector, industry, tier, is_active",
+    )
+    return {r["symbol"]: r for r in rows}
+
+
+def without_pharma(
+    orders: list[dict], book: list[dict], uni: dict[str, dict]
+) -> tuple[list[dict], list[dict]]:
+    """Drop pharma/biotech names using universe industry tags."""
+    def ok(sym: str) -> bool:
+        return not is_pharma_stock(uni.get(sym, {}))
+
+    return (
+        [o for o in orders if ok(o["ticker"])],
+        [p for p in book if ok(p["symbol"])],
+    )
+
+
+def benchmark_index_curve(
+    sb: Client,
+    start: date,
+    end: date,
+    symbols: tuple[str, ...] = BENCHMARK_ETFS,
+) -> pd.DataFrame:
+    """Normalized total-return curves for index ETFs (100 at start date)."""
+    rows = fetch_all(
+        sb,
+        "prices_daily",
+        "symbol, date, close",
+        filters=lambda q: q.in_("symbol", list(symbols)),
+        order=("date", False),
+    )
+    px = pd.DataFrame(rows)
+    if px.empty:
+        try:
+            import yfinance as yf
+
+            frames = []
+            for sym in symbols:
+                hist = yf.Ticker(sym).history(
+                    start=start.isoformat(),
+                    end=(end + timedelta(days=1)).isoformat(),
+                    auto_adjust=True,
+                )
+                if hist.empty:
+                    continue
+                h = hist.reset_index()[["Date", "Close"]].rename(
+                    columns={"Date": "date", "Close": "close"}
+                )
+                h["symbol"] = sym
+                frames.append(h)
+            px = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        except Exception:
+            return pd.DataFrame()
+    if px.empty:
+        return pd.DataFrame()
+    px["date"] = pd.to_datetime(px["date"]).dt.date
+    px = px[(px["date"] >= start) & (px["date"] <= end)]
+    out: dict[str, list[dict]] = {s: [] for s in symbols}
+    for sym, g in px.groupby("symbol"):
+        g = g.sort_values("date")
+        base = float(g.iloc[0]["close"])
+        for _, row in g.iterrows():
+            out[sym].append(
+                {
+                    "date": row["date"],
+                    sym: 100.0 * float(row["close"]) / base,
+                }
+            )
+    merged = None
+    for sym, pts in out.items():
+        df = pd.DataFrame(pts)
+        merged = df if merged is None else merged.merge(df, on="date", how="outer")
+    return merged.sort_values("date") if merged is not None else pd.DataFrame()
 
 
 def load_loop_tables(sb: Client | None = None) -> dict[str, list[dict]]:

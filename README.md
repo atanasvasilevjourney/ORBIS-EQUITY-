@@ -119,6 +119,7 @@ Surfaced in the UI at `/health` and via `GET /api/health`. Signals are heuristic
 
 Turns Trend Radar into a mechanical long-only paper portfolio:
 
+- **Universe:** S&P 500 ∪ Nasdaq-100 via `python -m pipeline.ingest.us_index_universe` (pharma/biotech excluded from LOOP entries; open pharma lines are exited on the next run)
 - **Entry:** GREEN + rank ≥ 60 + positive momentum/EWMAC + (breakout or volume confirm)
 - **Size:** Turtle-style — `shares = floor((equity × 1%) / (2N))` with N = 14-day ATR
 - **Stop:** 2N below entry; max 8 names, max 2 per sector, 8% open heat

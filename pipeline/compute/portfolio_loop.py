@@ -25,6 +25,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from supabase import create_client
 
+from pipeline.universe_filters import is_loop_tradable, is_pharma_stock
 from pipeline.utils.supabase import fetch_all
 
 load_dotenv()
@@ -99,7 +100,12 @@ def main() -> None:
         log.append({"at": now, "level": level, "message": message})
         logger.info("%s %s", level, message)
 
-    universe = fetch_all(sb, "universe_members", "symbol, company_name, sector", filters=lambda q: q.eq("is_active", True))
+    universe = fetch_all(
+        sb,
+        "universe_members",
+        "symbol, company_name, sector, industry, tier, is_active",
+        filters=lambda q: q.eq("is_active", True),
+    )
     radar = fetch_all(
         sb,
         "trend_radar",
@@ -190,7 +196,10 @@ def main() -> None:
         opened = _parse_date(pos.get("opened_at")) or today
         days_held = (today - opened).days
         exit_reason = None
-        if stop and low_map.get(sym, last) <= stop:
+        u_row = uni.get(sym) or pos
+        if is_pharma_stock(u_row):
+            exit_reason = "Universe policy · pharma/biotech excluded"
+        elif stop and low_map.get(sym, last) <= stop:
             exit_reason = f"Stop hit · last {last:.2f} ≤ stop {stop:.2f}"
         elif r.get("state") == -1:
             exit_reason = "State RED"
@@ -243,6 +252,10 @@ def main() -> None:
             sym = r["symbol"]
             u = uni.get(sym)
             if not u:
+                continue
+            if not is_loop_tradable(u):
+                if is_pharma_stock(u):
+                    skip(sym, "PHARMA_EXCLUDED", "pharma/biotech not in LOOP universe", u.get("sector") or "", None)
                 continue
             sector = u.get("sector") or "Unknown"
             rank = int(r.get("quality_rank") or 0)
