@@ -7,7 +7,7 @@ Turns Trend Radar (screener) into a tradable paper book:
   Stop    2N below fill (prior close used as fill for paper EOD)
   Caps    max 8 names, max 2 per sector, 8% open heat, 15% name notional
   Skip    earnings in next 5 days, insufficient ATR, posture < 50 (no new entries)
-  Exit    stop (low <= stop), state RED, rank < 50, dual-momentum fail
+  Exit    state RED, rank < 50, dual-momentum fail (no fixed ATR stop)
 
 Does NOT place live broker orders. Writes paper_loop_runs / paper_book / paper_orders.
 
@@ -199,8 +199,6 @@ def main() -> None:
         u_row = uni.get(sym) or pos
         if is_pharma_stock(u_row):
             exit_reason = "Universe policy · pharma/biotech excluded"
-        elif stop and low_map.get(sym, last) <= stop:
-            exit_reason = f"Stop hit · last {last:.2f} ≤ stop {stop:.2f}"
         elif r.get("state") == -1:
             exit_reason = "State RED"
         elif (r.get("quality_rank") or 0) < 50:

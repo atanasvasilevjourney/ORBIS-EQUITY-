@@ -206,10 +206,7 @@ def run_loop_backtest(
             close = float(bar["close"])
             exit_px = None
             reason = None
-            if low <= pos.stop:
-                exit_px = close
-                reason = "stop"
-            elif int(row["state"]) == -1:
+            if int(row["state"]) == -1:
                 exit_px = close
                 reason = "state_red"
             elif int(row["quality_rank"]) < 50:
@@ -366,6 +363,7 @@ def run_loop_backtest(
     curve = pd.DataFrame(curve_rows)
     closed = pd.DataFrame([t for t in trades if t["exit_reason"] != "OPEN"])
     win = (closed["pnl_usd"] > 0).mean() * 100 if len(closed) else 0.0
+    exit_mix = closed["exit_reason"].value_counts().to_dict() if len(closed) and "exit_reason" in closed.columns else {}
     summary = {
         "start": start.isoformat(),
         "end": end.isoformat(),
@@ -377,6 +375,7 @@ def run_loop_backtest(
         "max_drawdown_pct": _max_drawdown(curve["equity_usd"]) if len(curve) else 0.0,
         "universe_symbols": len(symbols),
         "symbols_with_radar": len(radar),
+        "exit_reasons": exit_mix,
     }
     return BacktestResult(equity_curve=curve, trades=closed, summary=summary)
 
@@ -414,6 +413,8 @@ def main() -> None:
     print(f"Final equity: ${s['final_equity']:,.2f}  ({s['total_return_pct']:+.2f}%)")
     print(f"Max drawdown: {s['max_drawdown_pct']:.2f}%")
     print(f"Closed trades: {s['closed_trades']}  Win rate: {s['win_rate_pct']:.1f}%")
+    if s.get("exit_reasons"):
+        print(f"Exit mix: {s['exit_reasons']}")
     print(f"Benchmarks: SPY {spy:+.2f}%  QQQ {qqq:+.2f}%")
 
 
