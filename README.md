@@ -230,6 +230,8 @@ python -m pipeline.compute.perps_desk
 
 Surfaced at `/cash` (`/perps` redirects) and `GET /api/perps`. Paper harness only. Not investment advice.
 
+**Prop-firm research:** how to map this edge to manual/FTMO-style books, backtest, validate, and overlay challenge rules — see [`docs/PROP_FIRM_EDGE.md`](docs/PROP_FIRM_EDGE.md).
+
 ## Beta rotation (which sectors are trending)
 
 Inspired by [Caltropia's 2026 sector and industry outlook](https://caltropia.substack.com/p/2026-stock-market-sector-and-industry) **structure** and the canary → TEMA-MACD ensemble flow from the Crypto Allocation notebook. Not their published numbers.
