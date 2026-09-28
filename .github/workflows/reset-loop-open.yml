@@ -1,0 +1,60 @@
+# One-shot: flatten the LOOP paper book, then fill at the New York cash open.
+# Trigger by pushing a change to .github/run-loop-open-reset.flag on main.
+name: Reset LOOP book at open
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/run-loop-open-reset.flag"
+
+jobs:
+  reset-and-fill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Flatten the paper book
+        run: python -m pipeline.compute.reset_open_book --flatten
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+      - name: Wait for the New York cash open, then fill
+        run: |
+          python - <<'PY'
+          import time
+          from datetime import datetime, timedelta
+          from zoneinfo import ZoneInfo
+          ny = ZoneInfo("America/New_York")
+          now = datetime.now(ny)
+          open_at = now.replace(hour=9, minute=32, second=0, microsecond=0)
+          if now >= open_at:
+              print("cash session already open")
+          else:
+              wait = (open_at - now).total_seconds()
+              print(f"waiting {wait:.0f}s until {open_at.isoformat()}")
+              time.sleep(wait)
+          PY
+          for i in $(seq 1 40); do
+            if python -m pipeline.compute.reset_open_book --fill; then
+              exit 0
+            fi
+            echo "open not printed yet ($i)"
+            sleep 30
+          done
+          echo "timed out waiting for the session open"
+          exit 1
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
