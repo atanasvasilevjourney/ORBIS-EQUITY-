@@ -155,9 +155,7 @@ def flatten() -> None:
     print(f"FLAT {run_id} closed {len(book)}")
 
 
-def session_opens(symbols: list[str]) -> dict[str, float] | None:
-    """Opening prints for the New York session. None until that bar exists."""
-    session = _session_day()
+def _open_from_daily(symbols: list[str], session: date) -> dict[str, float] | None:
     raw = yf.download(
         symbols + ["SPY"],
         start=session.isoformat(),
@@ -190,6 +188,57 @@ def session_opens(symbols: list[str]) -> dict[str, float] | None:
     if len(opens) != len(symbols):
         return None
     return opens
+
+
+def _open_from_intraday(symbols: list[str], session: date) -> dict[str, float] | None:
+    """First 1m bar open after 09:30 ET when the daily bar is not ready yet."""
+    from zoneinfo import ZoneInfo
+
+    ny = ZoneInfo("America/New_York")
+    opens: dict[str, float] = {}
+    for sym in symbols + ["SPY"]:
+        raw = yf.download(
+            sym,
+            start=session.isoformat(),
+            end=(session + timedelta(days=1)).isoformat(),
+            interval="1m",
+            auto_adjust=True,
+            progress=False,
+            prepost=False,
+        )
+        if raw is None or getattr(raw, "empty", True):
+            return None
+        frame = raw.rename(columns=str.lower)
+        if "open" not in frame.columns:
+            return None
+        idx = frame.index
+        if getattr(idx, "tz", None) is None:
+            idx = idx.tz_localize("UTC").tz_convert(ny)
+        else:
+            idx = idx.tz_convert(ny)
+        frame = frame.copy()
+        frame.index = idx
+        regular = frame.between_time("09:30", "16:00")
+        if regular.empty:
+            return None
+        px = float(regular["open"].iloc[0])
+        if px <= 0:
+            return None
+        opens[sym] = px
+    if len(opens) != len(symbols) + 1:
+        return None
+    if "SPY" not in opens:
+        return None
+    return {sym: opens[sym] for sym in symbols}
+
+
+def session_opens(symbols: list[str]) -> dict[str, float] | None:
+    """Opening prints for the New York session. None until that bar exists."""
+    session = _session_day()
+    daily = _open_from_daily(symbols, session)
+    if daily is not None:
+        return daily
+    return _open_from_intraday(symbols, session)
 
 
 def fill() -> bool:
