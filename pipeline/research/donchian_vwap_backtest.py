@@ -8,18 +8,21 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
+from pipeline.compute.donchian_vwap import (
+    ENTRY_CHANNEL,
+    EQUITY as INITIAL_EQUITY,
+    EXIT_CHANNEL,
+    MAX_PER_SECTOR,
+    MIN_PRICE as PRICE_MIN,
+    REBALANCE_DAYS,
+    TOP_N,
+    VWAP_WINDOW,
+    donchian_frame,
+    rolling_vwap,
+)
 from pipeline.ingest.us_index_universe import build_merged_universe
 from pipeline.research.loop_backtest import _bar_on, _download_panel
 from pipeline.universe_filters import is_loop_tradable, is_pharma_stock
-
-ENTRY_CHANNEL = 55
-EXIT_CHANNEL = 20
-VWAP_WINDOW = 20
-TOP_N = 8
-MAX_PER_SECTOR = 2
-REBALANCE_DAYS = 5
-INITIAL_EQUITY = 100_000.0
-PRICE_MIN = 10.0
 
 
 @dataclass
@@ -42,39 +45,11 @@ def _universe() -> dict[str, str]:
     }
 
 
-def _rolling_vwap(df: pd.DataFrame, window: int = VWAP_WINDOW) -> pd.Series:
-    tp = (df["high"].astype(float) + df["low"].astype(float) + df["close"].astype(float)) / 3.0
-    vol = df["volume"].astype(float).replace(0, np.nan)
-    num = (tp * vol).rolling(window, min_periods=window).sum()
-    den = vol.rolling(window, min_periods=window).sum()
-    return num / den
-
-
 def _donchian_signals(df: pd.DataFrame) -> pd.DataFrame:
-    high = df["high"].astype(float)
-    low = df["low"].astype(float)
-    close = df["close"].astype(float)
-    upper = high.rolling(ENTRY_CHANNEL, min_periods=ENTRY_CHANNEL).max().shift(1)
-    lower = low.rolling(EXIT_CHANNEL, min_periods=EXIT_CHANNEL).min().shift(1)
-    vwap = _rolling_vwap(df)
-    breakout = close > upper
-    above_vwap = close > vwap
-    eligible = breakout & above_vwap & (close >= PRICE_MIN)
-    exit_signal = close < lower
-    strength = (close / upper.replace(0, np.nan) - 1.0).clip(lower=0)
-    out = pd.DataFrame(
-        {
-            "close": close,
-            "upper": upper,
-            "lower": lower,
-            "vwap": vwap,
-            "eligible": eligible,
-            "exit_signal": exit_signal,
-            "strength": strength.fillna(0),
-        },
-        index=df.index,
-    )
-    return out
+    d = df.copy()
+    if "date" not in d.columns:
+        return donchian_frame(d)
+    return donchian_frame(d)
 
 
 def _metrics(label: str, start: date, end: date, daily_returns: pd.Series) -> PeriodMetrics:

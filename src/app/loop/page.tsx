@@ -92,7 +92,7 @@ export default function LoopPage() {
           LOOP TERMINAL
         </h1>
         <p className="text-xs text-[var(--text-secondary)]">
-          Equity breakout portfolio harness · Turtle-style 2N sizing from Trend Radar
+          Donchian 55 + 20d VWAP · equal-weight index book (ex-pharma) · paper only
         </p>
       </div>
 
@@ -124,9 +124,9 @@ export default function LoopPage() {
               <th className="text-right px-3 py-2">SHARES</th>
               <th className="text-right px-3 py-2">ENTRY</th>
               <th className="text-right px-3 py-2">LAST</th>
-              <th className="text-right px-3 py-2">STOP 2N</th>
-              <th className="text-right px-3 py-2">N</th>
-              <th className="text-right px-3 py-2">RISK $</th>
+              <th className="text-right px-3 py-2">DC20 LOW</th>
+              <th className="text-right px-3 py-2">STR</th>
+              <th className="text-right px-3 py-2">—</th>
               <th className="text-right px-3 py-2">P&amp;L</th>
               <th className="text-left px-3 py-2">REASON</th>
             </tr>
@@ -150,11 +150,12 @@ export default function LoopPage() {
                     <td className="px-3 py-2 text-right">{px(r.entry)}</td>
                     <td className="px-3 py-2 text-right">{px(r.last)}</td>
                     <td className="px-3 py-2 text-right" style={{ color: "var(--accent-bear)" }}>{px(r.stop)}</td>
-                    <td className="px-3 py-2 text-right">{px(r.n)}</td>
-                    <td className="px-3 py-2 text-right">{usd(r.riskUsd, 0)}</td>
+                    <td className="px-3 py-2 text-right">{r.rank ?? "—"}</td>
+                    <td className="px-3 py-2 text-right">—</td>
                     <td className="px-3 py-2 text-right font-bold" style={{ color: pnlColor }}>{usd(r.unrealizedPnlUsd, 0)}</td>
                     <td className="px-3 py-2 text-xs">
-                      {r.breakout && <span className="text-[10px] px-1 py-0.5 rounded bg-[var(--badge-bg)] text-[var(--accent-warning)] mr-1">BRK</span>}
+                      {r.breakout && <span className="text-[10px] px-1 py-0.5 rounded bg-[var(--badge-bg)] text-[var(--accent-warning)] mr-1">DC55</span>}
+                      {r.green && <span className="text-[10px] px-1 py-0.5 rounded bg-[var(--badge-bg)] text-[var(--accent-bull)] mr-1">VWAP</span>}
                       <span className="text-[var(--text-secondary)]">{r.reason}</span>
                     </td>
                   </tr>
