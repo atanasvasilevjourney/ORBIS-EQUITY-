@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ThemeToggle } from "@/components/cards/ThemeToggle";
 
 const NAV_LINKS = [
-  { href: "/screener", label: "SCREENER" },
+  { href: "/screener", label: "WATCHLIST" },
   { href: "/loop", label: "LOOP" },
   { href: "/orb", label: "ORB" },
   { href: "/skew", label: "SKEW" },

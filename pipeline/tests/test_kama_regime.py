@@ -10,7 +10,7 @@ from pipeline.compute.kama_regime import (
     compute_kama_regime,
     dual_kama_position,
 )
-from pipeline.compute.trend_radar import (
+from pipeline.compute.trend_radar_legacy import (
     compute_quality_rank,
     determine_state,
     process_ticker,

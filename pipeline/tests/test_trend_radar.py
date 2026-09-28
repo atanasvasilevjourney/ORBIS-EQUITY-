@@ -1,95 +1,109 @@
-"""Unit tests for pipeline.compute.trend_radar signal functions."""
+"""Unit tests for the module-1 watchlist screener."""
 import pandas as pd
 import pytest
 
 from pipeline.compute.trend_radar import (
-    BEAR_THRESHOLD,
-    BULL_THRESHOLD,
+    HOT_MIN_DAY_PCT,
+    HOT_MIN_REL_VOLUME,
     MIN_HISTORY_DAYS,
-    compute_momentum_z,
-    compute_quality_rank,
-    compute_52w_proximity,
-    determine_state,
+    WATCH_MIN_DAY_PCT,
+    WATCH_MIN_REL_VOLUME,
+    day_percent_change,
+    on_watchlist,
     process_ticker,
+    relative_volume,
+    watch_rank,
 )
 
 
-class TestComputeMomentumZ:
-    def test_insufficient_history_returns_zero(self, flat_prices):
-        short = flat_prices.iloc[:50]
-        assert compute_momentum_z(short) == 0.0
-
-    def test_uptrend_positive_momentum(self, uptrend_prices):
-        z = compute_momentum_z(uptrend_prices)
-        assert z > 0
-
-    def test_downtrend_negative_momentum(self, downtrend_prices):
-        z = compute_momentum_z(downtrend_prices)
-        assert z < 0
-
-    def test_output_bounded(self, uptrend_prices):
-        z = compute_momentum_z(uptrend_prices)
-        assert -3 <= z <= 3
+def _frame(closes, highs, volumes) -> pd.DataFrame:
+    n = len(closes)
+    return pd.DataFrame({
+        "date": pd.date_range("2024-01-01", periods=n),
+        "open": closes,
+        "high": highs,
+        "low": [c * 0.99 for c in closes],
+        "close": closes,
+        "volume": volumes,
+    })
 
 
-class TestCompute52wProximity:
-    def test_at_high_returns_near_zero(self):
-        prices = pd.Series([100.0] * 252)
-        assert compute_52w_proximity(prices) == pytest.approx(0.0, abs=0.01)
+class TestRelativeVolume:
+    def test_excludes_today_from_average(self):
+        volume = pd.Series([100.0] * 50 + [500.0])
+        assert relative_volume(volume, 50) == pytest.approx(5.0)
 
-    def test_below_high_returns_negative(self):
-        prices = pd.Series([100.0] * 251 + [80.0])
-        prox = compute_52w_proximity(prices)
-        assert prox < 0
+    def test_short_history_is_zero(self):
+        assert relative_volume(pd.Series([100.0] * 10), 50) == 0.0
 
 
-class TestComputeQualityRank:
-    def test_rank_in_valid_range(self):
-        rank = compute_quality_rank(1.0, 1.0, -0.05, True, True)
-        assert 0 <= rank <= 100
-
-    def test_bullish_signals_high_rank(self):
-        rank = compute_quality_rank(2.5, 2.5, -0.02, True, True)
-        assert rank >= BULL_THRESHOLD
-
-    def test_bearish_signals_low_rank(self):
-        rank = compute_quality_rank(-2.5, -2.5, -0.50, False, False)
-        assert rank <= BEAR_THRESHOLD
+class TestDayChange:
+    def test_percent_points(self):
+        close = pd.Series([100.0, 110.0])
+        assert day_percent_change(close) == pytest.approx(10.0)
 
 
-class TestDetermineState:
-    def test_green_state(self):
-        state = determine_state(1.5, 1.0, -0.05, 70)
-        assert state == 1
+class TestWatchRank:
+    def test_on_list_outranks_ordinary_up_day(self):
+        listed = watch_rank(True, -1.0, 6.0)
+        ordinary = watch_rank(False, 0.0, 3.0)
+        assert listed >= 70
+        assert ordinary < listed
 
-    def test_red_state(self):
-        state = determine_state(-1.5, -1.0, -0.40, 30)
-        assert state == -1
-
-    def test_grey_state(self):
-        state = determine_state(0.1, -0.1, -0.15, 50)
-        assert state == 0
+    def test_closer_to_high_ranks_higher_on_the_list(self):
+        at_high = watch_rank(True, 0.0, 8.0)
+        off_high = watch_rank(True, -4.0, 8.0)
+        assert at_high > off_high
 
 
 class TestProcessTicker:
     def test_insufficient_data_returns_none(self):
-        df = pd.DataFrame({
-            "date": pd.date_range("2024-01-01", periods=50),
-            "open": [100.0] * 50,
-            "high": [101.0] * 50,
-            "low": [99.0] * 50,
-            "close": [100.0] * 50,
-            "volume": [1_000_000.0] * 50,
-        })
+        df = _frame([100.0] * 40, [101.0] * 40, [1_000_000.0] * 40)
         assert process_ticker(df) is None
 
-    def test_sufficient_data_returns_valid_signals(self, price_ohlcv_df):
-        result = process_ticker(price_ohlcv_df)
+    def test_hot_name_clears_five_times_volume_and_ten_percent(self):
+        n = MIN_HISTORY_DAYS
+        closes = [100.0] * (n - 1) + [112.0]
+        highs = [101.0] * (n - 1) + [112.0]
+        volumes = [1_000_000.0] * (n - 1) + [6_000_000.0]
+        result = process_ticker(_frame(closes, highs, volumes))
         assert result is not None
-        assert 0 <= result["quality_rank"] <= 100
-        assert result["state"] in (-1, 0, 1)
-        assert isinstance(result["breakout_active"], bool)
-        assert isinstance(result["volume_confirmed"], bool)
+        assert result["state"] == 1
+        assert result["entry_timing"] == "hot"
+        assert result["volume_confirmed"] is True
+        assert result["breakout_active"] is True
+        assert result["z_mom"] == pytest.approx(12.0)
+        assert result["f_ewmac"] == pytest.approx(6.0)
+        assert result["quality_rank"] >= 70
+        assert result["kama_regime"] == 0
 
-    def test_min_history_constant(self):
-        assert MIN_HISTORY_DAYS == 148
+    def test_watch_name_is_on_list_but_not_hot(self):
+        n = MIN_HISTORY_DAYS
+        closes = [100.0] * (n - 1) + [105.0]
+        highs = [101.0] * (n - 1) + [108.0]  # about 2.8% off the high
+        volumes = [1_000_000.0] * (n - 1) + [3_000_000.0]
+        result = process_ticker(_frame(closes, highs, volumes))
+        assert result is not None
+        assert result["entry_timing"] == "watch"
+        assert result["state"] == 1
+        assert result["volume_confirmed"] is False
+        assert result["breakout_active"] is False
+        assert result["convergence_count"] == 2
+
+    def test_down_day_is_off_the_list(self):
+        n = MIN_HISTORY_DAYS
+        closes = [100.0] * (n - 1) + [97.0]
+        highs = [101.0] * n
+        volumes = [1_000_000.0] * n
+        result = process_ticker(_frame(closes, highs, volumes))
+        assert result is not None
+        assert result["state"] == -1
+        assert result["entry_timing"] == "off"
+        assert on_watchlist(result["z_mom"], result["f_ewmac"]) is False
+
+    def test_thresholds_match_watchlist_contract(self):
+        assert WATCH_MIN_DAY_PCT == 4.0
+        assert WATCH_MIN_REL_VOLUME == 2.0
+        assert HOT_MIN_DAY_PCT == 10.0
+        assert HOT_MIN_REL_VOLUME == 5.0
+        assert MIN_HISTORY_DAYS == 51

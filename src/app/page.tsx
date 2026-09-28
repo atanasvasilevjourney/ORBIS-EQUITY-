@@ -308,11 +308,11 @@ export default function Home() {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {([
           {
-            href: "/screener", title: "SWING SCREENER", badge: "MODULE 1",
-            subtitle: "Momentum & technical bias board", accent: "var(--module-1)", source: "TREND RADAR",
+            href: "/screener", title: "WATCHLIST", badge: "MODULE 1",
+            subtitle: "Day strength and relative volume — scan only", accent: "var(--module-1)", source: "EOD",
             metrics: [
               { label: "POSTURE", value: d?.posture ?? "—", color: postureColor },
-              { label: "GREEN", value: d?.breadth ? `${d.breadth.pctGreen}%` : "—", color: "var(--accent-bull)" },
+              { label: "ON LIST", value: d?.breadth ? d.breadth.greens : "—", color: "var(--accent-bull)" },
               { label: "BEST", value: d?.bestSector ?? "—" },
             ],
           },

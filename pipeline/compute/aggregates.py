@@ -1,13 +1,13 @@
 """Market breadth and posture aggregates.
 
-Reads trend_radar + universe_members, computes:
-  - % universe GREEN / RED / GREY
-  - Per-sector breadth (net state count)
-  - Market posture score (0-100)
-  - Delta vs 5d ago
-  - Best/worst sectors
+Reads the module-1 watchlist (`trend_radar`) plus universe membership.
 
-Stores results in daily_brief table as inputs for the AI brief generator.
+Posture is the share of names up on the day (`z_mom` = day percent change).
+It is not the size of the hot list, so a short watchlist does not shut off
+other modules that read `daily_brief.posture_score`.
+
+Also reports how many names are on the watchlist (`state == 1`) and which
+sectors led or lagged by average day change.
 
 Usage:
     python -m pipeline.compute.aggregates
@@ -24,54 +24,63 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
+def _day_pct(row: dict) -> float:
+    try:
+        return float(row.get("z_mom") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def compute_breadth(radar_rows: list[dict], universe_rows: list[dict]) -> dict:
-    """Compute breadth metrics from trend_radar data."""
-    # Build symbol→sector map
+    """Breadth from the watchlist table.
+
+    `state == 1` counts names on the hot list. Day direction comes from `z_mom`
+    (percent change). Sector score is the average day change, not GREEN/RED mix.
+    """
     sector_map = {r["symbol"]: r.get("sector", "Unknown") for r in universe_rows}
 
     total = len(radar_rows)
     if total == 0:
-        return {"pct_green": 0, "pct_red": 0, "pct_grey": 0, "total": 0}
+        return {
+            "pct_green": 0,
+            "pct_red": 0,
+            "pct_grey": 0,
+            "advancers_pct": 0,
+            "total": 0,
+            "greens": 0,
+            "reds": 0,
+            "greys": 0,
+        }
 
-    states = Counter(r["state"] for r in radar_rows)
-    greens = states.get(1, 0)
-    reds = states.get(-1, 0)
-    greys = states.get(0, 0)
+    states = Counter(r.get("state") for r in radar_rows)
+    on_list = states.get(1, 0)
+    down = states.get(-1, 0)
+    idle = states.get(0, 0)
+    ups = sum(1 for r in radar_rows if _day_pct(r) > 0)
 
-    # Per-sector breadth
-    sector_states: dict[str, dict] = {}
+    sector_changes: dict[str, list[float]] = {}
     for r in radar_rows:
         sector = sector_map.get(r["symbol"], "Unknown")
-        if sector not in sector_states:
-            sector_states[sector] = {"green": 0, "red": 0, "grey": 0, "total": 0}
-        sector_states[sector]["total"] += 1
-        if r["state"] == 1:
-            sector_states[sector]["green"] += 1
-        elif r["state"] == -1:
-            sector_states[sector]["red"] += 1
-        else:
-            sector_states[sector]["grey"] += 1
+        sector_changes.setdefault(sector, []).append(_day_pct(r))
 
-    # Net score per sector (green% - red%)
-    sector_scores = {}
-    for sector, counts in sector_states.items():
-        if counts["total"] > 0:
-            net = (counts["green"] - counts["red"]) / counts["total"]
-            sector_scores[sector] = round(net * 100, 1)
-
-    # Sort sectors by score
+    sector_scores = {
+        sector: round(sum(vals) / len(vals), 2)
+        for sector, vals in sector_changes.items()
+        if vals
+    }
     sorted_sectors = sorted(sector_scores.items(), key=lambda x: x[1], reverse=True)
     best_sector = sorted_sectors[0] if sorted_sectors else ("—", 0)
     worst_sector = sorted_sectors[-1] if sorted_sectors else ("—", 0)
 
     return {
         "total": total,
-        "greens": greens,
-        "reds": reds,
-        "greys": greys,
-        "pct_green": round(greens / total * 100, 1),
-        "pct_red": round(reds / total * 100, 1),
-        "pct_grey": round(greys / total * 100, 1),
+        "greens": on_list,
+        "reds": down,
+        "greys": idle,
+        "pct_green": round(on_list / total * 100, 1),
+        "pct_red": round(down / total * 100, 1),
+        "pct_grey": round(idle / total * 100, 1),
+        "advancers_pct": round(ups / total * 100, 1),
         "sector_breadth": sector_scores,
         "best_sector": best_sector[0],
         "best_sector_score": best_sector[1],
@@ -81,13 +90,13 @@ def compute_breadth(radar_rows: list[dict], universe_rows: list[dict]) -> dict:
 
 
 def compute_posture(breadth: dict) -> int:
-    """Market posture score 0-100.
+    """Market posture 0-100 = percent of names up on the day.
 
-    Components:
-      - 50% net breadth: (green% - red%) mapped from [-100,+100] to [0,50]
-      - 30% directional strength: (green% - red%) / (green% + red%) mapped to [0,30]
-      - 20% sector uniformity: fraction of sectors with positive net score
+    Falls back to the older GREEN/RED mix only when day-change breadth is absent.
     """
+    if "advancers_pct" in breadth:
+        return int(min(max(round(float(breadth["advancers_pct"])), 0), 100))
+
     green_pct = breadth.get("pct_green", 0)
     red_pct = breadth.get("pct_red", 0)
 
@@ -146,7 +155,7 @@ def main():
 
     from pipeline.utils.supabase import fetch_all
 
-    radar_data = fetch_all(sb, "trend_radar", "symbol,state,quality_rank")
+    radar_data = fetch_all(sb, "trend_radar", "symbol,state,quality_rank,z_mom")
     universe_data = fetch_all(
         sb,
         "universe_members",
@@ -184,9 +193,8 @@ def main():
         region_symbols = {s for s, r in region_map.items() if r == region}
         region_rows = [r for r in radar_data if r["symbol"] in region_symbols]
         if region_rows:
-            total = len(region_rows)
-            greens = sum(1 for r in region_rows if r["state"] == 1)
-            region_breadth[region] = round(greens / total * 100, 1)
+            ups = sum(1 for r in region_rows if _day_pct(r) > 0)
+            region_breadth[region] = round(ups / len(region_rows) * 100, 1)
 
     # Average quality rank
     avg_rank = round(sum(r["quality_rank"] for r in radar_data) / len(radar_data), 1)
@@ -204,14 +212,18 @@ def main():
     # Store in daily_brief as inputs
     sb.table("daily_brief").upsert({
         "asof_date": date.today().isoformat(),
-        "brief": f"{label} - {breadth['pct_green']}% GREEN, led by {breadth['best_sector']}",
+        "brief": (
+            f"{label} — {breadth.get('advancers_pct', 0)}% of names up, "
+            f"{breadth.get('greens', 0)} on the watchlist, "
+            f"led by {breadth['best_sector']}"
+        ),
         "inputs": summary,
         "model": "aggregates_v1",
     }, on_conflict="asof_date").execute()
 
     logger.info(
         f"Posture: {posture} ({label}) | "
-        f"GREEN: {breadth['pct_green']}% | RED: {breadth['pct_red']}% | "
+        f"Advancers: {breadth.get('advancers_pct', 0)}% | Watchlist: {breadth.get('greens', 0)} | "
         f"Best: {breadth['best_sector']} ({breadth['best_sector_score']}) | "
         f"Worst: {breadth['worst_sector']} ({breadth['worst_sector_score']})"
     )

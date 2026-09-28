@@ -1,323 +1,165 @@
-"""Trend Radar compute engine — core signal layer for Orbis Equity.
+"""Module 1 — momentum watchlist screener. Does not place orders.
 
-Reads prices_daily, computes component signals per ticker, produces
-a composite quality_rank (0-100) and state (GREEN/GREY/RED). Writes to
-trend_radar table.
+Scans the active universe (S&P 500 ∪ Nasdaq-100) for names already moving
+with heavy volume, then ranks them by how close the close is to the session
+high. Execution lives in other modules (LOOP Donchian, and so on).
 
-Components:
-  1. z_mom   — multi-lookback momentum z-score (20/60/120d returns, z-scored)
-  2. f_ewmac — EWMAC forecast (fast EMA - slow EMA, normalized by volatility)
-  3. z_52    — 52-week-high proximity (0 = at high, negative = far below)
-  4. breakout — compression detection (ATR contraction) + expansion trigger
-  5. volume  — volume confirmation (above 20d average on up-days)
-  6. kama_regime — dual-KAMA trend regime (stability-promoted global params)
-  7. adx     — Wilder ADX / DI+ trend-strength gate (swing-screener)
+This is the large-cap daily form of a high-of-day momentum scan:
 
-Entry timing vetoes (too_late / wait_pullback) demote extended GREEN names.
+  On list   day change >= +4%  AND  volume >= 2× the prior 50-day average
+  Hot       day change >= +10% AND  volume >= 5× that average
+  Sort      closer to the session high ranks first
 
-Parameter changes (EWMAC spans, KAMA defaults, thresholds) must pass
-pipeline.compute.param_stability before promotion to production constants.
+The $2–$20 and <10M-share filters from small-cap day scans are not applied:
+those names are not in this universe, and `prices_daily` has no share count.
+
+Column mapping on `trend_radar` (existing schema):
+  z_mom              day percent change (4.2 means +4.2%)
+  f_ewmac            relative volume (today / 50-day average, shifted 1 bar)
+  z_52               (close / session high) - 1   (0 = closed at the high)
+  breakout_active    close within 1% of the session high
+  volume_confirmed   relative volume >= 5
+  quality_rank       sort score; on-list names are 70–100
+  state              1 on list, 0 up but not qualified, -1 down day
+  entry_timing       hot | watch | off
+  convergence_count  how many of the three gates fired (day, volume, near high)
 
 Usage:
     python -m pipeline.compute.trend_radar
 """
+from __future__ import annotations
+
 import logging
 import os
 from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
-
-from pipeline.compute.adx import (
-    ADX_TREND_MIN,
-    adx_ok,
-    adx_score,
-    latest_adx,
-)
-from pipeline.compute.entry_timing import evaluate_entry_timing
-from pipeline.compute.kama_regime import compute_kama_regime
+from dotenv import load_dotenv
+from supabase import create_client
 
 logger = logging.getLogger(__name__)
 
-# ── Signal parameters ────────────────────────────────────────────
-# Promote changes only after param_stability.score_candidates clears them.
+REL_VOL_BARS = 50
+MIN_HISTORY_DAYS = REL_VOL_BARS + 1  # average excludes today
 
-MOM_LOOKBACKS = [20, 60, 120]       # days for momentum returns
-EWMAC_FAST = 32                      # fast EMA span (equity-calibrated)
-EWMAC_SLOW = 128                     # slow EMA span (equity-calibrated)
-VOL_WINDOW = 20                      # rolling volatility window
-ATR_WINDOW = 14                      # ATR for breakout detection
-ATR_COMPRESSION_RATIO = 0.6          # current ATR / 60d ATR < this = compressed
-VOLUME_CONFIRM_RATIO = 1.2           # volume / 20d avg > this = confirmed
-HIGH_252_PROXIMITY_THRESHOLD = 0.95  # within 5% of 52w high = strong
-MIN_HISTORY_DAYS = 148               # EWMAC_SLOW(128) + VOL_WINDOW(20) = 148
-CONVERGENCE_MAX = 7                  # mom, ewmac, 52w, breakout, vol, kama, adx
-
-# State thresholds
-BULL_THRESHOLD = 55       # rank >= this AND net positive → GREEN
-BEAR_THRESHOLD = 45       # rank <= this AND net negative → RED
+WATCH_MIN_DAY_PCT = 4.0
+WATCH_MIN_REL_VOLUME = 2.0
+HOT_MIN_DAY_PCT = 10.0
+HOT_MIN_REL_VOLUME = 5.0
+NEAR_HIGH_PCT = -1.0  # within 1 percentage point of the session high
 
 
-def compute_momentum_z(prices: pd.Series) -> float:
-    """Multi-lookback momentum z-score. Average of z-scored returns."""
-    if len(prices) < max(MOM_LOOKBACKS) + VOL_WINDOW:
+def day_percent_change(close: pd.Series) -> float:
+    """Percent change from the prior close. 4.0 means +4%."""
+    if len(close) < 2:
         return 0.0
-
-    zscores = []
-    returns_series = prices.pct_change().dropna()
-
-    for lb in MOM_LOOKBACKS:
-        if len(prices) < lb + 1:
-            continue
-        ret = (prices.iloc[-1] / prices.iloc[-lb - 1]) - 1
-        # Use std of returns over the lookback window directly
-        lb_vol = returns_series.iloc[-lb:].std()
-        if lb_vol > 0:
-            z = ret / (lb_vol * np.sqrt(lb))
-            zscores.append(np.clip(z, -3, 3))
-
-    return float(np.mean(zscores)) if zscores else 0.0
-
-
-def compute_ewmac(prices: pd.Series) -> float:
-    """EWMAC forecast: (fast_ema - slow_ema) / volatility."""
-    if len(prices) < EWMAC_SLOW + VOL_WINDOW:
+    prev = float(close.iloc[-2])
+    last = float(close.iloc[-1])
+    if prev <= 0:
         return 0.0
-
-    fast = prices.ewm(span=EWMAC_FAST, min_periods=EWMAC_FAST).mean()
-    slow = prices.ewm(span=EWMAC_SLOW, min_periods=EWMAC_SLOW).mean()
-    diff = fast.iloc[-1] - slow.iloc[-1]
-
-    returns = prices.pct_change()
-    vol = returns.rolling(VOL_WINDOW).std().iloc[-1]
-
-    if vol > 0 and prices.iloc[-1] > 0:
-        forecast = diff / (prices.iloc[-1] * vol)
-        return float(np.clip(forecast, -3, 3))
-    return 0.0
+    return (last / prev - 1.0) * 100.0
 
 
-def compute_52w_proximity(prices: pd.Series) -> float:
-    """How close price is to 52-week high. 0 = at high, -1 = 50% below."""
-    if len(prices) < 252:
-        window = prices
-    else:
-        window = prices.iloc[-252:]
+def relative_volume(volume: pd.Series, length: int = REL_VOL_BARS) -> float:
+    """Today's volume divided by the average of the previous `length` bars.
 
-    high_252 = window.max()
-    if high_252 <= 0:
-        return 0.0
-
-    proximity = (prices.iloc[-1] / high_252) - 1  # 0 at high, negative below
-    return float(np.clip(proximity, -1, 0))
-
-
-def compute_breakout(prices: pd.Series, highs: pd.Series, lows: pd.Series) -> bool:
-    """Detect breakout: ATR compressed then expanding + price at range high."""
-    if len(prices) < 60:
-        return False
-
-    # ATR calculation
-    tr = pd.concat([
-        highs - lows,
-        (highs - prices.shift(1)).abs(),
-        (lows - prices.shift(1)).abs(),
-    ], axis=1).max(axis=1)
-
-    atr_current = tr.iloc[-ATR_WINDOW:].mean()
-    atr_60d = tr.iloc[-60:].mean()
-
-    if atr_60d <= 0:
-        return False
-
-    # Compression: current ATR much less than 60d ATR
-    was_compressed = (atr_current / atr_60d) < ATR_COMPRESSION_RATIO
-
-    # Expansion: price near 20d high
-    high_20 = highs.iloc[-20:].max()
-    at_range_high = prices.iloc[-1] >= high_20 * 0.98
-
-    return was_compressed and at_range_high
-
-
-def compute_volume_confirmation(
-    prices: pd.Series, volumes: pd.Series
-) -> bool:
-    """Volume above 20d average on a positive day."""
-    if len(volumes) < VOL_WINDOW + 1 or len(prices) < 2:
-        return False
-
-    avg_vol = volumes.iloc[-VOL_WINDOW - 1:-1].mean()
-    if avg_vol <= 0:
-        return False
-
-    today_up = prices.iloc[-1] > prices.iloc[-2]
-    vol_above = volumes.iloc[-1] > avg_vol * VOLUME_CONFIRM_RATIO
-
-    return today_up and vol_above
-
-
-def compute_quality_rank(
-    z_mom: float,
-    f_ewmac: float,
-    z_52: float,
-    breakout: bool,
-    vol_confirm: bool,
-    kama_regime: int = 0,
-    adx: float = 0.0,
-    plus_di: float = 0.0,
-    minus_di: float = 0.0,
-) -> int:
-    """Composite rank 0-100 from component signals.
-
-    Weights: momentum 24, EWMAC 20, 52w-high 16, breakout 12, volume 8,
-    dual-KAMA regime 12, ADX 8. Continuous signals dominate; regime/ADX confirm.
+    The current bar is excluded from the average (same as a 1-bar offset).
     """
-    # z_mom: [-3, 3] → [0, 24]
-    mom_score = ((z_mom + 3) / 6) * 24
-
-    # f_ewmac: [-3, 3] → [0, 20]
-    ewmac_score = ((f_ewmac + 3) / 6) * 20
-
-    # z_52: [-1, 0] → [0, 16]  (0 = at high = best)
-    high_score = (z_52 + 1) * 16
-
-    # breakout: bool → 0 or 12
-    brk_score = 12.0 if breakout else 0.0
-
-    # volume: bool → 0 or 8
-    vol_score = 8.0 if vol_confirm else 0.0
-
-    # dual-KAMA regime: bullish 12, unknown 6, bearish 0
-    if kama_regime > 0:
-        kama_score = 12.0
-    elif kama_regime < 0:
-        kama_score = 0.0
-    else:
-        kama_score = 6.0
-
-    a_score = adx_score(adx, plus_di, minus_di)
-
-    raw = (
-        mom_score + ewmac_score + high_score + brk_score
-        + vol_score + kama_score + a_score
-    )
-    return int(np.clip(round(raw), 0, 100))
+    if len(volume) < length + 1:
+        return 0.0
+    prior = volume.iloc[-(length + 1):-1].astype(float)
+    avg = float(prior.mean())
+    today = float(volume.iloc[-1])
+    if avg <= 0 or not np.isfinite(avg) or not np.isfinite(today):
+        return 0.0
+    return today / avg
 
 
-def determine_state(
-    z_mom: float,
-    f_ewmac: float,
-    z_52: float,
-    quality_rank: int,
-    kama_regime: int = 0,
-    *,
-    adx_trend_ok: bool = True,
-    too_late: bool = False,
-) -> int:
-    """Determine state: 1=GREEN, 0=GREY, -1=RED.
+def percent_from_high(close: pd.Series, high: pd.Series) -> float:
+    """How far the close finished below the session high. 0 = at the high."""
+    if len(close) < 1 or len(high) < 1:
+        return 0.0
+    hi = float(high.iloc[-1])
+    last = float(close.iloc[-1])
+    if hi <= 0:
+        return 0.0
+    return (last / hi - 1.0) * 100.0
 
-    Dual-KAMA is a soft regime gate: GREEN requires non-bearish KAMA.
-    ADX must show bullish trend strength; too_late demotes GREEN → GREY.
-    """
-    positives = sum([
-        z_mom > 0,
-        f_ewmac > 0,
-        z_52 > -0.10,  # within 10% of 52w high
-    ])
 
-    if (
-        quality_rank >= BULL_THRESHOLD
-        and positives >= 2
-        and kama_regime >= 0
-        and adx_trend_ok
-        and not too_late
-    ):
-        return 1   # GREEN
-    elif quality_rank <= BEAR_THRESHOLD and positives <= 1:
-        return -1  # RED
-    else:
-        return 0   # GREY
+def on_watchlist(day_pct: float, rel_vol: float) -> bool:
+    return day_pct >= WATCH_MIN_DAY_PCT and rel_vol >= WATCH_MIN_REL_VOLUME
+
+
+def is_hot(day_pct: float, rel_vol: float) -> bool:
+    return day_pct >= HOT_MIN_DAY_PCT and rel_vol >= HOT_MIN_REL_VOLUME
+
+
+def watch_rank(on_list: bool, pct_from_high: float, day_pct: float) -> int:
+    """Higher score sorts first. On-list names occupy 70–100 by proximity to the high."""
+    closeness = float(np.clip(100.0 + pct_from_high * 10.0, 0.0, 100.0))
+    if on_list:
+        return int(np.clip(round(70 + closeness * 0.30), 70, 100))
+    if day_pct > 0:
+        return int(np.clip(round(min(closeness, 69)), 1, 69))
+    return int(np.clip(round(min(30.0 + day_pct, 30.0)), 0, 30))
 
 
 def process_ticker(df: pd.DataFrame) -> dict | None:
-    """Compute all signals for one ticker. df has columns: date, open, high, low, close, volume."""
+    """Score one symbol. `df` columns: date, open, high, low, close, volume."""
     if len(df) < MIN_HISTORY_DAYS:
         return None
 
     df = df.sort_values("date").reset_index(drop=True)
     close = df["close"].astype(float)
     high = df["high"].astype(float)
-    low = df["low"].astype(float)
     volume = df["volume"].astype(float)
 
-    z_mom = compute_momentum_z(close)
-    f_ewmac = compute_ewmac(close)
-    z_52 = compute_52w_proximity(close)
-    breakout = bool(compute_breakout(close, high, low))
-    vol_confirm = bool(compute_volume_confirmation(close, volume))
-    kama_regime = int(compute_kama_regime(close))
-    adx_val, plus_di, minus_di = latest_adx(high, low, close)
-    trend_ok = adx_ok(adx_val, plus_di, minus_di, ADX_TREND_MIN)
-    timing = evaluate_entry_timing(close, high, low)
+    day_pct = day_percent_change(close)
+    rel_vol = relative_volume(volume)
+    off_high = percent_from_high(close, high)
+    listed = on_watchlist(day_pct, rel_vol)
+    hot = is_hot(day_pct, rel_vol)
+    near_high = off_high >= NEAR_HIGH_PCT
 
-    rank = compute_quality_rank(
-        z_mom, f_ewmac, z_52, breakout, vol_confirm, kama_regime,
-        adx_val, plus_di, minus_di,
-    )
-    state = determine_state(
-        z_mom, f_ewmac, z_52, rank, kama_regime,
-        adx_trend_ok=trend_ok,
-        too_late=timing.is_too_late,
-    )
-
-    # Convergence: how many components are directionally aligned
-    bullish_flags = [
-        z_mom > 0,
-        f_ewmac > 0,
-        z_52 > -0.10,
-        breakout,
-        vol_confirm,
-        kama_regime > 0,
-        trend_ok,
-    ]
-    bullish_count = sum(bullish_flags)
-    if state == 1:
-        convergence = bullish_count
-    elif state == -1:
-        convergence = sum([
-            z_mom < 0,
-            f_ewmac < 0,
-            z_52 < -0.20,
-            not breakout,
-            not vol_confirm,
-            kama_regime < 0,
-            not trend_ok,
-        ])
+    if listed:
+        state = 1
+    elif day_pct < 0:
+        state = -1
     else:
-        convergence = bullish_count  # for GREY: shows how close to GREEN
+        state = 0
+
+    if hot:
+        timing = "hot"
+    elif listed:
+        timing = "watch"
+    else:
+        timing = "off"
+
+    gates = [
+        day_pct >= WATCH_MIN_DAY_PCT,
+        rel_vol >= WATCH_MIN_REL_VOLUME,
+        near_high,
+    ]
 
     return {
         "state": state,
-        "quality_rank": rank,
-        "z_mom": round(z_mom, 4),
-        "f_ewmac": round(f_ewmac, 4),
-        "z_52": round(z_52, 4),
-        "breakout_active": bool(breakout),
-        "volume_confirmed": bool(vol_confirm),
-        "kama_regime": kama_regime,
-        "adx": round(adx_val, 2),
-        "entry_timing": timing.label,
-        "convergence_count": int(convergence),
+        "quality_rank": watch_rank(listed, off_high, day_pct),
+        "z_mom": round(day_pct, 4),
+        "f_ewmac": round(rel_vol, 4),
+        "z_52": round(off_high / 100.0, 4),
+        "breakout_active": bool(near_high),
+        "volume_confirmed": bool(rel_vol >= HOT_MIN_REL_VOLUME),
+        "kama_regime": 0,
+        "adx": round(rel_vol, 2),
+        "entry_timing": timing,
+        "convergence_count": int(sum(gates)),
         "daily_state": state,
-        "weekly_state": None,  # TODO: compute from weekly prices
+        "weekly_state": None,
     }
 
 
 def main() -> None:
-    from dotenv import load_dotenv
-    from supabase import create_client
-
     load_dotenv()
     logging.basicConfig(
         level=logging.INFO,
@@ -332,7 +174,6 @@ def main() -> None:
 
     sb = create_client(sb_url, sb_key)
 
-    # Get active universe
     from pipeline.utils.supabase import fetch_all
 
     universe_rows = fetch_all(
@@ -343,18 +184,16 @@ def main() -> None:
     )
     symbols = [r["symbol"] for r in universe_rows]
     active_symbols = set(symbols)
-    logger.info("Computing Trend Radar for %d tickers", len(symbols))
+    logger.info("Computing watchlist for %d tickers", len(symbols))
 
-    # Pre-fetch existing states to preserve state_changed_at
     existing_rows = fetch_all(sb, "trend_radar", "symbol,state,state_changed_at")
     prev_state_map = {r["symbol"]: r for r in existing_rows}
 
-    # Bulk fetch ALL prices since cutoff with pagination (instead of N+1 per-symbol queries)
-    cutoff = (date.today() - timedelta(days=400)).isoformat()
+    cutoff = (date.today() - timedelta(days=120)).isoformat()
     all_prices: list[dict] = []
     page_size = 5000
     offset = 0
-    logger.info("Fetching all prices since %s...", cutoff)
+    logger.info("Fetching prices since %s...", cutoff)
 
     while True:
         resp = (
@@ -379,7 +218,6 @@ def main() -> None:
         return
 
     prices_df = pd.DataFrame(all_prices)
-    # Filter to active universe symbols only
     prices_df = prices_df[prices_df["symbol"].isin(active_symbols)]
 
     results = []
@@ -389,16 +227,12 @@ def main() -> None:
 
     for i, (symbol, df) in enumerate(grouped):
         try:
-            if len(df) < MIN_HISTORY_DAYS:
-                continue
-
             signals = process_ticker(df)
             if signals is None:
                 continue
 
             signals["symbol"] = symbol
             signals["computed_at"] = datetime.now(timezone.utc).isoformat()
-            # Only update state_changed_at when state actually changes
             prev = prev_state_map.get(symbol)
             if prev and prev.get("state") == signals["state"]:
                 signals["state_changed_at"] = prev.get("state_changed_at", date.today().isoformat())
@@ -413,7 +247,6 @@ def main() -> None:
             logger.warning("Error computing %s: %s", symbol, e)
             errors += 1
 
-    # Batch upsert to trend_radar
     if results:
         batch_size = 200
         for j in range(0, len(results), batch_size):
@@ -424,19 +257,13 @@ def main() -> None:
                 logger.exception("Failed to upsert trend_radar batch %d-%d", j, j + len(batch))
 
         logger.info(
-            "Trend Radar complete: %d computed, %d errors, %d skipped (insufficient data)",
+            "Watchlist complete: %d computed, %d errors, %d skipped (insufficient data)",
             len(results), errors, len(symbols) - len(results) - errors,
         )
 
-    # Log summary stats
-    greens = sum(1 for r in results if r["state"] == 1)
-    reds = sum(1 for r in results if r["state"] == -1)
-    greys = sum(1 for r in results if r["state"] == 0)
-    logger.info("Distribution: GREEN=%d RED=%d GREY=%d", greens, reds, greys)
-
-    if results:
-        avg_rank = np.mean([r["quality_rank"] for r in results])
-        logger.info("Average quality rank: %.1f", avg_rank)
+    on_list = sum(1 for r in results if r["state"] == 1)
+    hot = sum(1 for r in results if r["entry_timing"] == "hot")
+    logger.info("Watchlist: %d on list, %d hot, %d total", on_list, hot, len(results))
 
 
 if __name__ == "__main__":
