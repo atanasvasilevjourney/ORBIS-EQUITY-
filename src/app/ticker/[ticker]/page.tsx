@@ -295,19 +295,15 @@ export default function TickerPage() {
 
   const signals = r
     ? [
-        r.z_mom > 0,
-        r.f_ewmac > 0,
-        r.z_52 > -0.10,
-        r.breakout_active,
-        r.volume_confirmed,
-        (r.kama_regime ?? 0) > 0,
-        (r.adx ?? 0) >= 20,
+        r.z_mom >= 4,
+        r.f_ewmac >= 2,
+        r.z_52 >= -0.01,
       ]
-    : [false, false, false, false, false, false, false];
+    : [false, false, false];
 
   const tabs = [
     { key: "chart", label: "CHART" },
-    { key: "swing", label: "SWING" },
+    { key: "swing", label: "WATCH" },
     { key: "fundamentals", label: "FUNDAMENTALS" },
     { key: "earnings", label: "EARNINGS" },
     { key: "insider", label: "INSIDER" },
@@ -352,7 +348,7 @@ export default function TickerPage() {
         <div>
           <div className="flex items-center gap-3 mb-1">
             <h1 className="text-2xl font-terminal font-bold">{ticker}</h1>
-            {r && <BiasChip state={r.state} rank={r.quality_rank} />}
+            {r && <BiasChip state={r.state} rank={r.quality_rank} entryTiming={r.entry_timing} />}
             {r && <AgreementDots signals={signals} />}
             {f?.f_score != null && (
               <span className={`text-xs px-2 py-0.5 rounded font-terminal font-bold ${
@@ -481,26 +477,16 @@ export default function TickerPage() {
       {tab === "swing" && r && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {[
-            { label: "QUALITY RANK", value: r.quality_rank, color: r.quality_rank >= 70 ? "var(--accent-bull)" : r.quality_rank <= 30 ? "var(--accent-bear)" : "" },
-            { label: "Z-MOM", value: r.z_mom?.toFixed(2), color: r.z_mom > 0 ? "var(--accent-bull)" : "var(--accent-bear)" },
-            { label: "EWMAC", value: r.f_ewmac?.toFixed(2), color: r.f_ewmac > 0 ? "var(--accent-bull)" : "var(--accent-bear)" },
-            { label: "52W PROX", value: `${((r.z_52 + 1) * 100).toFixed(1)}%`, color: r.z_52 > -0.05 ? "var(--accent-bull)" : "var(--accent-bear)" },
+            { label: "SORT", value: r.quality_rank, color: r.quality_rank >= 70 ? "var(--accent-bull)" : r.quality_rank <= 30 ? "var(--accent-bear)" : "" },
+            { label: "DAY %", value: `${r.z_mom > 0 ? "+" : ""}${r.z_mom?.toFixed(1)}%`, color: r.z_mom > 0 ? "var(--accent-bull)" : "var(--accent-bear)" },
+            { label: "REL VOL", value: `${r.f_ewmac?.toFixed(1)}×`, color: r.f_ewmac >= 5 ? "var(--accent-bull)" : r.f_ewmac >= 2 ? "var(--accent-warning)" : "" },
+            { label: "OFF HIGH", value: `${(r.z_52 * 100).toFixed(1)}%`, color: r.z_52 >= -0.01 ? "var(--accent-bull)" : "" },
             {
-              label: "KAMA REGIME",
-              value: (r.kama_regime ?? 0) > 0 ? "BULL" : (r.kama_regime ?? 0) < 0 ? "BEAR" : "—",
-              color: (r.kama_regime ?? 0) > 0 ? "var(--accent-bull)" : (r.kama_regime ?? 0) < 0 ? "var(--accent-bear)" : "",
+              label: "STATUS",
+              value: (r.entry_timing ?? "off").replace("_", " ").toUpperCase(),
+              color: r.entry_timing === "hot" ? "var(--accent-bull)" : r.entry_timing === "watch" ? "var(--accent-warning)" : "",
             },
-            {
-              label: "ADX",
-              value: r.adx != null ? Number(r.adx).toFixed(1) : "—",
-              color: (r.adx ?? 0) >= 25 ? "var(--accent-bull)" : (r.adx ?? 0) >= 20 ? "" : "var(--accent-bear)",
-            },
-            {
-              label: "ENTRY TIMING",
-              value: (r.entry_timing ?? "ok").replace("_", " ").toUpperCase(),
-              color: r.entry_timing === "too_late" ? "var(--accent-bear)" : r.entry_timing === "wait_pullback" ? "var(--accent-warning)" : "var(--accent-bull)",
-            },
-            { label: "CONVERGENCE", value: `${r.convergence_count}/7`, color: r.convergence_count >= 4 ? "var(--accent-bull)" : "" },
+            { label: "GATES", value: `${r.convergence_count}/3`, color: r.convergence_count >= 2 ? "var(--accent-bull)" : "" },
           ].map((c) => (
             <div key={c.label} className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
               <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">{c.label}</div>
@@ -508,13 +494,9 @@ export default function TickerPage() {
             </div>
           ))}
           <div className="col-span-full mt-2 flex gap-2">
-            {r.breakout_active && <span className="text-xs px-2 py-1 rounded bg-[var(--badge-bg)] text-[var(--accent-warning)] font-terminal">BREAKOUT</span>}
-            {r.volume_confirmed && <span className="text-xs px-2 py-1 rounded bg-[var(--badge-bg)] text-[var(--accent-bull)] font-terminal">VOL CONFIRMED</span>}
-            {(r.kama_regime ?? 0) > 0 && <span className="text-xs px-2 py-1 rounded bg-[var(--badge-bg)] text-[var(--accent-bull)] font-terminal">KAMA BULL</span>}
-            {(r.kama_regime ?? 0) < 0 && <span className="text-xs px-2 py-1 rounded bg-[var(--badge-bg)] text-[var(--accent-bear)] font-terminal">KAMA BEAR</span>}
-            {(r.adx ?? 0) >= 20 && <span className="text-xs px-2 py-1 rounded bg-[var(--badge-bg)] text-[var(--accent-bull)] font-terminal">ADX TREND</span>}
-            {r.entry_timing === "too_late" && <span className="text-xs px-2 py-1 rounded bg-[var(--badge-bg)] text-[var(--accent-bear)] font-terminal">TOO LATE</span>}
-            {r.entry_timing === "wait_pullback" && <span className="text-xs px-2 py-1 rounded bg-[var(--badge-bg)] text-[var(--accent-warning)] font-terminal">WAIT PULLBACK</span>}
+            {r.breakout_active && <span className="text-xs px-2 py-1 rounded bg-[var(--badge-bg)] text-[var(--accent-warning)] font-terminal">NEAR HIGH</span>}
+            {r.volume_confirmed && <span className="text-xs px-2 py-1 rounded bg-[var(--badge-bg)] text-[var(--accent-bull)] font-terminal">5× VOLUME</span>}
+            {r.entry_timing === "hot" && <span className="text-xs px-2 py-1 rounded bg-[var(--badge-bg)] text-[var(--accent-bull)] font-terminal">HOT</span>}
             {r.state_changed_at && <span className="text-xs text-[var(--text-muted)] font-terminal">State changed: {r.state_changed_at}</span>}
           </div>
         </div>
@@ -598,7 +580,7 @@ export default function TickerPage() {
       {/* Cross-module links */}
       <div className="flex gap-3 mt-6 pt-4 border-t border-[var(--border)]">
         <Link href="/screener" className="text-xs font-terminal text-[var(--accent-info)] hover:underline">
-          Screener
+          Watchlist
         </Link>
         <Link href="/fundamentals" className="text-xs font-terminal text-[var(--accent-info)] hover:underline">
           Fundamentals

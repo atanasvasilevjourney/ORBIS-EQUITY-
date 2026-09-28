@@ -18,10 +18,11 @@ export async function GET(req: NextRequest) {
     const region = sp.get("region");
     const sector = sp.get("sector");
     const minRank = parseInt(sp.get("min_rank") ?? "0", 10);
+    const minDay = parseFloat(sp.get("min_day") ?? "0");
     const limit = Math.min(parseInt(sp.get("limit") ?? "200", 10), 1000);
 
-    if (Number.isNaN(minRank)) {
-      return NextResponse.json({ error: "Invalid min_rank" }, { status: 400 });
+    if (Number.isNaN(minRank) || Number.isNaN(minDay)) {
+      return NextResponse.json({ error: "Invalid min_rank or min_day" }, { status: 400 });
     }
 
     const sb = createServerClient();
@@ -85,8 +86,10 @@ export async function GET(req: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const radarFilter = (q: any) => {
       let query = q.gte("quality_rank", minRank).order("quality_rank", { ascending: false });
+      if (minDay > 0) query = query.gte("z_mom", minDay);
       if (direction === "bull") query = query.eq("state", 1);
       else if (direction === "bear") query = query.eq("state", -1);
+      else if (direction === "hot") query = query.eq("entry_timing", "hot");
       return query;
     };
 
@@ -140,6 +143,9 @@ export async function GET(req: NextRequest) {
           entryTiming: r.entry_timing ?? null,
           convergence: r.convergence_count,
           stateChangedAt: r.state_changed_at,
+          dayPct: r.z_mom,
+          relVolume: r.f_ewmac,
+          pctFromHigh: r.z_52 * 100,
           price: f?.price ?? null,
           marketCap: f?.market_cap ?? null,
           peRatio: f?.pe_ratio ?? null,

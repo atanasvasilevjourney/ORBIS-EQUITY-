@@ -19,7 +19,7 @@ import pandas as pd
 import yfinance as yf
 
 from pipeline.compute.donchian_vwap import EQUITY, MAX_PER_SECTOR, MIN_PRICE, TOP_N
-from pipeline.compute.trend_radar import ATR_WINDOW
+from pipeline.compute.trend_radar_legacy import ATR_WINDOW
 
 # Legacy Trend-Radar LOOP simulation constants (production LOOP is Donchian now)
 MAX_NAMES = TOP_N

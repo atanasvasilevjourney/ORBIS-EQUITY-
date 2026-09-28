@@ -50,7 +50,7 @@ from pipeline.compute.kama_regime import (
 )
 from pipeline.compute.market_regime import regime_series
 from pipeline.compute.trail_exit import CooldownTracker, TrailState
-from pipeline.compute.trend_radar import (
+from pipeline.compute.trend_radar_legacy import (
     ATR_COMPRESSION_RATIO,
     ATR_WINDOW,
     EWMAC_FAST,

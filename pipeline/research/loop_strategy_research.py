@@ -14,7 +14,7 @@ import pandas as pd
 import yfinance as yf
 
 from pipeline.compute.market_regime import regime_series
-from pipeline.compute.trend_radar import MIN_HISTORY_DAYS
+from pipeline.compute.trend_radar_legacy import MIN_HISTORY_DAYS
 from pipeline.ingest.us_index_universe import build_merged_universe
 from pipeline.research.loop_backtest import (
     LOOKBACK_START,

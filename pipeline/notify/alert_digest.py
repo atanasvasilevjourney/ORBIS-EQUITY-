@@ -1,7 +1,7 @@
-"""EOD Trend Radar alert digest → email (Resend).
+"""EOD watchlist digest → email (Resend).
 
-After nightly `trend_radar` compute, collect today's GREEN flips that pass
-discretionary filters and email a short digest.
+After nightly module-1 compute, email names that joined the watchlist today.
+This is a scan alert. It does not place orders.
 
 Usage:
     PYTHONPATH=/workspace python -m pipeline.notify.alert_digest
@@ -30,7 +30,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 DEFAULT_MIN_RANK = 60
-DEFAULT_MIN_CONVERGENCE = 4
+DEFAULT_MIN_CONVERGENCE = 2
 DEFAULT_FROM = "KovaView Alerts <onboarding@resend.dev>"
 RESEND_URL = "https://api.resend.com/emails"
 
@@ -137,12 +137,12 @@ def format_digest_text(
     lines = [
         f"KovaView EOD Alert Digest — {as_of.isoformat()}",
         "",
-        "GREEN_FLIP candidates (manual / discretionary entry).",
-        "Check SPY regime + chart before taking any trade.",
+        "Watchlist additions (module 1 does not place orders).",
+        "Use LOOP or another execution module if you take a trade.",
         "",
     ]
     if not candidates:
-        lines.append("No qualifying GREEN flips today.")
+        lines.append("No qualifying watchlist additions today.")
         return "\n".join(lines)
 
     lines.append(f"{len(candidates)} alert(s):")
@@ -150,13 +150,9 @@ def format_digest_text(
     for c in candidates:
         flags = []
         if c.breakout_active:
-            flags.append("BRK")
+            flags.append("NEAR")
         if c.volume_confirmed:
-            flags.append("VOL")
-        if c.kama_regime > 0:
-            flags.append("KAMA+")
-        if c.adx is not None and c.adx >= 20:
-            flags.append(f"ADX{c.adx:.0f}")
+            flags.append("5X")
         flag_s = ",".join(flags) if flags else "—"
         name = f" — {c.company_name}" if c.company_name else ""
         sector = f" [{c.sector}]" if c.sector else ""
@@ -165,12 +161,9 @@ def format_digest_text(
             link = f"  {app_base_url.rstrip('/')}/ticker/{c.symbol}"
         lines.append(
             f"  {c.symbol}{name}{sector}\n"
-            f"    rank={c.quality_rank}  conv={c.convergence_count}/7  "
-            f"timing={c.entry_timing}  {flag_s}{link}"
+            f"    sort={c.quality_rank}  gates={c.convergence_count}/3  "
+            f"status={c.entry_timing}  {flag_s}{link}"
         )
-    lines.append("")
-    lines.append("Sizing hint: ATR×2.5 stop, ~1.25% equity risk (see atr_risk).")
-    lines.append("Exit plan: SMA20 trail / RED / hard ATR stop.")
     return "\n".join(lines)
 
 
@@ -197,20 +190,19 @@ def format_digest_html(
             f"<td style='padding:6px 10px;border-bottom:1px solid #eee'>{sym}</td>"
             f"<td style='padding:6px 10px;border-bottom:1px solid #eee'>{c.company_name}</td>"
             f"<td style='padding:6px 10px;border-bottom:1px solid #eee'>{c.quality_rank}</td>"
-            f"<td style='padding:6px 10px;border-bottom:1px solid #eee'>{c.convergence_count}/7</td>"
+            f"<td style='padding:6px 10px;border-bottom:1px solid #eee'>{c.convergence_count}/3</td>"
             f"<td style='padding:6px 10px;border-bottom:1px solid #eee'>{c.entry_timing}</td>"
             f"<td style='padding:6px 10px;border-bottom:1px solid #eee'>"
-            f"{'BRK ' if c.breakout_active else ''}"
-            f"{'VOL ' if c.volume_confirmed else ''}"
-            f"{f'ADX {c.adx:.0f}' if c.adx is not None else ''}</td>"
+            f"{'NEAR ' if c.breakout_active else ''}"
+            f"{'5X ' if c.volume_confirmed else ''}</td>"
             "</tr>"
         )
     body = (
-        "<p>No qualifying GREEN flips today.</p>"
+        "<p>No qualifying watchlist additions today.</p>"
         if not candidates
         else (
-            f"<p><strong>{len(candidates)}</strong> GREEN_FLIP candidate(s) "
-            "for discretionary review. Confirm SPY regime before entry.</p>"
+            f"<p><strong>{len(candidates)}</strong> name(s) joined the watchlist. "
+            "Module 1 does not place orders.</p>"
             "<table style='border-collapse:collapse;font-family:monospace;font-size:13px'>"
             "<thead><tr>"
             "<th align='left' style='padding:6px 10px'>Symbol</th>"

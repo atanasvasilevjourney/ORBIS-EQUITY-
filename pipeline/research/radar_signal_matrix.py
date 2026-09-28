@@ -27,7 +27,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from pipeline.compute.trend_radar import BEAR_THRESHOLD, BULL_THRESHOLD
+from pipeline.compute.trend_radar_legacy import BEAR_THRESHOLD, BULL_THRESHOLD
 from pipeline.research.radar_alert_backtest import (
     Trade,
     build_radar_history,

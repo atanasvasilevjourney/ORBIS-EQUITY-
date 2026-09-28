@@ -13,22 +13,30 @@ type Summary = {
   briefText: string | null;
   posture: number | null;
   postureLabel: string | null;
-  breadth: { total: number; greens: number; reds: number; pctGreen: number; pctRed: number };
+  breadth: {
+    total: number;
+    greens: number;
+    reds: number;
+    pctGreen: number;
+    pctRed: number;
+    advancersPct?: number;
+  };
   avgRank: number;
   bestSector: string | null;
   worstSector: string | null;
 };
 
 type FilterState = {
-  direction: "all" | "bull" | "bear";
+  direction: "all" | "bull" | "bear" | "hot";
   region: "all" | "us" | "uk" | "eu";
-  minRank: number;
+  minDay: number;
 };
 
 const DIRECTION_FILTERS = [
+  { key: "bull" as const, label: "On list" },
+  { key: "hot" as const, label: "Hot" },
   { key: "all" as const, label: "All" },
-  { key: "bull" as const, label: "Bull" },
-  { key: "bear" as const, label: "Bear" },
+  { key: "bear" as const, label: "Down day" },
 ];
 
 const REGION_FILTERS = [
@@ -38,20 +46,19 @@ const REGION_FILTERS = [
   { key: "eu" as const, label: "EU" },
 ];
 
-const RANK_FILTERS = [
-  { key: 0, label: "Any" },
-  { key: 60, label: "Q≥60" },
-  { key: 70, label: "Q≥70" },
-  { key: 80, label: "Q≥80" },
+const DAY_FILTERS = [
+  { key: 0, label: "Any day" },
+  { key: 4, label: "Day ≥4%" },
+  { key: 10, label: "Day ≥10%" },
 ];
 
 export default function ScreenerPage() {
   const [rows, setRows] = useState<ScreenerRow[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [filters, setFilters] = useState<FilterState>({
-    direction: "all",
+    direction: "bull",
     region: "all",
-    minRank: 0,
+    minDay: 0,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -62,7 +69,7 @@ export default function ScreenerPage() {
     const params = new URLSearchParams();
     if (filters.direction !== "all") params.set("direction", filters.direction);
     if (filters.region !== "all") params.set("region", filters.region);
-    if (filters.minRank > 0) params.set("min_rank", String(filters.minRank));
+    if (filters.minDay > 0) params.set("min_day", String(filters.minDay));
 
     try {
       const [screenerRes, summaryRes] = await Promise.all([
@@ -97,9 +104,9 @@ export default function ScreenerPage() {
     <div className="px-4 py-6 space-y-4">
       <ModuleHeader
         module="MODULE 1"
-        title="SWING SCREENER"
-        description="Momentum & technical bias board — bull/bear swing candidates"
-        source="TREND RADAR · EOD"
+        title="WATCHLIST"
+        description="Scan only. On list: day ≥ +4% and volume ≥ 2× the prior 50-day average. Hot: ≥ +10% and ≥ 5×. Sorted by distance from the session high. Orders come from other modules."
+        source="EOD PRICES"
         accent="var(--module-1)"
       />
 
@@ -114,16 +121,16 @@ export default function ScreenerPage() {
           barColor={postureColor}
         />
         <MetricCard
-          label="BREADTH"
-          value={summary?.breadth ? `${summary.breadth.pctGreen}%` : "—"}
+          label="ADVANCERS"
+          value={summary?.breadth?.advancersPct != null ? `${summary.breadth.advancersPct}%` : "—"}
           sub={summary?.breadth ? `${summary.breadth.total} names` : undefined}
           color="var(--accent-bull)"
-          bar={summary?.breadth?.pctGreen}
+          bar={summary?.breadth?.advancersPct}
           barColor="var(--accent-bull)"
         />
-        <MetricCard label="BEST" value={summary?.bestSector ?? "—"} sub="Leading" color="var(--accent-bull)" />
-        <MetricCard label="WORST" value={summary?.worstSector ?? "—"} sub="Lagging" color="var(--accent-bear)" />
-        <MetricCard label="AVG RANK" value={summary?.avgRank ?? "—"} sub="Quality" />
+        <MetricCard label="ON LIST" value={summary?.breadth?.greens ?? "—"} sub="Day + volume" color="var(--accent-bull)" />
+        <MetricCard label="BEST" value={summary?.bestSector ?? "—"} sub="Avg day" color="var(--accent-bull)" />
+        <MetricCard label="WORST" value={summary?.worstSector ?? "—"} sub="Avg day" color="var(--accent-bear)" />
       </div>
 
       {summary?.briefText && (
@@ -153,19 +160,19 @@ export default function ScreenerPage() {
           />
         ))}
         <span className="w-px h-4 bg-[var(--panel-border)] mx-1" />
-        {RANK_FILTERS.map((f) => (
+        {DAY_FILTERS.map((f) => (
           <FilterChip
             key={f.key}
             label={f.label}
-            active={filters.minRank === f.key}
-            onClick={() => setFilters((p) => ({ ...p, minRank: f.key }))}
+            active={filters.minDay === f.key}
+            onClick={() => setFilters((p) => ({ ...p, minDay: f.key }))}
           />
         ))}
       </div>
 
       <ModulePanel
-        title="SCOREBOARD"
-        badge="TABLE"
+        title="WATCHLIST"
+        badge="SCAN"
         accent="var(--module-1)"
         source={`${rows.length} NAMES · ${summary?.asOfDate ?? "—"} EOD`}
       >
@@ -177,27 +184,28 @@ export default function ScreenerPage() {
               <thead>
                 <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--panel-border)] bg-[var(--panel-header)]">
                   <th className="text-left px-3 py-2">TICKER</th>
-                  <th className="text-left px-3 py-2">BIAS</th>
-                  <th className="text-left px-3 py-2">AGREE</th>
+                  <th className="text-left px-3 py-2">STATUS</th>
+                  <th className="text-right px-3 py-2">DAY</th>
+                  <th className="text-right px-3 py-2">REL VOL</th>
+                  <th className="text-right px-3 py-2">OFF HIGH</th>
                   <th className="text-left px-3 py-2">SECTOR</th>
                   <th className="text-right px-3 py-2">LAST</th>
-                  <th className="text-right px-3 py-2">MKT CAP</th>
                   <th className="text-left px-3 py-2">BADGES</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="px-3 py-8 text-center text-[var(--text-muted)]">
+                    <td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">
                       Loading scoreboard…
                     </td>
                   </tr>
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-3 py-4">
+                    <td colSpan={8} className="px-3 py-4">
                       <EmptyState
-                        title="No names match these filters"
-                        detail="Relax direction/region/quality filters, or run the nightly pipeline if the universe is empty."
+                        title="No names on this scan"
+                        detail="On list needs a day of at least +4% and volume at least 2× the prior 50-day average. Switch to All to see every name sorted by distance from the session high."
                       />
                     </td>
                   </tr>

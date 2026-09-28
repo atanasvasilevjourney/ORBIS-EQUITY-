@@ -10,7 +10,7 @@ Systematic equity research terminal — momentum screener, multi-factor fundamen
 
 ## Modules
 
-1. **Swing Screener** — trend radar signals (momentum, EWMAC, breakout, volume)
+1. **Watchlist Screener** — day change, relative volume, distance from session high (no orders)
 2. **Quant Fundamentals** — cross-sectional factor scores (value, quality, growth, earnings quality, leverage) + Piotroski F-Score
 3. **Health Sector** — pharma/biotech fundamentals + clinical-trial catalyst calendar (ClinicalTrials.gov)
 4. **Loop Terminal** — Donchian 55 + 20d VWAP paper portfolio (equal weight, sector caps)
@@ -102,7 +102,7 @@ Optional: `LSE_DATA_API_URL` (defaults to `https://data-api.londonstrategicedge.
 Without these secrets the nightly pipeline will fail immediately with a clear error.
 
 Runs nightly via `.github/workflows/nightly-pipeline.yml`:
-universe → prices → fundamentals → financial reports → trend radar → F-Score → factor scores → portfolio loop → skew map → opening range → stock analysis → Quantropy → daily bias → TEMA/Carver cash → beta rotation → earnings → news → clinical trials → health signals
+universe → prices → fundamentals → financial reports → watchlist screener → F-Score → factor scores → portfolio loop → skew map → opening range → stock analysis → Quantropy → daily bias → TEMA/Carver cash → beta rotation → earnings → news → clinical trials → health signals
 
 ## Health Sector (free data, no API key)
 
