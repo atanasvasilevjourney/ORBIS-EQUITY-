@@ -1,0 +1,28 @@
+Module 1 watchlist backtest
+Universe: current S&P 500 ∪ Nasdaq-100, ex-pharma (503 symbols, 503 with prices)
+Window: 2023-01-01 → 2026-09-26
+Rule: top 8 closest to the session high, buy next open, sell that close. Empty list = cash.
+Bias: today's index members only. Intraday entries before the close are not in this test.
+
+On list  (day ≥ +4%, rel vol ≥ 2×)
+  trades 2714  invested days 777/936  avg trade -0.01%  win 49.2%
+  gross    -21.7%   CAGR  -6.4%   maxDD  -61.3%   Sharpe -0.03
+  net      -83.5%   CAGR -38.4%   maxDD  -85.3%   Sharpe -1.26   (10 bps/side)
+
+Hot only (day ≥ +10%, rel vol ≥ 5×)
+  trades 158  invested days 142/936  avg trade +0.78%  win 55.1%
+  gross    +96.3%   CAGR +19.9%   maxDD  -37.6%   Sharpe 0.77
+  net      +47.9%   CAGR +11.1%   maxDD  -42.9%   Sharpe 0.51   (10 bps/side)
+
+SPY buy & hold    +111.5%   CAGR +22.3%   maxDD  -18.8%   Sharpe 1.42
+
+By year (gross total return, trade count in parentheses)
+  year            on list              hot        SPY
+  2023       -2.7% ( 659)    +25.6% ( 39)     +26.2%
+  2024      -21.8% ( 773)    +17.9% ( 66)     +24.9%
+  2025      +18.5% ( 711)     -6.0% ( 35)     +17.7%
+  2026      -13.2% ( 571)    +41.0% ( 18)     +14.0%
+
+Ablation: same gates, rank by day change instead of distance from the high (gross)
+  on list -23.4%   Sharpe -0.04   maxDD -61.6%
+  hot     +96.3%   Sharpe 0.77   maxDD -37.6%
