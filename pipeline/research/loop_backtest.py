@@ -18,21 +18,19 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
-from pipeline.compute.portfolio_loop import (
-    ATR_WINDOW,
-    EQUITY,
-    MAX_NAME_PCT,
-    MAX_NAMES,
-    MAX_OPEN_RISK_PCT,
-    MAX_PER_SECTOR,
-    MIN_ATR,
-    MIN_NOTIONAL,
-    MIN_PRICE,
-    MIN_RANK,
-    POSTURE_ENTRY_MIN,
-    RISK_PCT,
-    STOP_N,
-)
+from pipeline.compute.donchian_vwap import EQUITY, MAX_PER_SECTOR, MIN_PRICE, TOP_N
+from pipeline.compute.trend_radar import ATR_WINDOW
+
+# Legacy Trend-Radar LOOP simulation constants (production LOOP is Donchian now)
+MAX_NAMES = TOP_N
+MAX_NAME_PCT = 0.15
+MAX_OPEN_RISK_PCT = 0.08
+MIN_ATR = 0.25
+MIN_NOTIONAL = 500.0
+MIN_RANK = 60
+POSTURE_ENTRY_MIN = 50
+RISK_PCT = 0.01
+STOP_N = 2.0
 from pipeline.ingest.us_index_universe import build_merged_universe
 from pipeline.research.radar_alert_backtest import build_radar_history
 from pipeline.universe_filters import is_loop_tradable, is_pharma_stock
