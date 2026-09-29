@@ -67,6 +67,7 @@ export async function GET() {
       bestSector: breadth?.best_sector ?? null,
       worstSector: breadth?.worst_sector ?? null,
       regionBreadth: inputs.region_breadth ?? {},
+      posturePillars: inputs.posture_pillars ?? null,
       stale,
     });
   } catch (err) {

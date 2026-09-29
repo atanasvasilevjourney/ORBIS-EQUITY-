@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { isMissingColumn } from "@/lib/supabase/errors";
+import { orbisScore } from "@/lib/orbisScore";
 
 export const revalidate = 900;
 
@@ -42,6 +43,7 @@ export async function GET(req: NextRequest) {
       market_cap: number | null;
       pe_ratio: number | null;
       dividend_yield: number | null;
+      composite_factor_score: number | null;
     };
     type RadarRow = {
       symbol: string;
@@ -67,7 +69,11 @@ export async function GET(req: NextRequest) {
         "symbol, company_name, sector, industry, country, exchange, tier",
         (q) => q.eq("is_active", true)
       ),
-      fetchAll<FundRow>(sb, "fundamentals_snapshot", "symbol, price, market_cap, pe_ratio, dividend_yield"),
+      fetchAll<FundRow>(
+        sb,
+        "fundamentals_snapshot",
+        "symbol, price, market_cap, pe_ratio, dividend_yield, composite_factor_score"
+      ),
     ]);
 
     let filteredUniverse = universe;
@@ -150,6 +156,8 @@ export async function GET(req: NextRequest) {
           marketCap: f?.market_cap ?? null,
           peRatio: f?.pe_ratio ?? null,
           divYield: f?.dividend_yield ?? null,
+          orbisScore: orbisScore(r.quality_rank, f?.composite_factor_score ?? null),
+          compositeScore: f?.composite_factor_score ?? null,
         };
       })
       .filter(Boolean);
