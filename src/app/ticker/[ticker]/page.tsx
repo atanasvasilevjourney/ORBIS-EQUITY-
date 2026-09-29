@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { BiasChip } from "@/components/scoreboard/BiasChip";
@@ -303,17 +303,19 @@ export default function TickerPage() {
     { key: "insider", label: "INSIDER" },
   ] as const;
 
-  const overlayOk = (() => {
+  const overlayOk = useMemo(() => {
     if (!chart || chart.interval !== "5m") return true;
     const last5 = chart.candles?.[chart.candles.length - 1]?.close;
     const eod = bias?.last;
     if (last5 == null || eod == null || eod === 0) return true;
     return Math.abs(last5 - eod) / Math.abs(eod) < 0.08;
-  })();
-  const chartLevels: ChartLevel[] = [];
-  if (bias && overlayOk) {
+  }, [chart, bias?.last]);
+
+  const chartLevels = useMemo((): ChartLevel[] => {
+    if (!bias || !overlayOk) return [];
+    const out: ChartLevel[] = [];
     for (const lv of bias.levels ?? []) {
-      chartLevels.push({
+      out.push({
         price: lv.price,
         title: lv.label,
         color: lv.kind === "or" ? "var(--accent-info)" : "var(--text-muted)",
@@ -321,19 +323,20 @@ export default function TickerPage() {
       });
     }
     for (const idea of bias.ideas ?? []) {
-      chartLevels.push({ price: idea.entry, title: `idea ${idea.id} ${idea.side} @ ${idea.entry}`, color: "var(--accent-warning)" });
-      chartLevels.push({
+      out.push({ price: idea.entry, title: `idea ${idea.id} ${idea.side} @ ${idea.entry}`, color: "var(--accent-warning)" });
+      out.push({
         price: idea.target,
         title: `idea ${idea.id} target ${idea.target}`,
         color: idea.side === "LONG" ? "var(--accent-bull)" : "var(--accent-bear)",
       });
-      chartLevels.push({
+      out.push({
         price: idea.stop,
         title: `idea ${idea.id} stop ${idea.stop}`,
         color: idea.side === "LONG" ? "var(--accent-bear)" : "var(--accent-bull)",
       });
     }
-  }
+    return out;
+  }, [bias, overlayOk]);
 
   return (
     <div className="px-4 py-6">
