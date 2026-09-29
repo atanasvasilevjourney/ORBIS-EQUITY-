@@ -49,11 +49,19 @@ export async function GET() {
       postureLabel: inputs.posture_label ?? null,
       breadth: {
         total,
+        /** Names on the module-1 watchlist (day ≥ +4%, vol ≥ 2× avg). */
+        onList: greens,
+        onListPct: total > 0 ? Math.round((greens / total) * 100) : 0,
+        /** Names with a down day (close below prior close). */
+        downDay: reds,
+        downDayPct: total > 0 ? Math.round((reds / total) * 100) : 0,
+        /** Share of universe up on the day — matches pipeline posture. */
+        advancersPct: total > 0 ? Math.round((advancers / total) * 100) : 0,
+        /** @deprecated Use onListPct — old label implied market breadth. */
         greens,
         reds,
         pctGreen: total > 0 ? Math.round((greens / total) * 100) : 0,
         pctRed: total > 0 ? Math.round((reds / total) * 100) : 0,
-        advancersPct: total > 0 ? Math.round((advancers / total) * 100) : 0,
       },
       avgRank,
       bestSector: breadth?.best_sector ?? null,

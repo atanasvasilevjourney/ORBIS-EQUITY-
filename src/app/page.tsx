@@ -11,7 +11,18 @@ type DashData = {
   posture: number | null;
   postureLabel: string | null;
   briefText: string | null;
-  breadth: { total: number; greens: number; reds: number; pctGreen: number; pctRed: number } | null;
+  breadth: {
+    total: number;
+    onList?: number;
+    onListPct?: number;
+    advancersPct?: number;
+    downDay?: number;
+    downDayPct?: number;
+    greens: number;
+    reds: number;
+    pctGreen: number;
+    pctRed: number;
+  } | null;
   avgRank: number;
   bestSector: string | null;
   worstSector: string | null;
@@ -201,60 +212,90 @@ export default function Home() {
 
         <ModulePanel
           title="MARKET PULSE"
-          badge="BREADTH"
+          badge="TAPE"
           accent="var(--module-2)"
-          source="TREND RADAR"
+          source="WATCHLIST · EOD"
           className="lg:col-span-4"
         >
           <div className="grid grid-cols-2 gap-2">
             <MetricCard
-              label="BREADTH GREEN"
-              value={d?.breadth ? `${d.breadth.pctGreen}%` : "—"}
-              sub={d?.breadth ? `${d.breadth.greens}/${d.breadth.total} names` : undefined}
+              label="ADVANCERS"
+              value={
+                d?.breadth?.advancersPct != null ? `${d.breadth.advancersPct}%` : "—"
+              }
+              sub={d?.breadth ? `${d.breadth.total} names · drives POSTURE` : undefined}
               color="var(--accent-bull)"
-              bar={d?.breadth?.pctGreen}
+              bar={d?.breadth?.advancersPct}
               barColor="var(--accent-bull)"
             />
             <MetricCard
-              label="BREADTH RED"
-              value={d?.breadth ? `${d.breadth.pctRed}%` : "—"}
-              sub={d?.breadth ? `${d.breadth.reds} names` : undefined}
-              color="var(--accent-bear)"
-              bar={d?.breadth?.pctRed}
-              barColor="var(--accent-bear)"
+              label="ON LIST"
+              value={
+                d?.breadth?.onListPct != null
+                  ? `${d.breadth.onListPct}%`
+                  : d?.breadth
+                    ? `${d.breadth.pctGreen}%`
+                    : "—"
+              }
+              sub={
+                d?.breadth
+                  ? `${d.breadth.onList ?? d.breadth.greens} watchlist · +4% & 2× vol`
+                  : undefined
+              }
+              color="var(--accent-info)"
+              bar={d?.breadth?.onListPct ?? d?.breadth?.pctGreen}
+              barColor="var(--accent-info)"
             />
             <MetricCard
-              label="AVG QUALITY"
-              value={d?.avgRank ?? "—"}
-              sub="Universe rank"
-              color={postureColor}
-              bar={typeof d?.avgRank === "number" ? d.avgRank : undefined}
+              label="DOWN DAY"
+              value={
+                d?.breadth?.downDayPct != null
+                  ? `${d.breadth.downDayPct}%`
+                  : d?.breadth
+                    ? `${d.breadth.pctRed}%`
+                    : "—"
+              }
+              sub={d?.breadth ? `${d.breadth.downDay ?? d.breadth.reds} names` : undefined}
+              color="var(--accent-bear)"
+              bar={d?.breadth?.downDayPct ?? d?.breadth?.pctRed}
+              barColor="var(--accent-bear)"
             />
             <MetricCard
               label="POSTURE"
               value={d?.posture ?? "—"}
-              sub={d?.postureLabel ?? "Bias score"}
+              sub={d?.postureLabel ?? "≈ advancers %"}
               color={postureColor}
               bar={typeof d?.posture === "number" ? d.posture : undefined}
               barColor={postureColor}
             />
           </div>
-          {d?.breadth && (
+          {d?.breadth && d.breadth.advancersPct != null && (
             <div className="mt-3 h-2 rounded-full bg-[var(--gauge-track)] overflow-hidden flex">
               <div
                 className="h-full"
-                style={{ width: `${d.breadth.pctGreen}%`, background: "var(--accent-bull)" }}
+                title="Advancers"
+                style={{
+                  width: `${d.breadth.advancersPct}%`,
+                  background: "var(--accent-bull)",
+                }}
               />
               <div
                 className="h-full"
                 style={{
-                  width: `${Math.max(0, 100 - d.breadth.pctGreen - d.breadth.pctRed)}%`,
+                  width: `${Math.max(
+                    0,
+                    100 - d.breadth.advancersPct - (d.breadth.downDayPct ?? d.breadth.pctRed)
+                  )}%`,
                   background: "var(--surface-alt)",
                 }}
               />
               <div
                 className="h-full"
-                style={{ width: `${d.breadth.pctRed}%`, background: "var(--accent-bear)" }}
+                title="Down day"
+                style={{
+                  width: `${d.breadth.downDayPct ?? d.breadth.pctRed}%`,
+                  background: "var(--accent-bear)",
+                }}
               />
             </div>
           )}
@@ -339,7 +380,14 @@ export default function Home() {
             subtitle: "Breakout portfolio harness", accent: "var(--module-1)", source: "PAPER BOOK",
             metrics: [
               { label: "POSTURE", value: d?.posture ?? "—", color: postureColor },
-              { label: "GREEN", value: d?.breadth ? `${d.breadth.pctGreen}%` : "—", color: "var(--accent-bull)" },
+              {
+                label: "ADVANCERS",
+                value:
+                  d?.breadth?.advancersPct != null
+                    ? `${d.breadth.advancersPct}%`
+                    : "—",
+                color: "var(--accent-bull)",
+              },
               { label: "BEST", value: d?.bestSector ?? "—" },
             ],
           },
