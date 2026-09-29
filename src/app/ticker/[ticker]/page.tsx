@@ -239,7 +239,6 @@ export default function TickerPage() {
   const [tab, setTab] = useState<"chart" | "swing" | "fundamentals" | "earnings" | "insider">("chart");
   const [loading, setLoading] = useState(true);
   const [upcomingEarnings, setUpcomingEarnings] = useState(0);
-  const [pharmaCount, setPharmaCount] = useState(0);
   const [bias, setBias] = useState<any>(null);
   const [chartTf, setChartTf] = useState<"1d" | "5m">("1d");
   const [chart, setChart] = useState<{ candles: Candle[]; sma20: (number | null)[]; source: string; interval: string } | null>(null);
@@ -250,11 +249,6 @@ export default function TickerPage() {
       .then((d) => { setData(d); if (d && !d.error) recordRecentTicker(String(ticker)); })
       .catch(console.error)
       .finally(() => setLoading(false));
-
-    fetch(`/api/pharma?ticker=${ticker}&limit=100`)
-      .then((r) => r.json())
-      .then((d) => setPharmaCount(d?.summary?.total ?? 0))
-      .catch(() => {});
 
     fetch(`/api/earnings-news?ticker=${ticker}&view=upcoming&days=90&limit=10`)
       .then((r) => r.json())
@@ -585,11 +579,6 @@ export default function TickerPage() {
         <Link href="/fundamentals" className="text-xs font-terminal text-[var(--accent-info)] hover:underline">
           Fundamentals
         </Link>
-        {pharmaCount > 0 && (
-          <Link href={`/pharma?ticker=${encodeURIComponent(ticker)}`} className="text-xs font-terminal text-[var(--accent-info)] hover:underline">
-            Pharma ({pharmaCount})
-          </Link>
-        )}
         <Link href={`/earnings-news?ticker=${encodeURIComponent(ticker)}`} className="text-xs font-terminal text-[var(--accent-info)] hover:underline">
           Earnings & News
         </Link>

@@ -31,9 +31,9 @@ describe("GET /api/summary", () => {
         }),
         trend_radar: () => ({
           data: [
-            { state: 1, quality_rank: 70 },
-            { state: -1, quality_rank: 30 },
-            { state: 0, quality_rank: 50 },
+            { state: 1, quality_rank: 70, z_mom: 5 },
+            { state: -1, quality_rank: 30, z_mom: -2 },
+            { state: 0, quality_rank: 50, z_mom: 1 },
           ],
           error: null,
         }),
@@ -46,6 +46,10 @@ describe("GET /api/summary", () => {
 
     expect(res.status).toBe(200);
     expect(body.breadth.total).toBe(3);
+    expect(body.breadth.onList).toBe(1);
+    expect(body.breadth.onListPct).toBe(33);
+    expect(body.breadth.advancersPct).toBe(67);
+    expect(body.breadth.downDay).toBe(1);
     expect(body.breadth.greens).toBe(1);
     expect(body.breadth.reds).toBe(1);
     expect(body.postureLabel).toBe("Risk-On");

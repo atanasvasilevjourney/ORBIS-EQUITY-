@@ -11,7 +11,18 @@ type DashData = {
   posture: number | null;
   postureLabel: string | null;
   briefText: string | null;
-  breadth: { total: number; greens: number; reds: number; pctGreen: number; pctRed: number } | null;
+  breadth: {
+    total: number;
+    onList?: number;
+    onListPct?: number;
+    advancersPct?: number;
+    downDay?: number;
+    downDayPct?: number;
+    greens: number;
+    reds: number;
+    pctGreen: number;
+    pctRed: number;
+  } | null;
   avgRank: number;
   bestSector: string | null;
   worstSector: string | null;
@@ -21,9 +32,6 @@ type DashData = {
   highFScore: number;
   highComposite: number;
   avgComposite: number;
-  pharmaLong: number;
-  pharmaShort: number;
-  pharmaWatch: number;
   earningsBeats: number;
   earningsMisses: number;
   earningsUpcoming: number;
@@ -54,7 +62,6 @@ export default function Home() {
     Promise.all([
       fetch("/api/summary").then((r) => r.json()).catch(() => null),
       fetch("/api/fundamentals?limit=1000").then((r) => r.json()).catch(() => null),
-      fetch("/api/pharma").then((r) => r.json()).catch(() => null),
       fetch("/api/earnings-news?days=30").then((r) => r.json()).catch(() => null),
       fetch("/api/skew").then((r) => r.json()).catch(() => null),
       fetch("/api/orb").then((r) => r.json()).catch(() => null),
@@ -64,7 +71,7 @@ export default function Home() {
       fetch("/api/perps").then((r) => r.json()).catch(() => null),
       fetch("/api/rotate").then((r) => r.json()).catch(() => null),
     ])
-      .then(([summary, fund, pharma, earnings, skew, orb, analysis, quant, bias, perps, rotate]) => {
+      .then(([summary, fund, earnings, skew, orb, analysis, quant, bias, perps, rotate]) => {
         if (!summary && !fund) {
           setError(true);
           return;
@@ -87,9 +94,6 @@ export default function Home() {
           avgComposite: composites.length > 0
             ? Math.round(composites.reduce((s: number, r: { compositeScore: number }) => s + r.compositeScore, 0) / composites.length)
             : 0,
-          pharmaLong: pharma?.summary?.long ?? 0,
-          pharmaShort: pharma?.summary?.short ?? 0,
-          pharmaWatch: pharma?.summary?.watch ?? 0,
           earningsBeats: earnings?.summary?.beats ?? 0,
           earningsMisses: earnings?.summary?.misses ?? 0,
           earningsUpcoming: earnings?.summary?.upcoming ?? 0,
@@ -201,60 +205,90 @@ export default function Home() {
 
         <ModulePanel
           title="MARKET PULSE"
-          badge="BREADTH"
+          badge="TAPE"
           accent="var(--module-2)"
-          source="TREND RADAR"
+          source="WATCHLIST · EOD"
           className="lg:col-span-4"
         >
           <div className="grid grid-cols-2 gap-2">
             <MetricCard
-              label="BREADTH GREEN"
-              value={d?.breadth ? `${d.breadth.pctGreen}%` : "—"}
-              sub={d?.breadth ? `${d.breadth.greens}/${d.breadth.total} names` : undefined}
+              label="ADVANCERS"
+              value={
+                d?.breadth?.advancersPct != null ? `${d.breadth.advancersPct}%` : "—"
+              }
+              sub={d?.breadth ? `${d.breadth.total} names · drives POSTURE` : undefined}
               color="var(--accent-bull)"
-              bar={d?.breadth?.pctGreen}
+              bar={d?.breadth?.advancersPct}
               barColor="var(--accent-bull)"
             />
             <MetricCard
-              label="BREADTH RED"
-              value={d?.breadth ? `${d.breadth.pctRed}%` : "—"}
-              sub={d?.breadth ? `${d.breadth.reds} names` : undefined}
-              color="var(--accent-bear)"
-              bar={d?.breadth?.pctRed}
-              barColor="var(--accent-bear)"
+              label="ON LIST"
+              value={
+                d?.breadth?.onListPct != null
+                  ? `${d.breadth.onListPct}%`
+                  : d?.breadth
+                    ? `${d.breadth.pctGreen}%`
+                    : "—"
+              }
+              sub={
+                d?.breadth
+                  ? `${d.breadth.onList ?? d.breadth.greens} watchlist · +4% & 2× vol`
+                  : undefined
+              }
+              color="var(--accent-info)"
+              bar={d?.breadth?.onListPct ?? d?.breadth?.pctGreen}
+              barColor="var(--accent-info)"
             />
             <MetricCard
-              label="AVG QUALITY"
-              value={d?.avgRank ?? "—"}
-              sub="Universe rank"
-              color={postureColor}
-              bar={typeof d?.avgRank === "number" ? d.avgRank : undefined}
+              label="DOWN DAY"
+              value={
+                d?.breadth?.downDayPct != null
+                  ? `${d.breadth.downDayPct}%`
+                  : d?.breadth
+                    ? `${d.breadth.pctRed}%`
+                    : "—"
+              }
+              sub={d?.breadth ? `${d.breadth.downDay ?? d.breadth.reds} names` : undefined}
+              color="var(--accent-bear)"
+              bar={d?.breadth?.downDayPct ?? d?.breadth?.pctRed}
+              barColor="var(--accent-bear)"
             />
             <MetricCard
               label="POSTURE"
               value={d?.posture ?? "—"}
-              sub={d?.postureLabel ?? "Bias score"}
+              sub={d?.postureLabel ?? "≈ advancers %"}
               color={postureColor}
               bar={typeof d?.posture === "number" ? d.posture : undefined}
               barColor={postureColor}
             />
           </div>
-          {d?.breadth && (
+          {d?.breadth && d.breadth.advancersPct != null && (
             <div className="mt-3 h-2 rounded-full bg-[var(--gauge-track)] overflow-hidden flex">
               <div
                 className="h-full"
-                style={{ width: `${d.breadth.pctGreen}%`, background: "var(--accent-bull)" }}
+                title="Advancers"
+                style={{
+                  width: `${d.breadth.advancersPct}%`,
+                  background: "var(--accent-bull)",
+                }}
               />
               <div
                 className="h-full"
                 style={{
-                  width: `${Math.max(0, 100 - d.breadth.pctGreen - d.breadth.pctRed)}%`,
+                  width: `${Math.max(
+                    0,
+                    100 - d.breadth.advancersPct - (d.breadth.downDayPct ?? d.breadth.pctRed)
+                  )}%`,
                   background: "var(--surface-alt)",
                 }}
               />
               <div
                 className="h-full"
-                style={{ width: `${d.breadth.pctRed}%`, background: "var(--accent-bear)" }}
+                title="Down day"
+                style={{
+                  width: `${d.breadth.downDayPct ?? d.breadth.pctRed}%`,
+                  background: "var(--accent-bear)",
+                }}
               />
             </div>
           )}
@@ -326,20 +360,18 @@ export default function Home() {
             ],
           },
           {
-            href: "/pharma", title: "PHARMA PIPELINE", badge: "MODULE 3",
-            subtitle: "Clinical trial catalysts", accent: "var(--module-3)", source: "CLINICALTRIALS.GOV",
-            metrics: [
-              { label: "LONG", value: loading ? "…" : d?.pharmaLong ?? 0, color: "var(--accent-bull)" },
-              { label: "SHORT", value: loading ? "…" : d?.pharmaShort ?? 0, color: "var(--accent-bear)" },
-              { label: "WATCH", value: loading ? "…" : d?.pharmaWatch ?? 0, color: "var(--accent-warning)" },
-            ],
-          },
-          {
             href: "/loop", title: "LOOP TERMINAL", badge: "MODULE 4",
             subtitle: "Breakout portfolio harness", accent: "var(--module-1)", source: "PAPER BOOK",
             metrics: [
               { label: "POSTURE", value: d?.posture ?? "—", color: postureColor },
-              { label: "GREEN", value: d?.breadth ? `${d.breadth.pctGreen}%` : "—", color: "var(--accent-bull)" },
+              {
+                label: "ADVANCERS",
+                value:
+                  d?.breadth?.advancersPct != null
+                    ? `${d.breadth.advancersPct}%`
+                    : "—",
+                color: "var(--accent-bull)",
+              },
               { label: "BEST", value: d?.bestSector ?? "—" },
             ],
           },
@@ -416,8 +448,8 @@ export default function Home() {
             ],
           },
           {
-            href: "/health", title: "HEALTH CATALYST", badge: "MODULE 13",
-            subtitle: "Health & catalyst desk", accent: "var(--module-1)", source: "HEALTH",
+            href: "/health", title: "HEALTH SECTOR", badge: "MODULE 13",
+            subtitle: "Health Care fundamentals desk", accent: "var(--module-1)", source: "FUNDAMENTALS",
             metrics: [
               { label: "DESK", value: "ON", color: "var(--accent-info)" },
               { label: "NEWS", value: loading ? "…" : d?.newsCount ?? 0 },
