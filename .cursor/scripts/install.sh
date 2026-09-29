@@ -244,13 +244,6 @@ if [ "${RADAR_COUNT:-0}" = "0" ]; then
   "$REPO_DIR/.venv/bin/python" -m pipeline.compute.aggregates
   "$REPO_DIR/.venv/bin/python" -m pipeline.compute.factor_scores
 fi
-# Health-sector catalysts from the free ClinicalTrials.gov API (best-effort;
-# the client tolerates network failures and simply yields no rows).
-SIGNAL_COUNT="$(psql_su "$DBNAME" -tAc 'SELECT count(*) FROM pharma_signals' | tr -d '[:space:]')"
-if [ "${SIGNAL_COUNT:-0}" = "0" ]; then
-  "$REPO_DIR/.venv/bin/python" -m pipeline.ingest.pharma_trials || true
-  "$REPO_DIR/.venv/bin/python" -m pipeline.compute.pharma_signals || true
-fi
 # Paper breakout book — run once when empty so LOOP terminal has a first book.
 BOOK_COUNT="$(psql_su "$DBNAME" -tAc 'SELECT count(*) FROM paper_book' | tr -d '[:space:]')"
 if [ "${BOOK_COUNT:-0}" = "0" ]; then

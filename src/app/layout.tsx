@@ -7,7 +7,7 @@ import { CommandPalette } from "@/components/command/CommandPalette";
 
 export const metadata: Metadata = {
   title: "Orbis Equity Terminal",
-  description: "Equity swing terminal — momentum, fundamentals, pharma pipeline, earnings & news",
+  description: "Equity swing terminal — momentum, fundamentals, earnings & news",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

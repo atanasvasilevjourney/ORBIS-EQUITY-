@@ -32,9 +32,6 @@ type DashData = {
   highFScore: number;
   highComposite: number;
   avgComposite: number;
-  pharmaLong: number;
-  pharmaShort: number;
-  pharmaWatch: number;
   earningsBeats: number;
   earningsMisses: number;
   earningsUpcoming: number;
@@ -65,7 +62,6 @@ export default function Home() {
     Promise.all([
       fetch("/api/summary").then((r) => r.json()).catch(() => null),
       fetch("/api/fundamentals?limit=1000").then((r) => r.json()).catch(() => null),
-      fetch("/api/pharma").then((r) => r.json()).catch(() => null),
       fetch("/api/earnings-news?days=30").then((r) => r.json()).catch(() => null),
       fetch("/api/skew").then((r) => r.json()).catch(() => null),
       fetch("/api/orb").then((r) => r.json()).catch(() => null),
@@ -75,7 +71,7 @@ export default function Home() {
       fetch("/api/perps").then((r) => r.json()).catch(() => null),
       fetch("/api/rotate").then((r) => r.json()).catch(() => null),
     ])
-      .then(([summary, fund, pharma, earnings, skew, orb, analysis, quant, bias, perps, rotate]) => {
+      .then(([summary, fund, earnings, skew, orb, analysis, quant, bias, perps, rotate]) => {
         if (!summary && !fund) {
           setError(true);
           return;
@@ -98,9 +94,6 @@ export default function Home() {
           avgComposite: composites.length > 0
             ? Math.round(composites.reduce((s: number, r: { compositeScore: number }) => s + r.compositeScore, 0) / composites.length)
             : 0,
-          pharmaLong: pharma?.summary?.long ?? 0,
-          pharmaShort: pharma?.summary?.short ?? 0,
-          pharmaWatch: pharma?.summary?.watch ?? 0,
           earningsBeats: earnings?.summary?.beats ?? 0,
           earningsMisses: earnings?.summary?.misses ?? 0,
           earningsUpcoming: earnings?.summary?.upcoming ?? 0,
@@ -367,15 +360,6 @@ export default function Home() {
             ],
           },
           {
-            href: "/pharma", title: "PHARMA PIPELINE", badge: "MODULE 3",
-            subtitle: "Clinical trial catalysts", accent: "var(--module-3)", source: "CLINICALTRIALS.GOV",
-            metrics: [
-              { label: "LONG", value: loading ? "…" : d?.pharmaLong ?? 0, color: "var(--accent-bull)" },
-              { label: "SHORT", value: loading ? "…" : d?.pharmaShort ?? 0, color: "var(--accent-bear)" },
-              { label: "WATCH", value: loading ? "…" : d?.pharmaWatch ?? 0, color: "var(--accent-warning)" },
-            ],
-          },
-          {
             href: "/loop", title: "LOOP TERMINAL", badge: "MODULE 4",
             subtitle: "Breakout portfolio harness", accent: "var(--module-1)", source: "PAPER BOOK",
             metrics: [
@@ -464,8 +448,8 @@ export default function Home() {
             ],
           },
           {
-            href: "/health", title: "HEALTH CATALYST", badge: "MODULE 13",
-            subtitle: "Health & catalyst desk", accent: "var(--module-1)", source: "HEALTH",
+            href: "/health", title: "HEALTH SECTOR", badge: "MODULE 13",
+            subtitle: "Health Care fundamentals desk", accent: "var(--module-1)", source: "FUNDAMENTALS",
             metrics: [
               { label: "DESK", value: "ON", color: "var(--accent-info)" },
               { label: "NEWS", value: loading ? "…" : d?.newsCount ?? 0 },

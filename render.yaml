@@ -20,7 +20,7 @@ services:
         value: "3.12.0"
       - fromGroup: orbis-equity-pipeline
 
-  # Monday heavy jobs (universe + fundamentals + pharma) then daily chain
+  # Monday heavy jobs (universe + fundamentals) then daily chain
   - type: cron
     name: orbis-equity-weekly
     runtime: python

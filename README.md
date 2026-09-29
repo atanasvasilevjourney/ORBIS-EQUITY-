@@ -12,7 +12,7 @@ Systematic equity research terminal — momentum screener, multi-factor fundamen
 
 1. **Watchlist Screener** — day change, relative volume, distance from session high (no orders)
 2. **Quant Fundamentals** — cross-sectional factor scores (value, quality, growth, earnings quality, leverage) + Piotroski F-Score
-3. **Health Sector** — pharma/biotech fundamentals + clinical-trial catalyst calendar (ClinicalTrials.gov)
+3. **Health Sector** — Health Care fundamentals + watchlist bias
 4. **Loop Terminal** — Donchian 55 + 20d VWAP paper portfolio (equal weight, sector caps)
 5. **Earnings & News** — calendar + GDELT headlines
 6. **Skew Map** — listed IV surface (skew, term, weekend vol) from yfinance option chains
@@ -102,18 +102,11 @@ Optional: `LSE_DATA_API_URL` (defaults to `https://data-api.londonstrategicedge.
 Without these secrets the nightly pipeline will fail immediately with a clear error.
 
 Runs nightly via `.github/workflows/nightly-pipeline.yml`:
-universe → prices → fundamentals → financial reports → watchlist screener → F-Score → factor scores → portfolio loop → skew map → opening range → stock analysis → Quantropy → daily bias → TEMA/Carver cash → beta rotation → earnings → news → clinical trials → health signals
+universe → prices → fundamentals → financial reports → watchlist screener → F-Score → factor scores → portfolio loop → skew map → opening range → stock analysis → Quantropy → daily bias → TEMA/Carver cash → beta rotation → earnings → news
 
-## Health Sector (free data, no API key)
+## Health Sector
 
-Pharma/biotech catalysts come from the **ClinicalTrials.gov Data API v2** — a free, public-domain, key-less REST API. For every Health Care universe member, the pipeline pulls that company's recent interventional trials (by lead sponsor) and derives forward-looking catalyst signals (upcoming readouts, recent readouts, posted results) with a phase-weighted confidence.
-
-```bash
-python -m pipeline.ingest.pharma_trials    # ClinicalTrials.gov → pharma_trials
-python -m pipeline.compute.pharma_signals  # pharma_trials → pharma_signals
-```
-
-Surfaced in the UI at `/health` and via `GET /api/health`. Signals are heuristic and not investment advice.
+Health Care names from the active universe with factor scores, F-Score, and watchlist state. Surfaced at `/health` via `GET /api/health`.
 
 ## Loop Terminal (Donchian + VWAP paper book)
 
