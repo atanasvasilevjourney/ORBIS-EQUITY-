@@ -227,8 +227,12 @@ export default function SkewPage() {
 
   useEffect(() => {
     fetch("/api/skew")
-      .then((r) => r.json())
-      .then((data: unknown) => {
+      .then(async (r) => {
+        if (!r.ok) {
+          setD(null);
+          return;
+        }
+        const data: unknown = await r.json();
         const desk = parseDesk<SkewData>(data, "names");
         setD(desk);
         const first = desk?.names?.[0]?.ticker;
