@@ -1,4 +1,6 @@
-"""Historical backtest for LOOP (Trend Radar paper harness rules).
+"""Historical backtest for *legacy* Trend Radar LOOP rules (pre-Donchian).
+
+Production LOOP is Donchian + VWAP — use `pipeline.research.donchian_vwap_backtest`.
 
 Universe: S&P 500 ∪ Nasdaq-100, excluding pharma/biotech (same as production LOOP).
 

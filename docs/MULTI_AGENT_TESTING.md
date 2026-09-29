@@ -101,7 +101,7 @@ npm run test:e2e
 
 ### Pipeline (pytest)
 
-- **Unit:** `trend_radar` signal math, `f_score` Piotroski criteria, `pharma_signals` rules
+- **Unit:** `trend_radar` watchlist math, `watchlist_backtest` (production module 1), `f_score` Piotroski criteria, `pharma_signals` rules
 - **Integration:** DAG smoke test mirroring `.github/workflows/nightly-pipeline.yml`
 - **Location:** `pipeline/tests/`
 
