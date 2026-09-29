@@ -80,6 +80,24 @@ describe("lite desks", () => {
     expect(lite.lite).toBe(true);
   });
 
+  it("aligns correlation on the same calendar when one name has gaps", () => {
+    const rows: { symbol: string; date: string; close: number }[] = [];
+    for (let i = 0; i < 90; i++) {
+      const d = new Date(Date.UTC(2024, 0, 1 + i)).toISOString().slice(0, 10);
+      rows.push({ symbol: "AAA", date: d, close: 10 + i * 0.1 });
+      if (i % 5 !== 0) {
+        rows.push({ symbol: "BBB", date: d, close: 10 + i * 0.08 });
+      }
+    }
+    const lite = liteQuantFromPrices(rows);
+    expect(lite.names.map((n) => n.ticker).sort()).toEqual(["AAA", "BBB"]);
+    const idxA = lite.corr.labels.indexOf("AAA");
+    const idxB = lite.corr.labels.indexOf("BBB");
+    const r = lite.corr.matrix[idxA][idxB];
+    expect(r).not.toBeNull();
+    expect(r!).toBeGreaterThan(0.85);
+  });
+
   it("rotate lite votes canaries from sector baskets", () => {
     const sectors = [
       ["AAPL", "Technology"],

@@ -36,35 +36,43 @@ function alignCloses(book: Map<string, { dates: string[]; close: number[] }>, sy
   labels: string[];
   closes: number[][];
 } {
-  const datesSets = symbols
+  const eligible = symbols
     .map((s) => book.get(s))
-    .filter((s): s is { dates: string[]; close: number[] } => !!s && s.dates.length >= 60)
-    .map((s) => new Set(s.dates));
-  if (datesSets.length < 2) return { labels: [], closes: [] };
-  // Use dates that appear in at least 2 names, then keep symbols covering ≥60 of the densest calendar.
-  const freq = new Map<string, number>();
-  datesSets.forEach((set) => {
-    set.forEach((d) => freq.set(d, (freq.get(d) ?? 0) + 1));
-  });
-  const popular: string[] = [];
-  freq.forEach((n, d) => {
-    if (n >= 2) popular.push(d);
-  });
-  popular.sort();
-  const window = popular.slice(-252);
+    .filter((s): s is { dates: string[]; close: number[] } => !!s && s.dates.length >= 60);
+  if (eligible.length < 2) return { labels: [], closes: [] };
+
+  let common: Set<string> | null = null;
+  for (const row of eligible) {
+    const set = new Set(row.dates);
+    common = common === null ? set : new Set([...common].filter((d) => set.has(d)));
+  }
+  if (!common || common.size < 60) return { labels: [], closes: [] };
+
+  const window = [...common].sort().slice(-252);
+  if (window.length < 60) return { labels: [], closes: [] };
+
   const labels: string[] = [];
   const closes: number[][] = [];
   for (const sym of symbols) {
     const row = book.get(sym);
     if (!row) continue;
     const lookup = new Map(row.dates.map((d, i) => [d, row.close[i]]));
-    const series = window.map((d) => lookup.get(d)).filter((v): v is number => v != null);
-    if (series.length >= 60) {
+    const series: number[] = [];
+    let ok = true;
+    for (const d of window) {
+      const px = lookup.get(d);
+      if (px == null || !Number.isFinite(px)) {
+        ok = false;
+        break;
+      }
+      series.push(px);
+    }
+    if (ok) {
       labels.push(sym);
       closes.push(series);
     }
   }
-  return { labels, closes };
+  return labels.length >= 2 ? { labels, closes } : { labels: [], closes: [] };
 }
 
 export function liteQuantFromPrices(rows: PricePoint[]): {

@@ -83,15 +83,20 @@ def name_agrees(name_forecast: float, parent_forecast: float) -> bool:
 
 
 def xs_score(close: np.ndarray, peer_closes: list[np.ndarray], lookback: int = XS_LOOKBACK) -> float:
-    """Strategy 19-lite: own 60d return minus equal-weight peer mean."""
+    """Strategy 19-lite: own 60d return minus equal-weight peer mean (excludes self)."""
     own = period_return(close, lookback)
     if not math.isfinite(own):
         return float("nan")
-    peers = [period_return(c, lookback) for c in peer_closes]
-    finite = [p for p in peers if math.isfinite(p)]
-    if not finite:
+    peer_rets: list[float] = []
+    for c in peer_closes:
+        if c is close:
+            continue
+        p = period_return(c, lookback)
+        if math.isfinite(p):
+            peer_rets.append(p)
+    if not peer_rets:
         return float("nan")
-    return float(own - float(np.mean(finite)))
+    return float(own - float(np.mean(peer_rets)))
 
 
 def dca_action(unlocked: int, allocated: int, sleeve_rank: int, xs_rank: int) -> str:

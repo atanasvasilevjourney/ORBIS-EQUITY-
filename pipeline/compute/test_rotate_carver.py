@@ -83,6 +83,17 @@ class CrossSectionTests(unittest.TestCase):
         score = xs_score(leader, [leader, laggard])
         self.assertGreater(score, 0.0)
 
+    def test_xs_score_excludes_self_from_peer_mean(self):
+        n = 80
+        leader = 100.0 * (1.01 ** np.arange(n))
+        laggard = 100.0 * (1.001 ** np.arange(n))
+        from pipeline.compute.sector_math import period_return
+
+        own = period_return(leader, 60)
+        peer = period_return(laggard, 60)
+        score = xs_score(leader, [leader, laggard])
+        self.assertAlmostEqual(score, own - peer, places=6)
+
     def test_book_rotates_rungs_into_leading_sleeve(self):
         n = 220
         t = np.arange(n)
