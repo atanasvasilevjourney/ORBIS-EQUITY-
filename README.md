@@ -223,6 +223,19 @@ python -m pipeline.compute.perps_desk
 
 Surfaced at `/cash` (`/perps` redirects) and `GET /api/perps`. Paper harness only. Not investment advice.
 
+### TEMA-only top-10 research (Jupyter)
+
+IS-ranked top-10 liquid names with an **OOS promotion gate** (TEMA 9/99/199 + MACD close only — no Carver sleeve):
+
+```bash
+pip install -r pipeline/requirements-notebooks.txt
+jupyter notebook notebooks/tema_top10_oos.ipynb
+# or
+PYTHONPATH=. python -m pipeline.research.tema_top10_oos --top 10
+```
+
+See `notebooks/README.md`. Promote the list to a manual / FTMO book **only when the gate passes**.
+
 ## Beta rotation (which sectors are trending)
 
 Inspired by [Caltropia's 2026 sector and industry outlook](https://caltropia.substack.com/p/2026-stock-market-sector-and-industry) **structure** and the canary → TEMA-MACD ensemble flow from the Crypto Allocation notebook. Not their published numbers.
