@@ -98,8 +98,12 @@ export default function AnalysisPage() {
 
   useEffect(() => {
     fetch("/api/analysis")
-      .then((r) => r.json())
-      .then((data: unknown) => {
+      .then(async (r) => {
+        if (!r.ok) {
+          setD(null);
+          return;
+        }
+        const data: unknown = await r.json();
         const desk = parseDesk<AnalysisData>(data, "names");
         setD(desk);
         const q = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("ticker") : null;

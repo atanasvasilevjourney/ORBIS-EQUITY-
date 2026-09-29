@@ -47,7 +47,7 @@ export function Nav() {
           >
             ORBIS EQUITY
           </Link>
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden md:flex items-center gap-1 max-w-[min(72rem,calc(100vw-22rem))] overflow-x-auto">
             {NAV_LINKS.map((l) => {
               const isActive = pathname === l.href || pathname.startsWith(l.href + "/");
               return (
