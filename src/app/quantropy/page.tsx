@@ -136,6 +136,16 @@ export default function QuantropyPage() {
         </p>
       </div>
 
+      <div className="px-4 py-3 mb-4 rounded border border-[var(--accent-warning)]/40 bg-[var(--badge-bg)] text-xs text-[var(--text-secondary)] font-terminal">
+        <span className="font-bold tracking-wider" style={{ color: "var(--accent-warning)" }}>
+          IN-SAMPLE DESK
+        </span>
+        {" · "}
+        Max-Sharpe and the efficient frontier use the same return window as the displayed book — useful for
+        relative ranking, not out-of-sample performance or live allocation. Treat weights as diagnostic, not a
+        trade signal.
+      </div>
+
       {d?.headline && (
         <div className="px-4 py-2 mb-4 rounded border border-[var(--border)] bg-[var(--badge-bg)] text-sm text-[var(--text-secondary)] font-terminal">
           <span style={{ color: "var(--accent-info)" }}>Q:</span> {d.headline}
