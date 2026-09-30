@@ -103,7 +103,7 @@ Optional: `LSE_DATA_API_URL` (defaults to `https://data-api.londonstrategicedge.
 
 Without these secrets the nightly pipeline will fail immediately with a clear error.
 
-Runs nightly via `.github/workflows/nightly-pipeline.yml`:
+Runs after the US cash close via `.github/workflows/nightly-pipeline.yml` (Mon–Fri 21:30 UTC, Saturday 12:00 UTC catch-up):
 universe → prices → fundamentals → financial reports → trend radar → F-Score → factor scores → portfolio loop → skew map → opening range → stock analysis → Quantropy → daily bias → TEMA/Carver cash → beta rotation → earnings → news → clinical trials → health signals
 
 ## Health Sector (free data, no API key)

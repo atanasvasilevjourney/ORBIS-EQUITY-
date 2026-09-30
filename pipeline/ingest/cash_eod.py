@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -25,6 +25,8 @@ from pipeline.clients.cash_eod import (
     SLEEP_SEC,
     bars_to_rows,
     fetch_daily_bars,
+    last_trading_session_date,
+    rank_eod_queue,
 )
 from pipeline.config.settings import SupabaseConfig
 from pipeline.utils.supabase import fetch_all
@@ -131,9 +133,21 @@ def fetch_members(sb: Client, limit: int | None = None) -> list[dict]:
         filters=lambda q: q.eq("is_active", True),
         order=("symbol", False),
     )
-    if limit and limit > 0:
-        return members[:limit]
-    return members
+    cutoff = last_trading_session_date().isoformat()
+    try:
+        lookback = (date.fromisoformat(cutoff) - timedelta(days=21)).isoformat()
+        rows = fetch_all(
+            sb,
+            "prices_daily",
+            "symbol, date",
+            filters=lambda q: q.gte("date", lookback),
+        )
+        return rank_eod_queue(members, rows, cutoff, limit)
+    except Exception:
+        logger.warning("EOD queue ranking skipped — alphabetical fallback", exc_info=True)
+        if limit and limit > 0:
+            return members[:limit]
+        return members
 
 
 def ingest_symbol(

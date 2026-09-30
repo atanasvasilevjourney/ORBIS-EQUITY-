@@ -27,7 +27,6 @@ def corr_from_equities(series: dict[str, np.ndarray]) -> dict:
             continue
         prev = x[:-1]
         r = np.diff(x) / np.where(prev == 0, np.nan, prev)
-        r = np.nan_to_num(r, nan=0.0)
         labels.append(str(name))
         book.append(r)
     if len(book) < 2:

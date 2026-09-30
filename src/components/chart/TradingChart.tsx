@@ -23,6 +23,7 @@ type Props = {
   candles: Candle[];
   sma?: (number | null)[];
   levels: ChartLevel[];
+  /** Fixed px height. Omit to fill the parent (CHART module). */
   height?: number;
 };
 
@@ -38,7 +39,7 @@ function resolveColor(c: string) {
   return c;
 }
 
-export function TradingChart({ candles, sma, levels, height = 420 }: Props) {
+export function TradingChart({ candles, sma, levels, height }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
 
@@ -47,20 +48,20 @@ export function TradingChart({ candles, sma, levels, height = 420 }: Props) {
     if (!el || candles.length < 2) return;
     let disposed = false;
     let chart: any = null;
-    let ro: ResizeObserver | null = null;
 
     (async () => {
       const { createChart, ColorType, LineStyle, CrosshairMode } = await import("lightweight-charts");
       if (disposed || !wrap.current) return;
+      const host = wrap.current;
       const bull = cssVar("--accent-bull", "#00ff88");
       const bear = cssVar("--accent-bear", "#ff3366");
       const info = cssVar("--accent-info", "#00aaff");
       const text = cssVar("--text-secondary", "#9ca3af");
       const grid = cssVar("--border", "#1e2733");
       const bg = cssVar("--card-bg", "#0d1117");
-      chart = createChart(el, {
-        width: el.clientWidth,
-        height,
+      const intraday = typeof candles[0].time === "number";
+      chart = createChart(host, {
+        autoSize: true,
         layout: {
           background: { type: ColorType.Solid, color: bg },
           textColor: text,
@@ -72,8 +73,29 @@ export function TradingChart({ candles, sma, levels, height = 420 }: Props) {
           horzLines: { color: grid },
         },
         crosshair: { mode: CrosshairMode.Normal },
-        rightPriceScale: { borderColor: grid },
-        timeScale: { borderColor: grid, timeVisible: typeof candles[0].time === "number", secondsVisible: false },
+        rightPriceScale: {
+          borderColor: grid,
+          scaleMargins: { top: 0.06, bottom: 0.16 },
+        },
+        timeScale: {
+          borderColor: grid,
+          timeVisible: intraday,
+          secondsVisible: false,
+          rightOffset: 8,
+          lockVisibleTimeRangeOnResize: true,
+          fixLeftEdge: false,
+        },
+        handleScroll: {
+          mouseWheel: true,
+          pressedMouseMove: true,
+          horzTouchDrag: true,
+          vertTouchDrag: false,
+        },
+        handleScale: {
+          axisPressedMouseMove: true,
+          mouseWheel: true,
+          pinch: true,
+        },
       });
       const candleSeries = chart.addCandlestickSeries({
         upColor: bull,
@@ -97,7 +119,7 @@ export function TradingChart({ candles, sma, levels, height = 420 }: Props) {
           priceFormat: { type: "volume" },
           priceScaleId: "vol",
         });
-        chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+        chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.78, bottom: 0 } });
         vol.setData(
           candles.map((c) => ({
             time: c.time,
@@ -135,27 +157,33 @@ export function TradingChart({ candles, sma, levels, height = 420 }: Props) {
           title: lv.title,
         });
       }
-      chart.timeScale().fitContent();
-      ro = new ResizeObserver(() => {
-        if (!chart || !wrap.current) return;
-        chart.resize(wrap.current.clientWidth, height);
+      requestAnimationFrame(() => {
+        if (disposed || !chart) return;
+        chart.timeScale().fitContent();
       });
-      ro.observe(el);
     })();
 
     return () => {
       disposed = true;
-      ro?.disconnect();
       chart?.remove();
     };
   }, [candles, sma, levels, height, theme]);
 
   if (candles.length < 2) {
     return (
-      <div className="flex items-center justify-center text-xs font-terminal text-[var(--text-muted)]" style={{ height }}>
+      <div
+        className="flex items-center justify-center text-xs font-terminal text-[var(--text-muted)] w-full h-full min-h-[280px]"
+        style={height ? { height } : undefined}
+      >
         No candles
       </div>
     );
   }
-  return <div ref={wrap} className="w-full" style={{ height }} />;
+  return (
+    <div
+      ref={wrap}
+      className="w-full h-full min-h-0 overflow-hidden"
+      style={height ? { height, minHeight: height } : { minHeight: 280 }}
+    />
+  );
 }

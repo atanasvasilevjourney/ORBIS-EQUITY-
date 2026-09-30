@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
-import { cashClock } from "@/lib/cashSession";
+import { bookStale, cashClock, lastTradingSessionDate } from "@/lib/cashSession";
 import {
+  overnightBookCloses,
   overnightFromQuotes,
   overnightFromSpark,
   rankOvernightUps,
@@ -183,16 +184,17 @@ export async function GET() {
       })
       .filter((r): r is { symbol: string; date: string; open: number; high: number; low: number; close: number; volume: number | null } => r != null);
     const breakouts = rankBreakouts(dailyCloseBreakouts(histBars, names), "volume");
-    const liveStreaming = quotes.some((q) => quoteIsFresh(q.updated_at));
+    const liveQuotes = quotes.filter((q) => quoteIsFresh(q.updated_at) && !q.replay);
+    const liveStreaming = liveQuotes.length > 0;
     const live = {
       configured: lseStreamConfigured(),
       streaming: liveStreaming,
       source: "lse_ws" as const,
-      names: quotes.length,
+      names: liveQuotes.length,
     };
-    const prevClose: Record<string, number> = {};
-    for (let i = 0; i < today.length; i++) prevClose[today[i].symbol] = today[i].close;
-    const fromLive = overnightFromQuotes(quotes, prevClose, names, { tape: tapeFromPhase(clock.phase) });
+    const expected = lastTradingSessionDate();
+    const prevClose = overnightBookCloses(asOf, expected, today, prev);
+    const fromLive = overnightFromQuotes(liveQuotes, prevClose, names, { tape: tapeFromPhase(clock.phase) });
     let overnightSource: "lse" | "yahoo" | null = null;
     try {
       if (liveStreaming && fromLive.length) {
@@ -248,7 +250,7 @@ export async function GET() {
     } catch (err) {
       console.warn("overnight / 5m tape failed", err);
     }
-    const stale = (Date.now() - new Date(asOf).getTime()) / 86400000 > 3;
+    const stale = bookStale(asOf, expected);
     const sessionLead = gainers[0];
     const overnightLead = overnight[0];
     const bits = [`${asOf} · ${book.length} names · ${gainers.length} up`];

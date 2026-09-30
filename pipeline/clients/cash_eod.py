@@ -22,7 +22,7 @@ import io
 import logging
 import time
 from dataclasses import dataclass
-from datetime import date, datetime, time as dtime, timezone
+from datetime import date, datetime, time as dtime, timedelta, timezone
 from typing import Iterable
 from zoneinfo import ZoneInfo
 
@@ -90,6 +90,94 @@ def drop_in_progress(bars: list[DailyBar], *, now: datetime | None = None) -> li
     if last_d == now.date() and now.time() < SESSION_CLOSE:
         return bars[:-1]
     return bars
+
+
+def last_closed_cash_date(*, now: datetime | None = None) -> date:
+    """Calendar NY date of the last print that *could* be a closed cash bar."""
+    now = now or datetime.now(NY)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=NY)
+    else:
+        now = now.astimezone(NY)
+    if now.time() < SESSION_CLOSE:
+        return now.date() - timedelta(days=1)
+    return now.date()
+
+
+def last_trading_session_date(*, now: datetime | None = None) -> date:
+    """Last weekday cash session — skip Sat/Sun after the calendar cutoff."""
+    d = last_closed_cash_date(now=now)
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d
+
+
+def leftover_members(
+    members: list[dict],
+    rows: list[dict],
+    cutoff: str,
+) -> list[dict]:
+    """Names with no ingest rows, or whose newest bar is older than cutoff.
+
+    Oldest / missing books come first so a leftover cap patches the stalest tail.
+    """
+    latest: dict[str, str] = {}
+    for r in rows:
+        sym = r.get("symbol")
+        day = r.get("date")
+        if not sym or not day:
+            continue
+        day_s = str(day)[:10]
+        prev = latest.get(sym)
+        if prev is None or day_s > prev:
+            latest[sym] = day_s
+    out: list[dict] = []
+    for m in members:
+        sym = m.get("symbol")
+        if not sym:
+            continue
+        mx = latest.get(sym)
+        if mx is None or mx < cutoff:
+            out.append(m)
+    out.sort(key=lambda m: (latest.get(m.get("symbol") or "") or "", str(m.get("symbol") or "")))
+    return out
+
+
+def rank_eod_queue(
+    members: list[dict],
+    rows: list[dict],
+    cutoff: str,
+    limit: int | None = None,
+) -> list[dict]:
+    """Leftover (oldest / missing first), then the rest alphabetically.
+
+    A leftover cap therefore patches the stalest tail instead of AAPL… first.
+    """
+    leftover = leftover_members(members, rows, cutoff)
+    leftover_syms = {m.get("symbol") for m in leftover}
+    rest = [m for m in members if m.get("symbol") and m.get("symbol") not in leftover_syms]
+    rest.sort(key=lambda m: str(m.get("symbol") or ""))
+    ordered = leftover + rest
+    if limit and limit > 0:
+        return ordered[:limit]
+    return ordered
+
+
+def drop_open_session_rows(rows: list[dict], *, now: datetime | None = None) -> list[dict]:
+    """Keep only bars on or before the last closed weekday cash session."""
+    cutoff = last_trading_session_date(now=now).isoformat()
+    kept: list[dict] = []
+    for r in rows:
+        day = str(r.get("date") or "")[:10]
+        if day and day <= cutoff:
+            kept.append(r)
+    return kept
+
+
+def yfinance_window(*, today: date | None = None, lookback_days: int = 10) -> tuple[date, date]:
+    """Inclusive start, exclusive end — yfinance drops the end date."""
+    today = today or datetime.now(NY).date()
+    return today - timedelta(days=lookback_days), today + timedelta(days=1)
 
 
 def _f(v) -> float | None:

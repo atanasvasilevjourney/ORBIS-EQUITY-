@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime
+from datetime import date, datetime
 from unittest.mock import patch
 
 from pipeline.clients.cash_eod import (
@@ -8,8 +8,14 @@ from pipeline.clients.cash_eod import (
     fetch_daily_bars,
     fetch_stooq_daily,
     fetch_yahoo_daily,
+    last_closed_cash_date,
+    last_trading_session_date,
+    leftover_members,
+    rank_eod_queue,
+    drop_open_session_rows,
     stooq_candidates,
     yahoo_ticker,
+    yfinance_window,
 )
 
 
@@ -76,6 +82,60 @@ class ClosedBarTests(unittest.TestCase):
         now = datetime(2026, 9, 12, 16, 5, tzinfo=__import__("zoneinfo").ZoneInfo("America/New_York"))
         out = drop_in_progress(bars, now=now)
         self.assertEqual([b.date for b in out], ["2026-09-11", "2026-09-12"])
+
+    def test_last_closed_cash_date_is_yesterday_before_1600_et(self):
+        now = datetime(2026, 9, 18, 15, 30, tzinfo=__import__("zoneinfo").ZoneInfo("America/New_York"))
+        self.assertEqual(last_closed_cash_date(now=now), date(2026, 9, 17))
+        after = datetime(2026, 9, 18, 16, 1, tzinfo=__import__("zoneinfo").ZoneInfo("America/New_York"))
+        self.assertEqual(last_closed_cash_date(now=after), date(2026, 9, 18))
+
+    def test_yfinance_end_is_exclusive_next_day(self):
+        start, end = yfinance_window(today=date(2026, 9, 18), lookback_days=10)
+        self.assertEqual(start, date(2026, 9, 8))
+        self.assertEqual(end, date(2026, 9, 19))
+
+    def test_weekend_cutoff_is_friday(self):
+        sat = datetime(2026, 9, 19, 17, 0, tzinfo=__import__("zoneinfo").ZoneInfo("America/New_York"))
+        self.assertEqual(last_trading_session_date(now=sat), date(2026, 9, 18))
+        mon_pre = datetime(2026, 9, 21, 10, 0, tzinfo=__import__("zoneinfo").ZoneInfo("America/New_York"))
+        self.assertEqual(last_trading_session_date(now=mon_pre), date(2026, 9, 18))
+
+    def test_leftover_includes_stale_max_date(self):
+        members = [{"symbol": "AAA"}, {"symbol": "BBB"}, {"symbol": "CCC"}]
+        rows = [
+            {"symbol": "AAA", "date": "2026-09-18"},
+            {"symbol": "BBB", "date": "2026-09-10"},
+        ]
+        leftover = leftover_members(members, rows, "2026-09-18")
+        self.assertEqual([m["symbol"] for m in leftover], ["CCC", "BBB"])
+
+    def test_leftover_prefers_oldest_books_first(self):
+        members = [{"symbol": "NEW"}, {"symbol": "MID"}, {"symbol": "OLD"}]
+        rows = [
+            {"symbol": "MID", "date": "2026-09-12"},
+            {"symbol": "OLD", "date": "2026-09-01"},
+        ]
+        leftover = leftover_members(members, rows, "2026-09-18")
+        self.assertEqual([m["symbol"] for m in leftover], ["NEW", "OLD", "MID"])
+
+    def test_rank_eod_queue_patches_leftover_before_fresh(self):
+        members = [{"symbol": "AAPL"}, {"symbol": "ZZZ"}, {"symbol": "MID"}]
+        rows = [
+            {"symbol": "AAPL", "date": "2026-09-18"},
+            {"symbol": "MID", "date": "2026-09-01"},
+        ]
+        queued = rank_eod_queue(members, rows, "2026-09-18", limit=2)
+        self.assertEqual([m["symbol"] for m in queued], ["ZZZ", "MID"])
+
+    def test_bootstrap_drops_in_progress_session_bar(self):
+        ny = __import__("zoneinfo").ZoneInfo("America/New_York")
+        now = datetime(2026, 9, 18, 10, 0, tzinfo=ny)
+        rows = [
+            {"symbol": "AAPL", "date": "2026-09-17", "close": 1},
+            {"symbol": "AAPL", "date": "2026-09-18", "close": 2},
+        ]
+        kept = drop_open_session_rows(rows, now=now)
+        self.assertEqual([r["date"] for r in kept], ["2026-09-17"])
 
 
 class _Resp:

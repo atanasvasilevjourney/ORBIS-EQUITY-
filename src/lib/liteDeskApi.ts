@@ -121,17 +121,16 @@ export async function liteQuantPayload(sb: SupabaseClient) {
   const prices = await fetchLitePrices(sb, wanted);
   const lite = liteQuantFromPrices(prices);
   const w = 1 / Math.max(lite.names.length, 1);
+  const asOf = prices.reduce((mx, r) => (r.date > mx ? r.date : mx), "");
   return {
     summary: {
       names: lite.names.length,
-      asOfDate: null,
+      asOfDate: asOf || null,
       runId: null,
       lastRunAt: null,
       distressed: 0,
-      maxSharpe: lite.names[0]?.sharpe ?? null,
-      minVol: lite.names.length
-        ? Math.min(...lite.names.map((n) => n.annVol ?? Infinity))
-        : null,
+      maxSharpe: lite.allocations.maxSharpe.sharpe,
+      minVol: lite.allocations.minVar.annVol,
     },
     names: lite.names.map((n) => ({
       ...n,
@@ -145,12 +144,7 @@ export async function liteQuantPayload(sb: SupabaseClient) {
       altmanZ: null,
       wEqual: n.wEqual ?? w,
     })),
-    allocations: {
-      equal: { label: "Equally weighted (lite)", annReturn: null, annVol: null, sharpe: null },
-      invVol: { label: "Inverse volatility (lite)", annReturn: null, annVol: null, sharpe: null },
-      minVar: { label: "Min variance — snapshot pending", annReturn: null, annVol: null, sharpe: null },
-      maxSharpe: { label: "Max Sharpe — snapshot pending", annReturn: null, annVol: null, sharpe: null },
-    },
+    allocations: lite.allocations,
     frontier: [],
     headline: lite.headline,
     corr: lite.corr,
@@ -167,6 +161,7 @@ export async function liteRotatePayload(sb: SupabaseClient) {
   const wanted = uniq([...LIQUID_NAMES, ...meta.map((m) => m.symbol)]).slice(0, 48);
   const prices = await fetchLitePrices(sb, wanted);
   const lite = liteRotateFromPrices(prices, meta.length ? meta : wanted.map((s) => ({ symbol: s, sector: "Other" })));
+  const asOf = prices.reduce((mx, r) => (r.date > mx ? r.date : mx), "");
   return {
     summary: {
       names: wanted.length,
@@ -179,7 +174,7 @@ export async function liteRotatePayload(sb: SupabaseClient) {
       nTriggers: 0,
       nCarver: 0,
       carverRungs: 0,
-      asOfDate: null,
+      asOfDate: asOf || null,
       leading: 0,
       fading: 0,
       lastRunAt: null,

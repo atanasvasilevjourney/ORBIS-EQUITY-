@@ -24,11 +24,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-screen antialiased">
+      <body className="h-dvh overflow-hidden flex flex-col antialiased">
         <ThemeProvider>
           <Nav />
           <DataHonestyBar />
-          <main className="mx-auto max-w-[1600px]">{children}</main>
+          <main className="flex-1 min-h-0 overflow-auto w-full mx-auto max-w-[1600px]">{children}</main>
           <CommandPalette />
         </ThemeProvider>
       </body>

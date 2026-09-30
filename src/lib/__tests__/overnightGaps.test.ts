@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { overnightFromQuotes, overnightFromSpark, rankOvernightUps } from "@/lib/overnightGaps";
+import {
+  overnightBookCloses,
+  overnightFromQuotes,
+  overnightFromSpark,
+  rankOvernightUps,
+} from "@/lib/overnightGaps";
 
 describe("overnightFromSpark", () => {
   it("ranks an overnight gap-up vs previous close", () => {
@@ -80,5 +85,31 @@ describe("overnightFromQuotes", () => {
 
   it("drops prints without a prior close", () => {
     expect(overnightFromQuotes([{ symbol: "X", last: 10 }], {})).toEqual([]);
+  });
+
+  it("drops replay prints so they cannot rank overnight", () => {
+    expect(
+      overnightFromQuotes(
+        [{ symbol: "AAPL", last: 400, replay: true, ts: "2026-09-18T12:45:00Z" }],
+        { AAPL: 300 }
+      )
+    ).toEqual([]);
+  });
+});
+
+describe("overnightBookCloses", () => {
+  const asOfBars = [{ symbol: "SNSE", close: 12 }];
+  const priorBars = [{ symbol: "SNSE", close: 10 }];
+
+  it("gaps vs asOf on a clean closed-bar book", () => {
+    expect(overnightBookCloses("2026-09-16", "2026-09-16", asOfBars, priorBars).SNSE).toBe(12);
+  });
+
+  it("gaps vs prior when asOf leaked past the session cutoff", () => {
+    expect(overnightBookCloses("2026-09-16", "2026-09-15", asOfBars, priorBars).SNSE).toBe(10);
+  });
+
+  it("gaps vs asOf when the book is stale", () => {
+    expect(overnightBookCloses("2026-09-16", "2026-09-29", asOfBars, priorBars).SNSE).toBe(12);
   });
 });

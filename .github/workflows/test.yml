@@ -30,7 +30,7 @@ jobs:
         run: pip install -r pipeline/requirements.txt
 
       - name: Run pytest
-        run: python -m pytest pipeline/tests -v
+        run: python -m pytest pipeline/tests pipeline/compute/test_canary_math.py pipeline/compute/test_perps_math.py pipeline/compute/test_rotate_carver.py pipeline/compute/test_sector_math.py pipeline/compute/test_quantropy.py pipeline/compute/test_cash_eod.py pipeline/compute/test_lse_live.py -v
 
   frontend-tests:
     runs-on: ubuntu-latest

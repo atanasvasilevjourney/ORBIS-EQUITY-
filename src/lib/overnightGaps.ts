@@ -134,6 +134,28 @@ export function rankOvernightDowns(rows: OvernightMover[], n = 80): OvernightMov
   return rows.filter((r) => r.gapPct < 0).sort((a, b) => a.gapPct - b.gapPct).slice(0, n);
 }
 
+/** Closed-session closes for LSE overnight gaps.
+
+ * Clean book (`asOf` is the last weekday close): gap vs that asOf bar.
+ * Leaked in-progress today (`asOf` after the session cutoff): gap vs prior.
+ * Stale book (`asOf` behind expected): still gap vs the latest closed bar we have.
+ */
+export function overnightBookCloses(
+  asOf: string,
+  expected: string,
+  asOfBars: { symbol: string; close: number }[],
+  priorBars: { symbol: string; close: number }[]
+): Record<string, number> {
+  const rows = asOf > expected ? priorBars : asOfBars;
+  const out: Record<string, number> = {};
+  for (let i = 0; i < rows.length; i++) {
+    const sym = rows[i].symbol;
+    const close = rows[i].close;
+    if (sym && close > 0) out[sym] = close;
+  }
+  return out;
+}
+
 /** Map LSE `quotes_last` prints vs the last closed session close. */
 export function overnightFromQuotes(
   quotes: LastQuote[],
@@ -148,7 +170,7 @@ export function overnightFromQuotes(
     const ticker = String(q?.symbol || "").trim().toUpperCase();
     const last = Number(q?.last);
     const prevClose = prevCloses[ticker];
-    if (!ticker || !(last > 0) || !(prevClose > 0)) continue;
+    if (!ticker || q.replay || !(last > 0) || !(prevClose > 0)) continue;
     const bid = q.bid == null ? null : Number(q.bid);
     const ask = q.ask == null ? null : Number(q.ask);
     const vol = q.volume == null ? null : Number(q.volume);

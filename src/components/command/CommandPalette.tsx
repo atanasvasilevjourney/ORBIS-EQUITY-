@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { chartHref } from "@/lib/chartDesk";
 
 type PaletteItem = {
   id: string;
@@ -14,14 +15,23 @@ type PaletteItem = {
 const STATIC_ITEMS: PaletteItem[] = [
   { id: "home", label: "Home Cockpit", hint: "HOME", href: "/", group: "Navigate" },
   { id: "screener", label: "Swing Screener", hint: "SCR", href: "/screener", group: "Navigate" },
-  { id: "play", label: "Stocks in Play", hint: "PLAY", href: "/play", group: "Navigate" },
+  { id: "play", label: "Stocks in Play", hint: "PLA", href: "/play", group: "Navigate" },
+  { id: "chart", label: "Chart", hint: "CHT", href: "/chart", group: "Navigate" },
+  { id: "loop", label: "Loop Book", hint: "LOP", href: "/loop", group: "Navigate" },
   { id: "orb", label: "Opening Range Breakout", hint: "ORB", href: "/orb", group: "Navigate" },
+  { id: "skew", label: "Skew Map", hint: "SKW", href: "/skew", group: "Navigate" },
+  { id: "analysis", label: "Stock Analysis", hint: "ANL", href: "/analysis", group: "Navigate" },
+  { id: "bias", label: "Daily Bias", hint: "BIA", href: "/bias", group: "Navigate" },
+  { id: "cash", label: "TEMA + Carver Cash", hint: "CAS", href: "/cash", group: "Navigate" },
+  { id: "rotate", label: "Beta Rotation", hint: "ROT", href: "/rotate", group: "Navigate" },
+  { id: "quantropy", label: "Quant", hint: "QUA", href: "/quantropy", group: "Navigate" },
   { id: "fundamentals", label: "Fundamentals", hint: "FA", href: "/fundamentals", group: "Navigate" },
+  { id: "health", label: "Health Catalyst", hint: "HLT", href: "/health", group: "Navigate" },
   { id: "pharma", label: "Pharma Pipeline", hint: "PHAR", href: "/pharma", group: "Navigate" },
   { id: "earnings", label: "Earnings & News", hint: "ERN", href: "/earnings-news", group: "Navigate" },
 ];
 
-function recentTickers(): string[] {
+export function recentTickers(): string[] {
   try {
     const raw =
       localStorage.getItem("orbis-equity-recent-tickers") ||
@@ -87,8 +97,8 @@ export function CommandPalette() {
     const tickerItems: PaletteItem[] = recents.map((t) => ({
       id: `t-${t}`,
       label: t,
-      hint: "TICKER",
-      href: `/ticker/${t}`,
+      hint: "CHART",
+      href: chartHref(t),
       group: "Recent",
     }));
 
@@ -103,29 +113,17 @@ export function CommandPalette() {
     );
     const recentHits = tickerItems.filter((i) => i.label.includes(q));
     const looksLikeTicker = /^[A-Z0-9.\-]{1,12}$/.test(q);
-    const exactModuleHint = STATIC_ITEMS.some((i) => i.hint === q);
-    const direct: PaletteItem[] =
-      looksLikeTicker && !exactModuleHint
-        ? [
-            {
-              id: `go-${q}`,
-              label: `Open ${q}`,
-              hint: "GO",
-              href: `/ticker/${q}`,
-              group: "Ticker",
-            },
-          ]
-        : looksLikeTicker && exactModuleHint
-          ? [
-              {
-                id: `go-${q}`,
-                label: `Open ${q}`,
-                hint: "GO",
-                href: `/ticker/${q}`,
-                group: "Ticker",
-              },
-            ]
-          : [];
+    const direct: PaletteItem[] = looksLikeTicker
+      ? [
+          {
+            id: `go-${q}`,
+            label: `Chart ${q}`,
+            hint: "CHT",
+            href: chartHref(q),
+            group: "Ticker",
+          },
+        ]
+      : [];
 
     // Module hits first, then ticker open (if any), then recent
     const merged = [...moduleHits, ...direct, ...recentHits];
@@ -140,7 +138,7 @@ export function CommandPalette() {
   const go = useCallback(
     (item: PaletteItem) => {
       if (item.group === "Ticker" || item.group === "Recent") {
-        const t = item.href.split("/").pop();
+        const t = item.href.split("/").pop()?.split("?")[0];
         if (t) recordRecentTicker(t);
       }
       setOpen(false);

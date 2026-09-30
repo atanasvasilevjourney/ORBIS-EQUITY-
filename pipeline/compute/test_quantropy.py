@@ -1,7 +1,9 @@
 import unittest
 from datetime import date, datetime, timedelta, timezone
 
-from pipeline.compute.quantropy import _align_returns, _as_iso_date
+import numpy as np
+
+from pipeline.compute.quantropy import _align_returns, _as_iso_date, leave_one_out_market
 
 
 def _series(start: date, n: int, px0: float = 100.0) -> list[tuple[object, float]]:
@@ -64,6 +66,27 @@ class AlignReturnsTests(unittest.TestCase):
         symbols, rets = _align_returns({"AAA": a, "BBB": b}, min_obs=60, max_names=40)
         self.assertEqual(set(symbols), {"AAA", "BBB"})
         self.assertGreaterEqual(rets.shape[0], 60)
+
+    def test_zero_price_day_is_dropped_not_zero_filled(self):
+        start = date(2024, 1, 1)
+        a = _series(start, 80, 10)
+        b = _series(start, 80, 20)
+        a[40] = (a[40][0], 0.0)
+        symbols, rets = _align_returns({"AAA": a, "BBB": b}, min_obs=60, max_names=40)
+        self.assertEqual(set(symbols), {"AAA", "BBB"})
+        self.assertTrue(np.isfinite(rets).all())
+        self.assertLess(rets.shape[0], 79)
+
+
+class LeaveOneOutMarketTests(unittest.TestCase):
+    def test_name_is_excluded_from_its_own_benchmark(self):
+        common = np.full(40, 0.01)
+        shock = np.full(40, 0.05)
+        rets = np.column_stack([common + shock, common, common])
+        mkt0 = leave_one_out_market(rets, 0)
+        self.assertTrue(np.allclose(mkt0, common))
+        self.assertFalse(np.allclose(mkt0, rets.mean(axis=1)))
+        self.assertTrue(np.allclose(leave_one_out_market(rets, 1), (rets[:, 0] + rets[:, 2]) / 2))
 
 
 if __name__ == "__main__":

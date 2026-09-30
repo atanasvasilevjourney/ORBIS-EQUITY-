@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { TradingChart, type Candle, type ChartLevel } from "@/components/chart/TradingChart";
+import { chartHref, chartSourceNote } from "@/lib/chartDesk";
 
 type Idea = { id: number; side: string; entry: number; target: number; stop: number; rr: number; kind: string; label: string };
 type Level = { price: number; label: string; kind: string };
@@ -218,19 +219,22 @@ export default function BiasPage() {
               </div>
 
               <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] overflow-hidden">
-                <div className="px-3 py-1 text-[10px] font-terminal text-[var(--text-muted)] tracking-widest border-b border-[var(--border)]">
-                  {name.ticker} · Daily Bias · {chart?.interval ?? interval} · {chart?.source ?? "…"}
-                  {chart?.interval === "5m"
-                    ? overlayOk
-                      ? " · live Yahoo 5m, levels from EOD book"
-                      : " · live Yahoo 5m · EOD levels hidden (price disagree)"
-                    : ""}
+                <div className="px-3 py-1 text-[10px] font-terminal text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] flex items-center justify-between">
+                  <span>
+                    {name.ticker} · Daily Bias · {chart?.interval ?? interval} · {chart?.source ?? "…"}
+                    {chartSourceNote(chart?.interval ?? interval, chart?.source, { overlayOk, levels: true })}
+                  </span>
+                  <Link href={chartHref(name.ticker, { tf: interval })} className="text-[var(--accent-info)] hover:underline">
+                    OPEN CHART MODULE
+                  </Link>
                 </div>
-                <TradingChart
-                  candles={chart?.candles ?? []}
-                  sma={chart?.interval === "1d" ? chart?.sma20 : undefined}
-                  levels={levels}
-                />
+                <div className="h-[min(62dvh,560px)] min-h-[360px] overflow-hidden">
+                  <TradingChart
+                    candles={chart?.candles ?? []}
+                    sma={chart?.interval === "1d" ? chart?.sma20 : undefined}
+                    levels={levels}
+                  />
+                </div>
               </div>
 
               <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] p-3">
