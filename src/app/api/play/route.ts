@@ -3,6 +3,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { bookStale, cashClock, lastTradingSessionDate } from "@/lib/cashSession";
 import {
+  overnightBookCloses,
   overnightFromQuotes,
   overnightFromSpark,
   rankOvernightUps,
@@ -191,8 +192,8 @@ export async function GET() {
       source: "lse_ws" as const,
       names: liveQuotes.length,
     };
-    const prevClose: Record<string, number> = {};
-    for (let i = 0; i < prev.length; i++) prevClose[prev[i].symbol] = prev[i].close;
+    const expected = lastTradingSessionDate();
+    const prevClose = overnightBookCloses(asOf, expected, today, prev);
     const fromLive = overnightFromQuotes(liveQuotes, prevClose, names, { tape: tapeFromPhase(clock.phase) });
     let overnightSource: "lse" | "yahoo" | null = null;
     try {
@@ -249,7 +250,7 @@ export async function GET() {
     } catch (err) {
       console.warn("overnight / 5m tape failed", err);
     }
-    const stale = bookStale(asOf, lastTradingSessionDate());
+    const stale = bookStale(asOf, expected);
     const sessionLead = gainers[0];
     const overnightLead = overnight[0];
     const bits = [`${asOf} · ${book.length} names · ${gainers.length} up`];

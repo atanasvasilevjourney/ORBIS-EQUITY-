@@ -305,14 +305,45 @@ describe("GET /api/play", () => {
     const body = await res.json();
     expect(res.status).toBe(200);
     expect(body.overnight[0].ticker).toBe("SNSE");
-    expect(body.overnight[0].gapPct).toBeCloseTo(13.2 / 10 - 1, 6);
-    expect(body.overnight[0].prevClose).toBe(10);
+    expect(body.overnight[0].gapPct).toBeCloseTo(13.2 / 12 - 1, 6);
+    expect(body.overnight[0].prevClose).toBe(12);
     expect(body.overnight[0].source).toBe("lse_ws");
     expect(body.summary.overnightLead).toBe("SNSE");
     expect(body.summary.overnightSource).toBe("lse");
     expect(body.live.streaming).toBe(true);
     expect(body.headline).toContain("LSE last-print");
     expect(sparkMock.mock.calls.every((c) => c[1] !== "1d")).toBe(true);
+  });
+
+  it("gaps LSE last vs prior close when asOf leaked past the session cutoff", async () => {
+    lastCloseMock.mockReturnValue(PRIOR);
+    mockCreateServerClient.mockReturnValue(
+      createFilterMock({
+        prices_daily: PRICES,
+        universe_members: UNI,
+        quotes_last: [
+          {
+            symbol: "SNSE",
+            last: 13.2,
+            bid: 13.1,
+            ask: 13.3,
+            volume: 50_000,
+            ts: new Date().toISOString(),
+            source: "lse_ws",
+            replay: false,
+            updated_at: new Date().toISOString(),
+          },
+        ],
+      })
+    );
+    const { GET } = await import("../play/route");
+    const res = await GET();
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.overnight[0].ticker).toBe("SNSE");
+    expect(body.overnight[0].gapPct).toBeCloseTo(13.2 / 10 - 1, 6);
+    expect(body.overnight[0].prevClose).toBe(10);
+    expect(body.summary.overnightSource).toBe("lse");
   });
 
   it("flags a 100-bar close breakout and drops sub-$1 names", async () => {
