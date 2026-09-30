@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
 
-from pipeline.compute.quantropy import _align_returns, _as_iso_date
+from pipeline.compute.quantropy import _align_returns, _as_iso_date, leave_one_out_market
 
 
 def _series(start: date, n: int, px0: float = 100.0) -> list[tuple[object, float]]:
@@ -76,6 +76,17 @@ class AlignReturnsTests(unittest.TestCase):
         self.assertEqual(set(symbols), {"AAA", "BBB"})
         self.assertTrue(np.isfinite(rets).all())
         self.assertLess(rets.shape[0], 79)
+
+
+class LeaveOneOutMarketTests(unittest.TestCase):
+    def test_name_is_excluded_from_its_own_benchmark(self):
+        common = np.full(40, 0.01)
+        shock = np.full(40, 0.05)
+        rets = np.column_stack([common + shock, common, common])
+        mkt0 = leave_one_out_market(rets, 0)
+        self.assertTrue(np.allclose(mkt0, common))
+        self.assertFalse(np.allclose(mkt0, rets.mean(axis=1)))
+        self.assertTrue(np.allclose(leave_one_out_market(rets, 1), (rets[:, 0] + rets[:, 2]) / 2))
 
 
 if __name__ == "__main__":

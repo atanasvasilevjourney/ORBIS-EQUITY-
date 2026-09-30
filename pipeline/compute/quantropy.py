@@ -89,6 +89,13 @@ def capm_alpha_beta(r: np.ndarray, mkt: np.ndarray) -> tuple[float, float]:
     return float(coef[0] * PERIOD), float(coef[1])
 
 
+def leave_one_out_market(rets: np.ndarray, i: int) -> np.ndarray:
+    """Equal-weight book excluding name i so CAPM / IR are not self-included."""
+    if rets.ndim != 2 or rets.shape[1] <= 1:
+        return rets.mean(axis=1)
+    return np.delete(rets, i, axis=1).mean(axis=1)
+
+
 def altman_z(fund: dict) -> tuple[float | None, str | None]:
     """Public-firm Altman Z from snapshot fields.
 
@@ -293,7 +300,6 @@ def run() -> dict:
             logger.exception("quantropy_runs write skipped")
         return {"run_id": run_id, "names": 0, "headline": headline, "books": {}}
 
-    mkt = rets.mean(axis=1)
     mu = rets.mean(axis=0) * PERIOD
     vol = rets.std(axis=0, ddof=1) * np.sqrt(PERIOD)
     cov = np.cov(rets, rowvar=False) * PERIOD
@@ -340,6 +346,7 @@ def run() -> dict:
         ann_vol = float(vol[i])
         sharpe = (ann_ret - RF_ANNUAL) / ann_vol if ann_vol > 1e-12 else 0.0
         sortino = (ann_ret - RF_ANNUAL) / dvol if dvol > 1e-12 else 0.0
+        mkt = leave_one_out_market(rets, i)
         alpha, beta = capm_alpha_beta(r, mkt)
         active = r - mkt
         te = active.std(ddof=1) * np.sqrt(PERIOD)
