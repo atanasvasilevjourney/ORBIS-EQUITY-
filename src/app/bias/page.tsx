@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { TradingChart, type Candle, type ChartLevel } from "@/components/chart/TradingChart";
+import { chartHref, chartSourceNote } from "@/lib/chartDesk";
 
 type Idea = { id: number; side: string; entry: number; target: number; stop: number; rr: number; kind: string; label: string };
 type Level = { price: number; label: string; kind: string };
@@ -221,13 +222,9 @@ export default function BiasPage() {
                 <div className="px-3 py-1 text-[10px] font-terminal text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] flex items-center justify-between">
                   <span>
                     {name.ticker} · Daily Bias · {chart?.interval ?? interval} · {chart?.source ?? "…"}
-                    {chart?.interval === "5m"
-                      ? overlayOk
-                        ? " · live Yahoo 5m, levels from EOD book"
-                        : " · live Yahoo 5m · EOD levels hidden (price disagree)"
-                      : ""}
+                    {chartSourceNote(chart?.interval ?? interval, chart?.source, { overlayOk, levels: true })}
                   </span>
-                  <Link href={`/chart/${name.ticker}?tf=${interval}`} className="text-[var(--accent-info)] hover:underline">
+                  <Link href={chartHref(name.ticker, { tf: interval })} className="text-[var(--accent-info)] hover:underline">
                     OPEN CHART MODULE
                   </Link>
                 </div>

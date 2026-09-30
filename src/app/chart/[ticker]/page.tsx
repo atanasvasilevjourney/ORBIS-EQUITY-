@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { TradingChart, type Candle } from "@/components/chart/TradingChart";
-import { chartHref } from "@/lib/chartDesk";
+import { chartHref, chartSourceNote } from "@/lib/chartDesk";
 import { recordRecentTicker, recentTickers } from "@/components/command/CommandPalette";
 
 type ChartTf = "1d" | "5m";
@@ -15,6 +15,7 @@ type ChartPayload = {
   source?: string;
   candles?: Candle[];
   sma20?: (number | null)[];
+  fallbackFrom5m?: boolean;
 };
 
 type Quote = { last: number; bid: number | null; ask: number | null };
@@ -75,6 +76,7 @@ export default function ChartTickerPage() {
   const lastClose = candles.length ? candles[candles.length - 1].close : quote?.last ?? null;
   const source = payload?.source ?? "…";
   const interval = payload?.interval ?? tf;
+  const fallbackFrom5m = Boolean(payload?.fallbackFrom5m);
   const fromPlay = from === "play";
   const recents = useMemo(() => recentTickers().filter((t) => t !== ticker).slice(0, 6), [ticker, payload]);
 
@@ -96,8 +98,8 @@ export default function ChartTickerPage() {
         </div>
         <div className="text-[10px] font-terminal text-[var(--text-secondary)]">
           {ticker} · {interval} · {source}
-          {interval === "5m" && source !== "lse" ? " · Yahoo 5m" : ""}
-          {interval === "5m" && source === "lse" ? " · LSE vault" : ""}
+          {chartSourceNote(interval, source)}
+          {fallbackFrom5m ? " · 5m unavailable, showing daily" : ""}
         </div>
         <div className="flex gap-1">
           {(["1d", "5m"] as const).map((k) => (
@@ -145,6 +147,15 @@ export default function ChartTickerPage() {
         {err ? (
           <div className="h-full flex items-center justify-center text-xs font-terminal text-[var(--text-muted)]">
             {err}
+          </div>
+        ) : fallbackFrom5m ? (
+          <div className="h-full flex flex-col min-h-0">
+            <div className="shrink-0 px-3 py-1 text-[10px] font-terminal text-[var(--accent-warning)] border-b border-[var(--border)]">
+              5m tape empty — showing EOD / closed bars
+            </div>
+            <div className="flex-1 min-h-0">
+              <TradingChart candles={candles} sma={interval === "1d" ? payload?.sma20 : undefined} levels={[]} />
+            </div>
           </div>
         ) : (
           <TradingChart candles={candles} sma={interval === "1d" ? payload?.sma20 : undefined} levels={[]} />

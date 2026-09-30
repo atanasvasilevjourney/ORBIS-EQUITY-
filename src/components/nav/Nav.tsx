@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ThemeToggle } from "@/components/cards/ThemeToggle";
+import { recordRecentTicker } from "@/components/command/CommandPalette";
+import { chartHref } from "@/lib/chartDesk";
 
 const NAV_LINKS = [
   { href: "/screener", label: "SCREENER" },
@@ -33,7 +35,8 @@ export function Nav() {
     e.preventDefault();
     const ticker = search.trim().toUpperCase();
     if (ticker) {
-      router.push(`/chart/${ticker}`);
+      recordRecentTicker(ticker);
+      router.push(chartHref(ticker));
       setSearch("");
     }
   };
@@ -131,7 +134,7 @@ export function Nav() {
             </button>
           </form>
           {NAV_LINKS.map((l) => {
-            const isActive = pathname === l.href;
+            const isActive = pathname === l.href || pathname.startsWith(l.href + "/");
             return (
               <Link
                 key={l.href}

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { chartHref } from "@/lib/chartDesk";
 
 type PaletteItem = {
   id: string;
@@ -97,7 +98,7 @@ export function CommandPalette() {
       id: `t-${t}`,
       label: t,
       hint: "CHART",
-      href: `/chart/${t}`,
+      href: chartHref(t),
       group: "Recent",
     }));
 
@@ -118,7 +119,7 @@ export function CommandPalette() {
             id: `go-${q}`,
             label: `Chart ${q}`,
             hint: "CHT",
-            href: `/chart/${q}`,
+            href: chartHref(q),
             group: "Ticker",
           },
         ]

@@ -48,7 +48,6 @@ type DashData = {
   playOvernight: number;
   playBreakouts: number;
   playTape: string | null;
-  playLive: boolean;
   quantLite: boolean;
   rotateLite: boolean;
   cashStale: boolean;
@@ -126,7 +125,6 @@ export default function Home() {
           playOvernight: play?.summary?.nOvernight ?? 0,
           playBreakouts: play?.summary?.nBreakouts ?? 0,
           playTape: play?.summary?.overnightSource ?? null,
-          playLive: Boolean(play?.live?.streaming),
           quantLite: Boolean(quant?.lite),
           rotateLite: Boolean(rotate?.lite),
           cashStale: Boolean(perps?.stale),
@@ -387,7 +385,7 @@ export default function Home() {
           {
             href: "/play", title: "STOCKS IN PLAY", badge: "PLAY",
             subtitle: "Overnight gaps · 100-bar close breakouts", accent: "var(--accent-warning)",
-            source: d?.playLive ? "LSE LAST $" : d?.playTape === "lse" ? "LSE LAST $" : d?.playTape === "yahoo" ? "YAHOO DELAYED" : "PLAY",
+            source: d?.playTape === "lse" ? "LSE LAST $" : d?.playTape === "yahoo" ? "YAHOO DELAYED" : "PLAY",
             metrics: [
               { label: "AH/PRE", value: d?.playOvernight ? String(d.playOvernight) : "—", color: "var(--accent-warning)" },
               { label: "BRK 100", value: String(d?.playBreakouts ?? 0), color: "var(--accent-info)" },

@@ -49,7 +49,7 @@ export function DataHonestyBar() {
     tape == null
       ? "LSE …"
       : tape.streaming
-        ? `LSE WS TICKS${tape.names ? ` · ${tape.names} LAST $` : ""}`
+        ? `LSE LAST-PRINT${tape.names ? ` · ${tape.names} LAST $` : ""}`
         : tape.configured
           ? "LSE KEY SET — RUN python -m pipeline.ingest.lse_live"
           : "LSE: KEY MISSING — NOT STREAMING";

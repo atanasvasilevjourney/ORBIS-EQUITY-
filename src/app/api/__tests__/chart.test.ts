@@ -17,6 +17,7 @@ vi.mock("@/lib/lseLive", async () => {
 describe("GET /api/chart/[ticker]", () => {
   beforeEach(() => {
     vi.resetModules();
+    vi.unstubAllGlobals();
     mockCreateServerClient.mockReset();
     vaultMock.mockReset();
     vaultMock.mockResolvedValue([]);
@@ -63,5 +64,30 @@ describe("GET /api/chart/[ticker]", () => {
     expect(body.source).toBe("prices_daily");
     expect(body.interval).toBe("1d");
     expect(body.candles.length).toBe(2);
+  });
+
+  it("flags fallbackFrom5m when vault and Yahoo 5m are empty", async () => {
+    vaultMock.mockResolvedValue([]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, json: async () => ({}) }))
+    );
+    mockCreateServerClient.mockReturnValue(
+      createMockSupabase({
+        prices_daily: () => ({
+          data: [{ date: "2026-09-17", open: 1, high: 2, low: 1, close: 1.5, volume: 10 }],
+          error: null,
+        }),
+      })
+    );
+    const { GET } = await import("../chart/[ticker]/route");
+    const res = await GET(new NextRequest("http://localhost/api/chart/AAPL?interval=5m"), {
+      params: { ticker: "AAPL" },
+    });
+    const body = await res.json();
+    expect(body.interval).toBe("1d");
+    expect(body.source).toBe("prices_daily");
+    expect(body.fallbackFrom5m).toBe(true);
+    vi.unstubAllGlobals();
   });
 });

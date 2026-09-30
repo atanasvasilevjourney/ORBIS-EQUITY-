@@ -7,7 +7,7 @@ import { BiasChip } from "@/components/scoreboard/BiasChip";
 import { AgreementDots } from "@/components/scoreboard/AgreementDots";
 import { TradingChart, type Candle, type ChartLevel } from "@/components/chart/TradingChart";
 import { recordRecentTicker } from "@/components/command/CommandPalette";
-import { chartHref } from "@/lib/chartDesk";
+import { chartHref, chartSourceNote } from "@/lib/chartDesk";
 
 type TickerData = {
   radar: any;
@@ -435,11 +435,7 @@ export default function TickerPage() {
             <div className="px-3 py-1 text-[10px] font-terminal text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] flex items-center justify-between">
               <span>
                 {ticker} · Daily Bias · {chart?.interval ?? chartTf} · {chart?.source ?? "…"}
-                {chart?.interval === "5m"
-                  ? overlayOk
-                    ? " · live Yahoo 5m, levels from EOD book"
-                    : " · live Yahoo 5m · EOD levels hidden (price disagree)"
-                  : ""}
+                {chartSourceNote(chart?.interval ?? chartTf, chart?.source, { overlayOk, levels: true })}
               </span>
               <Link href={chartHref(ticker, { tf: chartTf })} className="text-[var(--accent-info)] hover:underline">
                 OPEN CHART MODULE

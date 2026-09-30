@@ -21,3 +21,22 @@ export function playScanTimeframe(scan: string): ChartTf {
   if (scan === "overnight" || scan === "breakout5m") return "5m";
   return "1d";
 }
+
+/** Honest tape line for CHART / BIAS / ticker strips. */
+export function chartSourceNote(
+  interval: string | undefined,
+  source: string | undefined,
+  opts?: { overlayOk?: boolean; levels?: boolean }
+): string {
+  const overlayOk = opts?.overlayOk ?? true;
+  const levels = opts?.levels ?? false;
+  const src = String(source || "").toLowerCase();
+  if (interval === "5m") {
+    const tape = src.startsWith("lse") ? "LSE vault 5m" : "Yahoo delayed 5m";
+    if (levels && !overlayOk) return ` · ${tape} · EOD levels hidden (price disagree)`;
+    if (levels) return ` · ${tape}, levels from EOD book`;
+    return ` · ${tape}`;
+  }
+  if (interval === "1d") return " · EOD / closed bars";
+  return "";
+}
