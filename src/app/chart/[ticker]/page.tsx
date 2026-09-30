@@ -96,11 +96,8 @@ export default function ChartTickerPage() {
         </div>
         <div className="text-[10px] font-terminal text-[var(--text-secondary)]">
           {ticker} · {interval} · {source}
-          {interval === "5m"
-            ? source === "lse"
-              ? " · LSE vault"
-              : " · Yahoo 5m"
-            : " · prices_daily"}
+          {interval === "5m" && source !== "lse" ? " · Yahoo 5m" : ""}
+          {interval === "5m" && source === "lse" ? " · LSE vault" : ""}
         </div>
         <div className="flex gap-1">
           {(["1d", "5m"] as const).map((k) => (
