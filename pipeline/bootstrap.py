@@ -94,7 +94,7 @@ def main():
 
     # ── Step 2: Prices ────────────────────────────────────────────
     logger.info("=== Step 2: Fetching prices via yfinance (last 400 days) ===")
-    from pipeline.clients.cash_eod import yfinance_window
+    from pipeline.clients.cash_eod import drop_open_session_rows, yfinance_window
 
     start_date, end_date = yfinance_window(lookback_days=400)
 
@@ -153,7 +153,8 @@ def main():
 
         time.sleep(1)  # rate limit
 
-    logger.info("Collected %d price rows, upserting...", len(all_price_rows))
+    all_price_rows = drop_open_session_rows(all_price_rows)
+    logger.info("Collected %d closed-session price rows, upserting...", len(all_price_rows))
     for i in range(0, len(all_price_rows), 500):
         batch = all_price_rows[i:i + 500]
         try:

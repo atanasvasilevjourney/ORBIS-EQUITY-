@@ -11,6 +11,7 @@ from pipeline.clients.cash_eod import (
     last_closed_cash_date,
     last_trading_session_date,
     leftover_members,
+    drop_open_session_rows,
     stooq_candidates,
     yahoo_ticker,
     yfinance_window,
@@ -105,7 +106,26 @@ class ClosedBarTests(unittest.TestCase):
             {"symbol": "BBB", "date": "2026-09-10"},
         ]
         leftover = leftover_members(members, rows, "2026-09-18")
-        self.assertEqual([m["symbol"] for m in leftover], ["BBB", "CCC"])
+        self.assertEqual([m["symbol"] for m in leftover], ["CCC", "BBB"])
+
+    def test_leftover_prefers_oldest_books_first(self):
+        members = [{"symbol": "NEW"}, {"symbol": "MID"}, {"symbol": "OLD"}]
+        rows = [
+            {"symbol": "MID", "date": "2026-09-12"},
+            {"symbol": "OLD", "date": "2026-09-01"},
+        ]
+        leftover = leftover_members(members, rows, "2026-09-18")
+        self.assertEqual([m["symbol"] for m in leftover], ["NEW", "OLD", "MID"])
+
+    def test_bootstrap_drops_in_progress_session_bar(self):
+        ny = __import__("zoneinfo").ZoneInfo("America/New_York")
+        now = datetime(2026, 9, 18, 10, 0, tzinfo=ny)
+        rows = [
+            {"symbol": "AAPL", "date": "2026-09-17", "close": 1},
+            {"symbol": "AAPL", "date": "2026-09-18", "close": 2},
+        ]
+        kept = drop_open_session_rows(rows, now=now)
+        self.assertEqual([r["date"] for r in kept], ["2026-09-17"])
 
 
 class _Resp:

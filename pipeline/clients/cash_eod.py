@@ -117,7 +117,10 @@ def leftover_members(
     rows: list[dict],
     cutoff: str,
 ) -> list[dict]:
-    """Names with no ingest rows, or whose newest bar is older than cutoff."""
+    """Names with no ingest rows, or whose newest bar is older than cutoff.
+
+    Oldest / missing books come first so a leftover cap patches the stalest tail.
+    """
     latest: dict[str, str] = {}
     for r in rows:
         sym = r.get("symbol")
@@ -136,7 +139,19 @@ def leftover_members(
         mx = latest.get(sym)
         if mx is None or mx < cutoff:
             out.append(m)
+    out.sort(key=lambda m: (latest.get(m.get("symbol") or "") or "", str(m.get("symbol") or "")))
     return out
+
+
+def drop_open_session_rows(rows: list[dict], *, now: datetime | None = None) -> list[dict]:
+    """Keep only bars on or before the last closed weekday cash session."""
+    cutoff = last_trading_session_date(now=now).isoformat()
+    kept: list[dict] = []
+    for r in rows:
+        day = str(r.get("date") or "")[:10]
+        if day and day <= cutoff:
+            kept.append(r)
+    return kept
 
 
 def yfinance_window(*, today: date | None = None, lookback_days: int = 10) -> tuple[date, date]:
