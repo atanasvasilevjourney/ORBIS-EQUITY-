@@ -71,7 +71,7 @@ type OrbWatch = {
 type ScanId = "overnight" | "breakout" | "breakout5m" | "gainers" | "losers" | "gappers" | "liquid" | "orb";
 
 const SCANS: { id: ScanId; label: string; hint: string }[] = [
-  { id: "overnight", label: "Overnight Gaps", hint: "LSE last vs prior close" },
+  { id: "overnight", label: "Overnight Gaps", hint: "LSE last vs closed session" },
   { id: "breakout", label: "Breakout 100D", hint: "close > HH(close,100)[1]" },
   { id: "breakout5m", label: "Breakout 100·5m", hint: "same logic on LSE vault 5m" },
   { id: "gainers", label: "Session Gainers", hint: "Close vs prior" },
@@ -517,7 +517,7 @@ export default function PlayPage() {
                       {scan === "orb"
                         ? "No ORB watch this session. Run: python -m pipeline.compute.opening_range"
                         : scan === "overnight"
-                          ? "No LSE last-prints vs prior close yet. Run python -m pipeline.ingest.lse_live. Yahoo spark is fallback only when the websocket is idle."
+                          ? "No LSE last-prints vs the closed session yet. Run python -m pipeline.ingest.lse_live. Yahoo spark is fallback only when the websocket is idle."
                           : isBrk
                           ? "No close above the prior 100-bar high with last ≥ $1 and volume ≥ 1M. Sub-$1 runners (TRUG) are excluded. LSE vault 5m, not Thinkorswim."
                           : "No names on this scan. Need two daily prints in prices_daily."}
