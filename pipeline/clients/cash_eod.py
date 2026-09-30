@@ -143,6 +143,26 @@ def leftover_members(
     return out
 
 
+def rank_eod_queue(
+    members: list[dict],
+    rows: list[dict],
+    cutoff: str,
+    limit: int | None = None,
+) -> list[dict]:
+    """Leftover (oldest / missing first), then the rest alphabetically.
+
+    A leftover cap therefore patches the stalest tail instead of AAPL… first.
+    """
+    leftover = leftover_members(members, rows, cutoff)
+    leftover_syms = {m.get("symbol") for m in leftover}
+    rest = [m for m in members if m.get("symbol") and m.get("symbol") not in leftover_syms]
+    rest.sort(key=lambda m: str(m.get("symbol") or ""))
+    ordered = leftover + rest
+    if limit and limit > 0:
+        return ordered[:limit]
+    return ordered
+
+
 def drop_open_session_rows(rows: list[dict], *, now: datetime | None = None) -> list[dict]:
     """Keep only bars on or before the last closed weekday cash session."""
     cutoff = last_trading_session_date(now=now).isoformat()

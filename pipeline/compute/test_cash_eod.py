@@ -11,6 +11,7 @@ from pipeline.clients.cash_eod import (
     last_closed_cash_date,
     last_trading_session_date,
     leftover_members,
+    rank_eod_queue,
     drop_open_session_rows,
     stooq_candidates,
     yahoo_ticker,
@@ -116,6 +117,15 @@ class ClosedBarTests(unittest.TestCase):
         ]
         leftover = leftover_members(members, rows, "2026-09-18")
         self.assertEqual([m["symbol"] for m in leftover], ["NEW", "OLD", "MID"])
+
+    def test_rank_eod_queue_patches_leftover_before_fresh(self):
+        members = [{"symbol": "AAPL"}, {"symbol": "ZZZ"}, {"symbol": "MID"}]
+        rows = [
+            {"symbol": "AAPL", "date": "2026-09-18"},
+            {"symbol": "MID", "date": "2026-09-01"},
+        ]
+        queued = rank_eod_queue(members, rows, "2026-09-18", limit=2)
+        self.assertEqual([m["symbol"] for m in queued], ["ZZZ", "MID"])
 
     def test_bootstrap_drops_in_progress_session_bar(self):
         ny = __import__("zoneinfo").ZoneInfo("America/New_York")
