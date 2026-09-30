@@ -8,6 +8,7 @@ import { ThemeToggle } from "@/components/cards/ThemeToggle";
 const NAV_LINKS = [
   { href: "/screener", label: "SCREENER" },
   { href: "/play", label: "PLAY" },
+  { href: "/chart", label: "CHART" },
   { href: "/loop", label: "LOOP" },
   { href: "/orb", label: "ORB" },
   { href: "/skew", label: "SKEW" },
@@ -32,7 +33,7 @@ export function Nav() {
     e.preventDefault();
     const ticker = search.trim().toUpperCase();
     if (ticker) {
-      router.push(`/ticker/${ticker}`);
+      router.push(`/chart/${ticker}`);
       setSearch("");
     }
   };

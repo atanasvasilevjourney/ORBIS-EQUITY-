@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { OvernightMover } from "@/lib/overnightGaps";
 import type { BreakoutHit } from "@/lib/breakoutScan";
-import { TradingChart, type Candle, type ChartLevel } from "@/components/chart/TradingChart";
 import { parseDesk } from "@/lib/deskPayload";
 import { recordRecentTicker } from "@/components/command/CommandPalette";
 import type { SessionMover } from "@/lib/sessionMovers";
 import { cashClock, overnightWatchStep, type CashClock } from "@/lib/cashSession";
+import { chartHref, playScanTimeframe } from "@/lib/chartDesk";
 
 type PlaySummary = {
   asOfDate: string;
@@ -68,15 +69,6 @@ type OrbWatch = {
 };
 
 type ScanId = "overnight" | "breakout" | "breakout5m" | "gainers" | "losers" | "gappers" | "liquid" | "orb";
-
-type NewsItem = {
-  id: string;
-  ticker: string;
-  publishedAt: string | null;
-  source: string | null;
-  headline: string | null;
-  url: string | null;
-};
 
 const SCANS: { id: ScanId; label: string; hint: string }[] = [
   { id: "overnight", label: "Overnight Gaps", hint: "LSE last vs prior close" },
@@ -168,6 +160,7 @@ function rankClientBreakouts(rows: BreakoutHit[], sort: "volume" | "rsi"): Break
 }
 
 export default function PlayPage() {
+  const router = useRouter();
   const [d, setD] = useState<PlayData | null>(null);
   const [orb, setOrb] = useState<OrbWatch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -176,14 +169,6 @@ export default function PlayPage() {
   const [sel, setSel] = useState("");
   const [filter, setFilter] = useState("");
   const [brkSort, setBrkSort] = useState<"volume" | "rsi">("volume");
-  const [chartTf, setChartTf] = useState<"1d" | "5m">(() => (cashClock().watchOvernight ? "5m" : "1d"));
-  const [chart, setChart] = useState<{
-    candles: Candle[];
-    sma20?: (number | null)[];
-    source: string;
-    interval: string;
-  } | null>(null);
-  const [news, setNews] = useState<NewsItem[]>([]);
   const [liveQuotes, setLiveQuotes] = useState<Record<string, LiveQuote>>({});
 
   useEffect(() => {
@@ -313,44 +298,11 @@ export default function PlayPage() {
 
   const selected = shown.find((r) => r.ticker === sel) ?? shown[0] ?? null;
 
-  useEffect(() => {
-    if (!selected?.ticker) {
-      setChart(null);
-      setNews([]);
-      return;
-    }
-    recordRecentTicker(selected.ticker);
-    setChart(null);
-    const ac = new AbortController();
-    fetch(`/api/chart/${encodeURIComponent(selected.ticker)}?interval=${chartTf}`, {
-      signal: ac.signal,
-    })
-      .then(async (r) => {
-        if (!r.ok) throw new Error("chart");
-        return r.json();
-      })
-      .then((x) => setChart(x))
-      .catch((err) => {
-        if (err?.name === "AbortError") return;
-        setChart(null);
-      });
-    fetch(`/api/earnings-news?ticker=${encodeURIComponent(selected.ticker)}&days=30&limit=20`, {
-      signal: ac.signal,
-    })
-      .then((r) => r.json())
-      .then((x) => setNews(Array.isArray(x?.news) ? x.news : []))
-      .catch((err) => {
-        if (err?.name === "AbortError") return;
-        setNews([]);
-      });
-    return () => ac.abort();
-  }, [selected?.ticker, chartTf]);
-
-  useEffect(() => {
-    if (scan === "overnight") setChartTf("5m");
-    if (scan === "breakout") setChartTf("1d");
-    if (scan === "breakout5m") setChartTf("5m");
-  }, [scan]);
+  function openChart(ticker: string) {
+    if (!ticker) return;
+    recordRecentTicker(ticker);
+    router.push(chartHref(ticker, { tf: playScanTimeframe(scan), from: "play" }));
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -362,8 +314,11 @@ export default function PlayPage() {
         e.preventDefault();
         const next = SCANS[idx - 1];
         setScan(next.id);
-        if (next.id === "overnight" || next.id === "breakout5m") setChartTf("5m");
-        if (next.id === "breakout") setChartTf("1d");
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (sel) openChart(sel);
         return;
       }
       if (e.key === "j" || e.key === "J" || e.key === "ArrowDown") {
@@ -384,7 +339,7 @@ export default function PlayPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [shown, sel]);
+  }, [shown, sel, scan, router]);
 
   const counts: Record<ScanId, number> = {
     overnight: d?.overnight?.length ?? 0,
@@ -402,30 +357,16 @@ export default function PlayPage() {
   const step = overnightWatchStep(clock);
   const n4 = (d?.overnight ?? []).filter((r) => r.orbEligible).length;
   const isBrk = scan === "breakout" || scan === "breakout5m";
-  const brkSel = selected && "priorHigh" in selected ? (selected as BreakoutHit) : null;
-  const liveSel = selected ? liveQuotes[selected.ticker] : undefined;
-  const extraLive =
-    scan === "overnight" && liveSel
-      ? [
-          ["BID", fmtPx(liveSel.bid)],
-          ["ASK", fmtPx(liveSel.ask)],
-        ]
-      : [];
-  const metricCols = (isBrk && brkSel ? 7 : 5) + extraLive.length;
-  const chartLevels: ChartLevel[] =
-    brkSel != null && Number.isFinite(brkSel.priorHigh)
-      ? [{ price: brkSel.priorHigh, title: `HH ${brkSel.lookback}`, color: "var(--accent-info)" }]
-      : [];
 
   return (
-    <div className="flex flex-col min-h-[560px] lg:h-[calc(100vh-72px)]">
+    <div className="flex flex-col h-full overflow-hidden">
       <div className="shrink-0 px-3 py-2 border-b border-[var(--border)] flex flex-wrap items-center gap-x-4 gap-y-1">
         <div>
           <h1 className="text-sm font-terminal font-bold tracking-wider" style={{ color: "var(--accent-warning)" }}>
             STOCKS IN PLAY
           </h1>
           <p className="text-[10px] text-[var(--text-muted)] font-terminal">
-            Overnight gaps = LSE last-print vs prior close · 5m = vault then Yahoo · not TOS Level-1
+            Click a ticker (or Enter) to open CHART · j/k moves the row · not TOS Level-1
           </p>
         </div>
         <div className="text-[10px] font-terminal text-[var(--text-secondary)]">
@@ -460,7 +401,7 @@ export default function PlayPage() {
       <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
         <aside className="lg:w-48 shrink-0 border-b lg:border-b-0 lg:border-r border-[var(--border)] bg-[var(--surface)] overflow-y-auto">
           <div className="px-3 py-2 text-[10px] font-terminal tracking-widest text-[var(--text-muted)]">
-            SCANS · 1–8 · J/K ROW
+            SCANS · 1–8 · J/K ROW · ENTER CHART
           </div>
           {SCANS.map((s) => {
             const active = scan === s.id;
@@ -468,11 +409,7 @@ export default function PlayPage() {
               <button
                 key={s.id}
                 type="button"
-                onClick={() => {
-                  setScan(s.id);
-                  if (s.id === "overnight" || s.id === "breakout5m") setChartTf("5m");
-                  if (s.id === "breakout") setChartTf("1d");
-                }}
+                onClick={() => setScan(s.id)}
                 className={`w-full text-left px-3 py-2 border-l-2 ${
                   active
                     ? "bg-[var(--badge-bg)] border-[var(--accent-warning)]"
@@ -515,7 +452,7 @@ export default function PlayPage() {
           </div>
         </aside>
 
-        <section className="flex-1 min-w-0 flex flex-col min-h-[320px] lg:min-h-0 border-b lg:border-b-0 lg:border-r border-[var(--border)]">
+        <section className="flex-1 min-w-0 flex flex-col min-h-0">
           <div className="shrink-0 px-3 py-1.5 flex items-center gap-2 border-b border-[var(--border)] bg-[var(--surface-alt)]">
             <span className="text-[10px] font-terminal tracking-widest text-[var(--text-muted)]">
               {SCANS.find((s) => s.id === scan)?.label.toUpperCase()} · {shown.length} RESULTS
@@ -597,18 +534,19 @@ export default function PlayPage() {
                         className={`border-b border-[var(--border)] cursor-pointer ${
                           active ? "bg-[var(--badge-bg)]" : "hover:bg-[var(--surface-alt)]"
                         }`}
-                        onClick={() => setSel(r.ticker)}
+                        onClick={() => {
+                          setSel(r.ticker);
+                          openChart(r.ticker);
+                        }}
                       >
                         <td className="px-2 py-1.5 text-right text-[var(--text-muted)]">{i + 1}</td>
                         <td className="px-2 py-1.5">
-                          <Link
-                            href={`/ticker/${r.ticker}`}
-                            className="font-bold hover:text-[var(--accent-info)]"
+                          <span
+                            className="font-bold"
                             style={{ color: active ? "var(--accent-warning)" : undefined }}
-                            onClick={(e) => e.stopPropagation()}
                           >
                             {r.ticker}
-                          </Link>
+                          </span>
                           {(r.companyName || (scan === "overnight" && overnight.orbEligible)) ? (
                             <div className="text-[10px] text-[var(--text-muted)] truncate max-w-[160px]">
                               {r.companyName}
@@ -654,121 +592,6 @@ export default function PlayPage() {
             </table>
           </div>
         </section>
-
-        <aside className="lg:w-[440px] xl:w-[500px] shrink-0 flex flex-col min-h-[420px] lg:min-h-0 bg-[var(--card-bg)]">
-          {selected ? (
-            <>
-              <div className="shrink-0 px-3 py-2 border-b border-[var(--border)]">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="text-lg font-terminal font-bold">{selected.ticker}</div>
-                    <div className="text-[10px] text-[var(--text-muted)] truncate max-w-[240px]">
-                      {selected.companyName || "—"}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-lg font-terminal font-bold">{fmtPx(selected.last)}</div>
-                    <div className="text-[10px] font-terminal" style={{ color: tone(selected.chgPct) }}>
-                      {fmtPct(selected.chgPct)} · {fmtAbs(selected.chgAbs)}
-                    </div>
-                  </div>
-                </div>
-                <div className={`mt-2 grid gap-1 text-center`} style={{ gridTemplateColumns: `repeat(${metricCols}, minmax(0, 1fr))` }}>
-                  {[
-                    ["OPEN", fmtPx(selected.open)],
-                    ["HIGH", fmtPx(selected.high)],
-                    ["LOW", fmtPx(selected.low)],
-                    ["GAP", fmtPct(selected.gapPct)],
-                    ["VOL", fmtVol(selected.volume)],
-                    ...extraLive,
-                    ...(isBrk && brkSel
-                      ? [
-                          ["RSI", brkSel.rsi == null ? "—" : brkSel.rsi.toFixed(0)],
-                          ["HH100", fmtPx(brkSel.priorHigh)],
-                        ]
-                      : []),
-                  ].map(([k, v]) => (
-                    <div key={k} className="rounded border border-[var(--border)] px-1 py-1">
-                      <div className="text-[9px] font-terminal text-[var(--text-muted)] tracking-widest">{k}</div>
-                      <div className="text-[10px] font-terminal">{v}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="shrink-0 flex items-center justify-between px-3 py-1 border-b border-[var(--border)]">
-                <span className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">
-                  {selected.ticker} · {chart?.interval ?? chartTf} · {chart?.source ?? "…"}
-                  {chart?.interval === "5m"
-                    ? chart?.source === "lse"
-                      ? " · LSE vault"
-                      : " · Yahoo fallback"
-                    : " · prices_daily"}
-                </span>
-                <div className="flex gap-1">
-                  {(["1d", "5m"] as const).map((tf) => (
-                    <button
-                      key={tf}
-                      type="button"
-                      onClick={() => setChartTf(tf)}
-                      className={`px-2 py-0.5 text-[10px] font-terminal rounded border ${
-                        chartTf === tf
-                          ? "border-[var(--accent-info)] text-[var(--accent-info)] bg-[var(--badge-bg)]"
-                          : "border-[var(--border)] text-[var(--text-muted)]"
-                      }`}
-                    >
-                      {tf.toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="shrink-0">
-                <TradingChart
-                  candles={chart?.candles ?? []}
-                  sma={chart?.interval === "1d" ? chart?.sma20 : undefined}
-                  levels={chartLevels}
-                  height={260}
-                />
-              </div>
-              <div className="flex-1 min-h-0 overflow-auto border-t border-[var(--border)]">
-                <div className="px-3 py-1.5 text-[10px] font-terminal tracking-widest text-[var(--text-muted)] border-b border-[var(--border)]">
-                  NEWS · {selected.ticker}
-                </div>
-                {!news.length ? (
-                  <p className="px-3 py-4 text-[10px] font-terminal text-[var(--text-muted)]">
-                    No stored headlines for this ticker.
-                  </p>
-                ) : (
-                  <ul>
-                    {news.map((n) => (
-                      <li key={n.id} className="px-3 py-2 border-b border-[var(--border)]">
-                        <div className="text-[9px] font-terminal text-[var(--text-muted)]">
-                          {n.publishedAt ? String(n.publishedAt).replace("T", " ").slice(0, 16) : "—"}
-                          {n.source ? ` · ${n.source}` : ""}
-                        </div>
-                        {n.url ? (
-                          <a
-                            href={n.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-[11px] text-[var(--text-secondary)] hover:text-[var(--accent-info)]"
-                          >
-                            {n.headline ?? "Headline"}
-                          </a>
-                        ) : (
-                          <div className="text-[11px] text-[var(--text-secondary)]">{n.headline ?? "Headline"}</div>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-xs font-terminal text-[var(--text-muted)] px-4 text-center">
-              Select a name to load the daily chart and news.
-            </div>
-          )}
-        </aside>
       </div>
     </div>
   );

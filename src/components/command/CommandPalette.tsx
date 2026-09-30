@@ -15,6 +15,7 @@ const STATIC_ITEMS: PaletteItem[] = [
   { id: "home", label: "Home Cockpit", hint: "HOME", href: "/", group: "Navigate" },
   { id: "screener", label: "Swing Screener", hint: "SCR", href: "/screener", group: "Navigate" },
   { id: "play", label: "Stocks in Play", hint: "PLA", href: "/play", group: "Navigate" },
+  { id: "chart", label: "Chart", hint: "CHT", href: "/chart", group: "Navigate" },
   { id: "loop", label: "Loop Book", hint: "LOP", href: "/loop", group: "Navigate" },
   { id: "orb", label: "Opening Range Breakout", hint: "ORB", href: "/orb", group: "Navigate" },
   { id: "skew", label: "Skew Map", hint: "SKW", href: "/skew", group: "Navigate" },
@@ -29,7 +30,7 @@ const STATIC_ITEMS: PaletteItem[] = [
   { id: "earnings", label: "Earnings & News", hint: "ERN", href: "/earnings-news", group: "Navigate" },
 ];
 
-function recentTickers(): string[] {
+export function recentTickers(): string[] {
   try {
     const raw =
       localStorage.getItem("orbis-equity-recent-tickers") ||
@@ -95,8 +96,8 @@ export function CommandPalette() {
     const tickerItems: PaletteItem[] = recents.map((t) => ({
       id: `t-${t}`,
       label: t,
-      hint: "TICKER",
-      href: `/ticker/${t}`,
+      hint: "CHART",
+      href: `/chart/${t}`,
       group: "Recent",
     }));
 
@@ -111,29 +112,17 @@ export function CommandPalette() {
     );
     const recentHits = tickerItems.filter((i) => i.label.includes(q));
     const looksLikeTicker = /^[A-Z0-9.\-]{1,12}$/.test(q);
-    const exactModuleHint = STATIC_ITEMS.some((i) => i.hint === q);
-    const direct: PaletteItem[] =
-      looksLikeTicker && !exactModuleHint
-        ? [
-            {
-              id: `go-${q}`,
-              label: `Open ${q}`,
-              hint: "GO",
-              href: `/ticker/${q}`,
-              group: "Ticker",
-            },
-          ]
-        : looksLikeTicker && exactModuleHint
-          ? [
-              {
-                id: `go-${q}`,
-                label: `Open ${q}`,
-                hint: "GO",
-                href: `/ticker/${q}`,
-                group: "Ticker",
-              },
-            ]
-          : [];
+    const direct: PaletteItem[] = looksLikeTicker
+      ? [
+          {
+            id: `go-${q}`,
+            label: `Chart ${q}`,
+            hint: "CHT",
+            href: `/chart/${q}`,
+            group: "Ticker",
+          },
+        ]
+      : [];
 
     // Module hits first, then ticker open (if any), then recent
     const merged = [...moduleHits, ...direct, ...recentHits];
@@ -148,7 +137,7 @@ export function CommandPalette() {
   const go = useCallback(
     (item: PaletteItem) => {
       if (item.group === "Ticker" || item.group === "Recent") {
-        const t = item.href.split("/").pop();
+        const t = item.href.split("/").pop()?.split("?")[0];
         if (t) recordRecentTicker(t);
       }
       setOpen(false);
