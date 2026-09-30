@@ -19,7 +19,6 @@ const NAV_LINKS = [
   { href: "/fundamentals", label: "FUNDAMENTALS" },
   { href: "/health", label: "HEALTH" },
   { href: "/pharma", label: "PHARMA" },
-  { href: "/perps", label: "PERPS" },
   { href: "/earnings-news", label: "EARNINGS" },
 ];
 

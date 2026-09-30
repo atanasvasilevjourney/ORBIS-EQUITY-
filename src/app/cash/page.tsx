@@ -187,7 +187,7 @@ export default function CashPage() {
         <p>
           <span style={{ color: "var(--accent-info)" }}>CASH:</span>{" "}
           Same TEMA 9/99/199 swing and Carver EWMAC as before, sized on the actual stock close
-          from the cash EOD ingest (Yahoo chart API, Stooq fallback — QMIE-shaped, not perp klines).
+          from the cash EOD ingest (Yahoo chart API, Stooq fallback — closed daily bars, not crypto klines).
           A slot is shares × cash price, capped at the allocated sleeve cash. Longs are paper long stock.
           Shorts are paper shorts of the listed name — no borrow / locate model. Isolated from LOOP / ORB / BIAS / ROTATE.
         </p>

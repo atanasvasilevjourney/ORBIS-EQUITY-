@@ -22,7 +22,7 @@ const STATIC_ITEMS: PaletteItem[] = [
   { id: "bias", label: "Daily Bias", hint: "BIA", href: "/bias", group: "Navigate" },
   { id: "cash", label: "TEMA + Carver Cash", hint: "CAS", href: "/cash", group: "Navigate" },
   { id: "rotate", label: "Beta Rotation", hint: "ROT", href: "/rotate", group: "Navigate" },
-  { id: "quantropy", label: "Quantropy", hint: "QUA", href: "/quantropy", group: "Navigate" },
+  { id: "quantropy", label: "Quant", hint: "QUA", href: "/quantropy", group: "Navigate" },
   { id: "fundamentals", label: "Fundamentals", hint: "FA", href: "/fundamentals", group: "Navigate" },
   { id: "health", label: "Health Catalyst", hint: "HLT", href: "/health", group: "Navigate" },
   { id: "pharma", label: "Pharma Pipeline", hint: "PHAR", href: "/pharma", group: "Navigate" },
