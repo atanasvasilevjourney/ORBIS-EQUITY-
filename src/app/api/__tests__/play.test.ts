@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockCreateServerClient = vi.fn();
 const sparkMock = vi.hoisted(() => vi.fn(async (_syms?: string[], _range?: string) => [] as unknown[]));
 const vaultMock = vi.hoisted(() => vi.fn(async (_ticker?: string) => [] as { open: number; high: number; low: number; close: number }[]));
+const lastCloseMock = vi.hoisted(() => vi.fn(() => "2026-09-16"));
 
 vi.mock("@/lib/supabase/server", () => ({
   createServerClient: () => mockCreateServerClient(),
@@ -11,6 +12,14 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/yahooSpark", () => ({
   fetchYahooSpark: sparkMock,
 }));
+
+vi.mock("@/lib/cashSession", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/cashSession")>("@/lib/cashSession");
+  return {
+    ...actual,
+    lastTradingSessionDate: () => lastCloseMock(),
+  };
+});
 
 vi.mock("@/lib/lseLive", async () => {
   const actual = await vi.importActual<typeof import("@/lib/lseLive")>("@/lib/lseLive");
@@ -193,6 +202,8 @@ describe("GET /api/play", () => {
     sparkMock.mockResolvedValue([]);
     vaultMock.mockReset();
     vaultMock.mockResolvedValue([]);
+    lastCloseMock.mockReset();
+    lastCloseMock.mockReturnValue(AS_OF);
   });
 
   it("ranks last-session gainers from two daily prints", async () => {
@@ -294,7 +305,8 @@ describe("GET /api/play", () => {
     const body = await res.json();
     expect(res.status).toBe(200);
     expect(body.overnight[0].ticker).toBe("SNSE");
-    expect(body.overnight[0].gapPct).toBeCloseTo(13.2 / 12 - 1, 6);
+    expect(body.overnight[0].gapPct).toBeCloseTo(13.2 / 10 - 1, 6);
+    expect(body.overnight[0].prevClose).toBe(10);
     expect(body.overnight[0].source).toBe("lse_ws");
     expect(body.summary.overnightLead).toBe("SNSE");
     expect(body.summary.overnightSource).toBe("lse");
@@ -355,6 +367,54 @@ describe("GET /api/play", () => {
     expect(body.breakouts5m[0].tf).toBe("5m");
     expect(body.breakouts5m[0].priorHigh).toBe(109);
     expect(vaultMock).toHaveBeenCalled();
+  });
+
+  it("marks EOD stale when the book is behind the last weekday cash close", async () => {
+    lastCloseMock.mockReturnValue("2026-09-17");
+    mockCreateServerClient.mockReturnValue(
+      createFilterMock({
+        prices_daily: PRICES,
+        universe_members: UNI,
+      })
+    );
+    const { GET } = await import("../play/route");
+    const res = await GET();
+    const body = await res.json();
+    expect(body.stale).toBe(true);
+    expect(body.summary.asOfDate).toBe(AS_OF);
+  });
+
+  it("ignores stale or replay LSE prints for overnight gaps", async () => {
+    mockCreateServerClient.mockReturnValue(
+      createFilterMock({
+        prices_daily: PRICES,
+        universe_members: UNI,
+        quotes_last: [
+          {
+            symbol: "SNSE",
+            last: 20,
+            ts: "2026-09-01T12:00:00Z",
+            source: "lse_ws",
+            replay: false,
+            updated_at: "2026-09-01T12:00:00Z",
+          },
+          {
+            symbol: "GAP",
+            last: 20,
+            ts: new Date().toISOString(),
+            source: "lse_ws",
+            replay: true,
+            updated_at: new Date().toISOString(),
+          },
+        ],
+      })
+    );
+    const { GET } = await import("../play/route");
+    const res = await GET();
+    const body = await res.json();
+    expect(body.live.streaming).toBe(false);
+    expect(body.live.names).toBe(0);
+    expect(body.summary.overnightSource).not.toBe("lse");
   });
 
   it("returns an empty desk when prices_daily has no dates", async () => {

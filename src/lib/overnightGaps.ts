@@ -148,7 +148,7 @@ export function overnightFromQuotes(
     const ticker = String(q?.symbol || "").trim().toUpperCase();
     const last = Number(q?.last);
     const prevClose = prevCloses[ticker];
-    if (!ticker || !(last > 0) || !(prevClose > 0)) continue;
+    if (!ticker || q.replay || !(last > 0) || !(prevClose > 0)) continue;
     const bid = q.bid == null ? null : Number(q.bid);
     const ask = q.ask == null ? null : Number(q.ask);
     const vol = q.volume == null ? null : Number(q.volume);

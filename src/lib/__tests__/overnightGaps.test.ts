@@ -81,4 +81,13 @@ describe("overnightFromQuotes", () => {
   it("drops prints without a prior close", () => {
     expect(overnightFromQuotes([{ symbol: "X", last: 10 }], {})).toEqual([]);
   });
+
+  it("drops replay prints so they cannot rank overnight", () => {
+    expect(
+      overnightFromQuotes(
+        [{ symbol: "AAPL", last: 400, replay: true, ts: "2026-09-18T12:45:00Z" }],
+        { AAPL: 300 }
+      )
+    ).toEqual([]);
+  });
 });

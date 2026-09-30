@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
-import { lastTradingSessionDate } from "@/lib/cashSession";
+import { bookStale, lastTradingSessionDate } from "@/lib/cashSession";
 import { quoteIsFresh } from "@/lib/lseLive";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type RunLite = { asof_date?: string | null; computed_at?: string | null; names?: number | null; headline?: string | null };
-
-function bookStale(asOf: string | null | undefined, expected: string): boolean {
-  if (!asOf) return true;
-  if (asOf < expected) return true;
-  return (Date.now() - new Date(asOf).getTime()) / 86400000 > 3;
-}
 
 async function latestRun(sb: ReturnType<typeof createServerClient>, table: string): Promise<RunLite | null> {
   const { data } = await sb

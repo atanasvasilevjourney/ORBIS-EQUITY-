@@ -437,7 +437,7 @@ export default function PlayPage() {
           ) : null}
           {d?.live?.streaming ? (
             <span className="ml-2 font-bold" style={{ color: "var(--accent-bull)" }}>
-              LIVE LSE
+              LSE LAST-PRINT
             </span>
           ) : d?.live?.configured ? (
             <span className="ml-2" style={{ color: "var(--accent-warning)" }}>

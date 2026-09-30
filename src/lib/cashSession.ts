@@ -108,6 +108,13 @@ export function lastTradingSessionDate(nowMs = Date.now()): string {
   return dt.toISOString().slice(0, 10);
 }
 
+/** True when the EOD book is behind the last weekday cash close or older than 3 days. */
+export function bookStale(asOf: string | null | undefined, expected = lastTradingSessionDate()): boolean {
+  if (!asOf) return true;
+  if (asOf < expected) return true;
+  return (Date.now() - new Date(`${asOf}T00:00:00Z`).getTime()) / 86_400_000 > 3;
+}
+
 export function overnightWatchStep(clock: CashClock): number {
   if (clock.phase === "WEEKEND" || clock.phase === "CLOSED") return 0;
   if (clock.phase === "OVERNIGHT" || (clock.phase === "PREMARKET" && clock.minutes < 9 * 60 + 25)) return 1;
