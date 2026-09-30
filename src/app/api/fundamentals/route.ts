@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
     const minComposite = parseInt(sp.get("min_composite") ?? "0", 10);
     const maxPE = parseFloat(sp.get("max_pe") ?? "0");
     const minROE = parseFloat(sp.get("min_roe") ?? "0");
+    const verdict = sp.get("verdict"); // STRONG | ATTRACTIVE | ...
     const rawSort = sp.get("sort") ?? "composite_factor_score";
     const sortBy = ALLOWED_SORTS.has(rawSort) ? rawSort : "composite_factor_score";
     const sortDir = sp.get("dir") === "asc";
@@ -68,6 +69,8 @@ export async function GET(req: NextRequest) {
       sector_quality_pctile: number | null;
       accruals_ratio: number | null;
       interest_coverage: number | null;
+      fundamental_verdict: string | null;
+      fundamental_summary: string | null;
     };
 
     type UniverseRow = { symbol: string; company_name: string | null; sector: string | null; industry: string | null; country: string | null; exchange: string | null; tier: string | null };
@@ -86,7 +89,8 @@ export async function GET(req: NextRequest) {
         value_score, quality_score, growth_score,
         earnings_quality_score, leverage_score, composite_factor_score,
         sector_value_pctile, sector_quality_pctile,
-        accruals_ratio, interest_coverage
+        accruals_ratio, interest_coverage,
+        fundamental_verdict, fundamental_summary
       `),
       fetchAll<UniverseRow>(sb, "universe_members", "symbol, company_name, sector, industry, country, exchange, tier", (q) =>
         q.eq("is_active", true)
@@ -104,6 +108,7 @@ export async function GET(req: NextRequest) {
     if (maxPE > 0) filtered = filtered.filter((r) => r.pe_ratio != null && r.pe_ratio > 0 && r.pe_ratio <= maxPE);
     if (minROE > 0) filtered = filtered.filter((r) => (r.roe ?? 0) >= minROE);
     if (sector) filtered = filtered.filter((r) => uniMap.get(r.symbol)?.sector === sector);
+    if (verdict) filtered = filtered.filter((r) => r.fundamental_verdict === verdict);
 
     filtered.sort((a, b) => {
       const av = a[sortBy as keyof typeof a] as number | null;
@@ -165,6 +170,8 @@ export async function GET(req: NextRequest) {
         sectorQualityPctile: r.sector_quality_pctile,
         accrualsRatio: r.accruals_ratio,
         interestCoverage: r.interest_coverage,
+        verdict: r.fundamental_verdict,
+        summary: r.fundamental_summary,
       };
     });
 

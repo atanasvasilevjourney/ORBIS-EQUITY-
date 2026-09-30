@@ -21,6 +21,8 @@ type FinancialHistory = {
   balance: any[];
   cashflow: any[];
   metrics: any[];
+  growth?: any[];
+  analysis?: any;
 };
 
 function formatVal(v: number | null | undefined, suffix = ""): string {
@@ -28,9 +30,30 @@ function formatVal(v: number | null | undefined, suffix = ""): string {
   return v.toLocaleString(undefined, { maximumFractionDigits: 2 }) + suffix;
 }
 
+const F_SCORE_LABELS: Record<string, string> = {
+  roa_positive: "ROA > 0",
+  cfo_positive: "CFO > 0",
+  delta_roa: "Δ ROA up",
+  accruals_quality: "CFO > NI",
+  delta_ltd: "Δ LTD down",
+  delta_current_ratio: "Δ Current ratio up",
+  no_dilution: "No share dilution",
+  delta_gross_margin: "Δ Gross margin up",
+  delta_asset_turnover: "Δ Asset turnover up",
+};
+
+function verdictColor(v: string | null | undefined): string {
+  if (!v) return "var(--text-muted)";
+  if (v === "STRONG" || v === "ATTRACTIVE") return "var(--accent-bull)";
+  if (v === "WEAK" || v === "DISTRESSED") return "var(--accent-bear)";
+  if (v === "NEUTRAL") return "var(--accent-warning)";
+  return "var(--text-muted)";
+}
+
 function FundamentalsGrid({ f }: { f: any }) {
   if (!f) return <p className="text-[var(--text-muted)] py-4">No fundamentals data</p>;
 
+  const detail = f.f_score_detail?.components as Record<string, boolean> | undefined;
   const groups = [
     { title: "VALUATION", items: [
       ["P/E", f.pe_ratio], ["P/B", f.pb_ratio], ["P/S", f.ps_ratio],
@@ -57,32 +80,79 @@ function FundamentalsGrid({ f }: { f: any }) {
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      {groups.map((g) => (
-        <div key={g.title} className="rounded border border-[var(--border)] bg-[var(--card-bg)]">
-          <div className="px-3 py-2 border-b border-[var(--border)] text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">
-            {g.title}
+    <div className="space-y-4">
+      {(f.fundamental_verdict || f.fundamental_summary) && (
+        <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] p-4">
+          <div className="flex flex-wrap items-center gap-3 mb-1">
+            <span className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">AUTO ANALYSIS</span>
+            {f.fundamental_verdict && (
+              <span
+                className="text-sm font-terminal font-bold px-2 py-0.5 rounded bg-[var(--badge-bg)]"
+                style={{ color: verdictColor(f.fundamental_verdict) }}
+              >
+                {f.fundamental_verdict}
+              </span>
+            )}
+            {f.f_score != null && (
+              <span className="text-xs font-terminal text-[var(--text-secondary)]">F{f.f_score}/9</span>
+            )}
+            {f.composite_factor_score != null && (
+              <span className="text-xs font-terminal text-[var(--text-secondary)]">Comp {f.composite_factor_score}</span>
+            )}
           </div>
-          <div className="p-3 space-y-1.5">
-            {g.items.map(([label, val, suf]) => (
-              <div key={label as string} className="flex justify-between text-xs font-terminal">
-                <span className="text-[var(--text-secondary)]">{label as string}</span>
-                <span className={
-                  typeof val === "number" && (suf === "%")
-                    ? val > 0 ? "text-[var(--accent-bull)]" : val < 0 ? "text-[var(--accent-bear)]" : ""
-                    : ""
-                }>
-                  {typeof val === "number"
-                    ? suf === "%"
-                      ? (val * 100).toFixed(1) + "%"
-                      : val.toFixed(2)
-                    : "—"}
-                </span>
-              </div>
-            ))}
+          <p className="text-sm font-terminal text-[var(--text-primary)]">{f.fundamental_summary ?? "—"}</p>
+          <p className="text-[11px] font-terminal text-[var(--text-muted)] mt-2">
+            From financial statements + factor ranks. Not an earnings-beat alert — discretionary overlay for swing risk.
+          </p>
+        </div>
+      )}
+
+      {detail && (
+        <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] p-3">
+          <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest mb-2">
+            PIOTROSKI F-SCORE DETAIL ({f.f_score ?? "—"}/9)
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+            {Object.entries(F_SCORE_LABELS).map(([key, label]) => {
+              const ok = !!detail[key];
+              return (
+                <div key={key} className="flex items-center gap-2 text-xs font-terminal">
+                  <span style={{ color: ok ? "var(--accent-bull)" : "var(--accent-bear)" }}>{ok ? "✓" : "✗"}</span>
+                  <span className="text-[var(--text-secondary)]">{label}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
-      ))}
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {groups.map((g) => (
+          <div key={g.title} className="rounded border border-[var(--border)] bg-[var(--card-bg)]">
+            <div className="px-3 py-2 border-b border-[var(--border)] text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">
+              {g.title}
+            </div>
+            <div className="p-3 space-y-1.5">
+              {g.items.map(([label, val, suf]) => (
+                <div key={label as string} className="flex justify-between text-xs font-terminal">
+                  <span className="text-[var(--text-secondary)]">{label as string}</span>
+                  <span className={
+                    typeof val === "number" && (suf === "%")
+                      ? val > 0 ? "text-[var(--accent-bull)]" : val < 0 ? "text-[var(--accent-bear)]" : ""
+                      : ""
+                  }>
+                    {typeof val === "number"
+                      ? suf === "%"
+                        ? (val * 100).toFixed(1) + "%"
+                        : Number.isInteger(val) ? String(val) : val.toFixed(2)
+                      : "—"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -97,8 +167,8 @@ function fmtBig(v: number | null | undefined): string {
 }
 
 function FinancialHistorySection({ ticker }: { ticker: string }) {
-  const [hist, setHist] = useState<FinancialHistory | null>(null);
-  const [histTab, setHistTab] = useState<"income" | "balance" | "cashflow">("income");
+  const [hist, setHist] = useState<any>(null);
+  const [histTab, setHistTab] = useState<"income" | "balance" | "cashflow" | "metrics" | "growth">("income");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -110,19 +180,23 @@ function FinancialHistorySection({ ticker }: { ticker: string }) {
   }, [ticker]);
 
   if (loading) return <p className="text-[var(--text-muted)] py-4 font-terminal">Loading history...</p>;
-  if (!hist || (hist.income.length === 0 && hist.balance.length === 0))
+  if (!hist || ((hist.income?.length ?? 0) === 0 && (hist.balance?.length ?? 0) === 0))
     return <p className="text-[var(--text-muted)] py-4 font-terminal">No historical financial reports</p>;
 
   const histTabs = [
     { key: "income" as const, label: "INCOME" },
     { key: "balance" as const, label: "BALANCE" },
     { key: "cashflow" as const, label: "CASH FLOW" },
+    { key: "metrics" as const, label: "METRICS" },
+    { key: "growth" as const, label: "GROWTH" },
   ];
 
   return (
     <div className="mt-6">
-      <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest mb-2">HISTORICAL FINANCIALS (FY)</div>
-      <div className="flex gap-1 mb-3">
+      <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest mb-2">
+        FINANCIAL STATEMENTS (FY) — income · balance · cash flow · metrics · growth
+      </div>
+      <div className="flex flex-wrap gap-1 mb-3">
         {histTabs.map((t) => (
           <button
             key={t.key}
@@ -146,6 +220,7 @@ function FinancialHistorySection({ ticker }: { ticker: string }) {
                 <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
                   <th className="text-left px-3 py-2">YEAR</th>
                   <th className="text-right px-3 py-2">REVENUE</th>
+                  <th className="text-right px-3 py-2">OP INCOME</th>
                   <th className="text-right px-3 py-2">NET INCOME</th>
                   <th className="text-right px-3 py-2">EPS</th>
                   <th className="text-right px-3 py-2">GROSS MGN</th>
@@ -153,10 +228,11 @@ function FinancialHistorySection({ ticker }: { ticker: string }) {
                 </tr>
               </thead>
               <tbody>
-                {hist.income.map((r: any) => (
-                  <tr key={r.year} className="border-b border-[var(--border)]">
-                    <td className="px-3 py-2 font-semibold">{r.year}</td>
+                {(hist.income ?? []).map((r: any) => (
+                  <tr key={r.year ?? r.date} className="border-b border-[var(--border)]">
+                    <td className="px-3 py-2 font-semibold">{r.year ?? r.date}</td>
                     <td className="px-3 py-2 text-right">{fmtBig(r.revenue)}</td>
+                    <td className="px-3 py-2 text-right">{fmtBig(r.operatingIncome)}</td>
                     <td className="px-3 py-2 text-right" style={{ color: r.netIncome > 0 ? "var(--accent-bull)" : r.netIncome < 0 ? "var(--accent-bear)" : undefined }}>
                       {fmtBig(r.netIncome)}
                     </td>
@@ -180,17 +256,19 @@ function FinancialHistorySection({ ticker }: { ticker: string }) {
                   <th className="text-right px-3 py-2">EQUITY</th>
                   <th className="text-right px-3 py-2">DEBT</th>
                   <th className="text-right px-3 py-2">CASH</th>
+                  <th className="text-right px-3 py-2">CUR RATIO</th>
                 </tr>
               </thead>
               <tbody>
-                {hist.balance.map((r: any) => (
-                  <tr key={r.year} className="border-b border-[var(--border)]">
-                    <td className="px-3 py-2 font-semibold">{r.year}</td>
+                {(hist.balance ?? []).map((r: any) => (
+                  <tr key={r.year ?? r.date} className="border-b border-[var(--border)]">
+                    <td className="px-3 py-2 font-semibold">{r.year ?? r.date}</td>
                     <td className="px-3 py-2 text-right">{fmtBig(r.totalAssets)}</td>
                     <td className="px-3 py-2 text-right">{fmtBig(r.totalLiabilities)}</td>
                     <td className="px-3 py-2 text-right">{fmtBig(r.totalEquity)}</td>
                     <td className="px-3 py-2 text-right">{fmtBig(r.totalDebt)}</td>
                     <td className="px-3 py-2 text-right" style={{ color: "var(--accent-bull)" }}>{fmtBig(r.cash)}</td>
+                    <td className="px-3 py-2 text-right">{r.currentRatio != null ? r.currentRatio.toFixed(2) : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -209,9 +287,9 @@ function FinancialHistorySection({ ticker }: { ticker: string }) {
                 </tr>
               </thead>
               <tbody>
-                {hist.cashflow.map((r: any) => (
-                  <tr key={r.year} className="border-b border-[var(--border)]">
-                    <td className="px-3 py-2 font-semibold">{r.year}</td>
+                {(hist.cashflow ?? []).map((r: any) => (
+                  <tr key={r.year ?? r.date} className="border-b border-[var(--border)]">
+                    <td className="px-3 py-2 font-semibold">{r.year ?? r.date}</td>
                     <td className="px-3 py-2 text-right" style={{ color: r.operatingCF > 0 ? "var(--accent-bull)" : "var(--accent-bear)" }}>
                       {fmtBig(r.operatingCF)}
                     </td>
@@ -221,6 +299,64 @@ function FinancialHistorySection({ ticker }: { ticker: string }) {
                     </td>
                     <td className="px-3 py-2 text-right">{fmtBig(r.dividendsPaid)}</td>
                     <td className="px-3 py-2 text-right">{fmtBig(r.buybacks)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </>
+          )}
+          {histTab === "metrics" && (
+            <>
+              <thead>
+                <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
+                  <th className="text-left px-3 py-2">YEAR</th>
+                  <th className="text-right px-3 py-2">ROE</th>
+                  <th className="text-right px-3 py-2">ROA</th>
+                  <th className="text-right px-3 py-2">ROIC</th>
+                  <th className="text-right px-3 py-2">EV/EBITDA</th>
+                  <th className="text-right px-3 py-2">FCF YLD</th>
+                  <th className="text-right px-3 py-2">EARN YLD</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(hist.metrics ?? []).length === 0 ? (
+                  <tr><td colSpan={7} className="px-3 py-4 text-center text-[var(--text-muted)]">No metrics reports</td></tr>
+                ) : (hist.metrics ?? []).map((r: any) => (
+                  <tr key={r.year ?? r.date} className="border-b border-[var(--border)]">
+                    <td className="px-3 py-2 font-semibold">{r.year ?? r.date}</td>
+                    <td className="px-3 py-2 text-right">{r.roe != null ? (r.roe * 100).toFixed(1) + "%" : "—"}</td>
+                    <td className="px-3 py-2 text-right">{r.roa != null ? (r.roa * 100).toFixed(1) + "%" : "—"}</td>
+                    <td className="px-3 py-2 text-right">{r.roic != null ? (r.roic * 100).toFixed(1) + "%" : "—"}</td>
+                    <td className="px-3 py-2 text-right">{r.evEbitda != null ? Number(r.evEbitda).toFixed(1) : "—"}</td>
+                    <td className="px-3 py-2 text-right">{r.fcfYield != null ? (r.fcfYield * 100).toFixed(1) + "%" : "—"}</td>
+                    <td className="px-3 py-2 text-right">{r.earningsYield != null ? (r.earningsYield * 100).toFixed(1) + "%" : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </>
+          )}
+          {histTab === "growth" && (
+            <>
+              <thead>
+                <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
+                  <th className="text-left px-3 py-2">YEAR</th>
+                  <th className="text-right px-3 py-2">REV GR</th>
+                  <th className="text-right px-3 py-2">NI GR</th>
+                  <th className="text-right px-3 py-2">EPS GR</th>
+                  <th className="text-right px-3 py-2">OP INC GR</th>
+                  <th className="text-right px-3 py-2">FCF GR</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(hist.growth ?? []).length === 0 ? (
+                  <tr><td colSpan={6} className="px-3 py-4 text-center text-[var(--text-muted)]">No growth reports</td></tr>
+                ) : (hist.growth ?? []).map((r: any) => (
+                  <tr key={r.year ?? r.date} className="border-b border-[var(--border)]">
+                    <td className="px-3 py-2 font-semibold">{r.year ?? r.date}</td>
+                    {[r.revenueGrowth, r.netIncomeGrowth, r.epsGrowth, r.operatingIncomeGrowth, r.freeCashFlowGrowth].map((v, i) => (
+                      <td key={i} className="px-3 py-2 text-right" style={{ color: v > 0 ? "var(--accent-bull)" : v < 0 ? "var(--accent-bear)" : undefined }}>
+                        {v != null ? (Number(v) * 100).toFixed(1) + "%" : "—"}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
@@ -351,6 +487,14 @@ export default function TickerPage() {
                 : "bg-[var(--badge-bg)] text-[var(--text-muted)]"
               }`}>
                 F{f.f_score}
+              </span>
+            )}
+            {f?.fundamental_verdict && (
+              <span
+                className="text-xs px-2 py-0.5 rounded font-terminal font-bold bg-[var(--badge-bg)]"
+                style={{ color: verdictColor(f.fundamental_verdict) }}
+              >
+                {f.fundamental_verdict}
               </span>
             )}
             {upcomingEarnings > 0 && (

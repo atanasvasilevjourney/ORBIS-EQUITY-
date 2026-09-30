@@ -1,29 +1,32 @@
 """Piotroski F-Score computation.
 
 Computes the 9-point Piotroski F-Score for each stock using
-fundamentals_snapshot (current) + financial_reports (prior year).
+financial_reports (current + prior FY). Persists score and per-test
+component breakdown to fundamentals_snapshot.
 
 Score components:
   PROFITABILITY (4 pts):
-    1. ROA > 0                          (positive net income / total assets)
-    2. Operating Cash Flow > 0          (CFO positive)
-    3. Delta ROA > 0                    (ROA improved YoY)
-    4. CFO > Net Income                 (accruals quality)
+    1. ROA > 0
+    2. Operating Cash Flow > 0
+    3. Delta ROA > 0
+    4. CFO > Net Income
 
   LEVERAGE / LIQUIDITY (3 pts):
-    5. Delta Long-Term Debt down        (leverage decreased)
-    6. Delta Current Ratio up           (liquidity improved)
-    7. No share dilution                (shares outstanding didn't increase)
+    5. Delta Long-Term Debt down
+    6. Delta Current Ratio up
+    7. No share dilution
 
   OPERATING EFFICIENCY (2 pts):
-    8. Delta Gross Margin up            (margins improved)
-    9. Delta Asset Turnover up          (revenue/assets improved)
+    8. Delta Gross Margin up
+    9. Delta Asset Turnover up
 
 Usage:
     python -m pipeline.compute.f_score
 """
+from __future__ import annotations
+
 import logging
-import os
+from typing import Any
 
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -33,6 +36,18 @@ from pipeline.config.settings import SupabaseConfig
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+COMPONENT_KEYS = (
+    "roa_positive",
+    "cfo_positive",
+    "delta_roa",
+    "accruals_quality",
+    "delta_ltd",
+    "delta_current_ratio",
+    "no_dilution",
+    "delta_gross_margin",
+    "delta_asset_turnover",
+)
 
 
 def _get_supabase_client() -> Client:
@@ -53,32 +68,18 @@ def _fetch_all_reports(sb: Client, report_type: str) -> dict[str, list[dict]]:
     """Fetch all FY reports of a given type in bulk, grouped by symbol.
 
     Returns {symbol: [newest_data, second_newest_data]} — at most 2 per symbol.
-    Uses paginated queries to avoid the 5000-row Supabase limit.
     """
-    page_size = 5000
-    offset = 0
-    all_rows: list[dict] = []
+    from pipeline.utils.supabase import fetch_all
 
-    while True:
-        resp = (
-            sb.table("financial_reports")
-            .select("symbol, data")
-            .eq("report_type", report_type)
-            .eq("period", "FY")
-            .order("symbol")
-            .order("date", desc=True)
-            .range(offset, offset + page_size - 1)
-            .execute()
-        )
-        rows = resp.data or []
-        all_rows.extend(rows)
-        if len(rows) < page_size:
-            break
-        offset += page_size
-
+    all_rows = fetch_all(
+        sb,
+        "financial_reports",
+        "symbol, date, data",
+        filters=lambda q, rt=report_type: q.eq("report_type", rt).eq("period", "FY"),
+        order=("date", True),
+    )
     logger.info("Fetched %d %s report rows", len(all_rows), report_type)
 
-    # Group by symbol, keep only latest 2 (already sorted newest-first per symbol)
     grouped: dict[str, list[dict]] = {}
     for r in all_rows:
         sym = r["symbol"]
@@ -90,87 +91,119 @@ def _fetch_all_reports(sb: Client, report_type: str) -> dict[str, list[dict]]:
     return grouped
 
 
+def compute_f_score_detail(
+    income_cur: dict | None,
+    income_pri: dict | None,
+    balance_cur: dict | None,
+    balance_pri: dict | None,
+    cashflow_cur: dict | None,
+) -> dict[str, Any] | None:
+    """Compute F-Score with boolean component breakdown. Returns None if data insufficient."""
+    if not income_cur or not balance_cur or not income_pri or not balance_pri:
+        return None
+
+    components: dict[str, bool] = {k: False for k in COMPONENT_KEYS}
+
+    net_income = income_cur.get("netIncome")
+    total_assets_beg = balance_pri.get("totalAssets")
+    roa = _safe_div(net_income, total_assets_beg)
+    components["roa_positive"] = roa is not None and roa > 0
+
+    cfo = cashflow_cur.get("operatingCashFlow") if cashflow_cur else None
+    components["cfo_positive"] = cfo is not None and cfo > 0
+
+    prior_ni = income_pri.get("netIncome")
+    prior_ta_beg = balance_pri.get("totalAssets")
+    prior_roa = _safe_div(prior_ni, prior_ta_beg)
+    components["delta_roa"] = (
+        roa is not None and prior_roa is not None and roa > prior_roa
+    )
+
+    components["accruals_quality"] = (
+        cfo is not None and net_income is not None and cfo > net_income
+    )
+
+    ltd_cur = balance_cur.get("longTermDebt")
+    ltd_pri = balance_pri.get("longTermDebt")
+    components["delta_ltd"] = (
+        ltd_cur is not None and ltd_pri is not None and ltd_cur < ltd_pri
+    )
+
+    cr_cur = _safe_div(
+        balance_cur.get("totalCurrentAssets"),
+        balance_cur.get("totalCurrentLiabilities"),
+    )
+    cr_pri = _safe_div(
+        balance_pri.get("totalCurrentAssets"),
+        balance_pri.get("totalCurrentLiabilities"),
+    )
+    components["delta_current_ratio"] = (
+        cr_cur is not None and cr_pri is not None and cr_cur > cr_pri
+    )
+
+    shares_cur = income_cur.get("weightedAverageShsOutDil") or income_cur.get(
+        "weightedAverageShsOut"
+    )
+    shares_pri = income_pri.get("weightedAverageShsOutDil") or income_pri.get(
+        "weightedAverageShsOut"
+    )
+    components["no_dilution"] = bool(
+        shares_cur and shares_pri and shares_cur <= shares_pri
+    )
+
+    gm_cur = _safe_div(income_cur.get("grossProfit"), income_cur.get("revenue"))
+    gm_pri = _safe_div(income_pri.get("grossProfit"), income_pri.get("revenue"))
+    components["delta_gross_margin"] = (
+        gm_cur is not None and gm_pri is not None and gm_cur > gm_pri
+    )
+
+    at_cur = _safe_div(income_cur.get("revenue"), total_assets_beg)
+    at_pri = _safe_div(income_pri.get("revenue"), prior_ta_beg)
+    components["delta_asset_turnover"] = (
+        at_cur is not None and at_pri is not None and at_cur > at_pri
+    )
+
+    score = sum(1 for v in components.values() if v)
+    return {
+        "score": score,
+        "components": components,
+        "groups": {
+            "profitability": sum(
+                1
+                for k in (
+                    "roa_positive",
+                    "cfo_positive",
+                    "delta_roa",
+                    "accruals_quality",
+                )
+                if components[k]
+            ),
+            "leverage_liquidity": sum(
+                1
+                for k in ("delta_ltd", "delta_current_ratio", "no_dilution")
+                if components[k]
+            ),
+            "operating_efficiency": sum(
+                1
+                for k in ("delta_gross_margin", "delta_asset_turnover")
+                if components[k]
+            ),
+        },
+    }
+
+
 def compute_f_score(
-    income_cur: dict | None, income_pri: dict | None,
-    balance_cur: dict | None, balance_pri: dict | None,
+    income_cur: dict | None,
+    income_pri: dict | None,
+    balance_cur: dict | None,
+    balance_pri: dict | None,
     cashflow_cur: dict | None,
 ) -> int | None:
     """Compute Piotroski F-Score from pre-loaded report data. Returns 0-9 or None."""
-    if not income_cur or not balance_cur:
-        return None
-
-    # Need prior-year data for 6 of 9 tests — return None if absent
-    if not income_pri or not balance_pri:
-        return None
-
-    score = 0
-
-    # --- PROFITABILITY ---
-
-    # 1. ROA > 0 (using beginning-of-year assets per Piotroski 2000)
-    net_income = income_cur.get("netIncome")
-    total_assets_beg = balance_pri.get("totalAssets")  # beginning-of-year = prior year-end
-    total_assets_cur = balance_cur.get("totalAssets")
-    roa = _safe_div(net_income, total_assets_beg)
-    if roa is not None and roa > 0:
-        score += 1
-
-    # 2. Operating Cash Flow > 0
-    cfo = cashflow_cur.get("operatingCashFlow") if cashflow_cur else None
-    if cfo is not None and cfo > 0:
-        score += 1
-
-    # 3. Delta ROA > 0 (improved from prior year)
-    prior_ni = income_pri.get("netIncome")
-    # Beginning-of-prior-year assets = two years back (balance[2] if available)
-    prior_ta_beg = balance_pri.get("totalAssets")  # fallback: prior year-end
-    prior_roa = _safe_div(prior_ni, prior_ta_beg)
-    if roa is not None and prior_roa is not None and roa > prior_roa:
-        score += 1
-
-    # 4. Accruals: CFO > Net Income
-    if cfo is not None and net_income is not None and cfo > net_income:
-        score += 1
-
-    # --- LEVERAGE / LIQUIDITY ---
-
-    # 5. Delta long-term debt decreased
-    ltd_cur = balance_cur.get("longTermDebt")
-    ltd_pri = balance_pri.get("longTermDebt")
-    if ltd_cur is not None and ltd_pri is not None and ltd_cur < ltd_pri:
-        score += 1
-
-    # 6. Delta current ratio improved
-    tca = balance_cur.get("totalCurrentAssets")
-    tcl = balance_cur.get("totalCurrentLiabilities")
-    cr_cur = _safe_div(tca, tcl)
-    tca_pri = balance_pri.get("totalCurrentAssets")
-    tcl_pri = balance_pri.get("totalCurrentLiabilities")
-    cr_pri = _safe_div(tca_pri, tcl_pri)
-    if cr_cur is not None and cr_pri is not None and cr_cur > cr_pri:
-        score += 1
-
-    # 7. No dilution (shares outstanding didn't increase)
-    shares_cur = income_cur.get("weightedAverageShsOutDil") or income_cur.get("weightedAverageShsOut")
-    shares_pri = income_pri.get("weightedAverageShsOutDil") or income_pri.get("weightedAverageShsOut")
-    if shares_cur and shares_pri and shares_cur <= shares_pri:
-        score += 1
-
-    # --- OPERATING EFFICIENCY ---
-
-    # 8. Delta gross margin improved
-    gm_cur = _safe_div(income_cur.get("grossProfit"), income_cur.get("revenue"))
-    gm_pri = _safe_div(income_pri.get("grossProfit"), income_pri.get("revenue"))
-    if gm_cur is not None and gm_pri is not None and gm_cur > gm_pri:
-        score += 1
-
-    # 9. Delta asset turnover improved (revenue / beginning-of-year assets)
-    at_cur = _safe_div(income_cur.get("revenue"), total_assets_beg)
-    at_pri = _safe_div(income_pri.get("revenue"), prior_ta_beg)
-    if at_cur is not None and at_pri is not None and at_cur > at_pri:
-        score += 1
-
-    return score
+    detail = compute_f_score_detail(
+        income_cur, income_pri, balance_cur, balance_pri, cashflow_cur
+    )
+    return None if detail is None else int(detail["score"])
 
 
 def main() -> None:
@@ -183,26 +216,25 @@ def main() -> None:
 
     sb = _get_supabase_client()
 
-    # Get all symbols that have fundamentals
     from pipeline.utils.supabase import fetch_all
 
     symbol_rows = fetch_all(sb, "fundamentals_snapshot", "symbol")
     symbols = {r["symbol"] for r in symbol_rows}
     logger.info("Computing F-Score for %d symbols", len(symbols))
 
-    # Pre-fetch ALL financial reports in bulk (3 queries instead of 6N)
     logger.info("Pre-fetching financial reports...")
     income_reports = _fetch_all_reports(sb, "income")
     balance_reports = _fetch_all_reports(sb, "balance")
     cashflow_reports = _fetch_all_reports(sb, "cashflow")
     logger.info(
         "Reports loaded: %d income, %d balance, %d cashflow symbols",
-        len(income_reports), len(balance_reports), len(cashflow_reports),
+        len(income_reports),
+        len(balance_reports),
+        len(cashflow_reports),
     )
 
-    # Compute F-Score for each symbol using in-memory data
     computed = 0
-    scores: dict[int, int] = {}  # distribution
+    scores: dict[int, int] = {}
     updates: list[dict] = []
 
     for symbol in symbols:
@@ -217,15 +249,23 @@ def main() -> None:
             balance_pri = balance[1] if len(balance) > 1 else None
             cashflow_cur = cashflow[0] if cashflow else None
 
-            f = compute_f_score(income_cur, income_pri, balance_cur, balance_pri, cashflow_cur)
-            if f is not None:
-                updates.append({"symbol": symbol, "f_score": f})
+            detail = compute_f_score_detail(
+                income_cur, income_pri, balance_cur, balance_pri, cashflow_cur
+            )
+            if detail is not None:
+                f = int(detail["score"])
+                updates.append(
+                    {
+                        "symbol": symbol,
+                        "f_score": f,
+                        "f_score_detail": detail,
+                    }
+                )
                 computed += 1
                 scores[f] = scores.get(f, 0) + 1
         except Exception:
             logger.exception("Failed to compute F-Score for %s", symbol)
 
-    # Batch upsert all scores (1-2 queries instead of N)
     logger.info("Upserting %d F-Score updates...", len(updates))
     batch_size = 500
     for i in range(0, len(updates), batch_size):
@@ -236,7 +276,11 @@ def main() -> None:
             logger.exception("Failed to upsert F-Score batch %d-%d", i, i + len(batch))
 
     dist = " | ".join(f"F{k}={v}" for k, v in sorted(scores.items()))
-    logger.info("=== F-Score Compute Complete: %d scored | Distribution: %s ===", computed, dist)
+    logger.info(
+        "=== F-Score Compute Complete: %d scored | Distribution: %s ===",
+        computed,
+        dist,
+    )
 
 
 if __name__ == "__main__":
