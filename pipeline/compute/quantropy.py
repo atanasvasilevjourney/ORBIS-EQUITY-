@@ -243,8 +243,8 @@ def _align_returns(
         common_dates = common_dates[-window:]
     core = sorted(core)
     px = np.array([[closes[s][d] for s in core] for d in common_dates], dtype=float)
-    rets = np.diff(px, axis=0) / np.where(px[:-1] == 0, np.nan, px[:-1])
-    rets = np.where(np.isfinite(rets), rets, 0.0)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rets = np.diff(px, axis=0) / np.where(px[:-1] == 0, np.nan, px[:-1])
     logger.info(
         "Quantropy aligned %d names × %d sessions (eligible %d, pool %d)",
         len(core), len(common_dates), len(closes), len(pool),
@@ -292,10 +292,15 @@ def run() -> dict:
             logger.exception("quantropy_runs write skipped")
         return {"run_id": run_id, "names": 0, "headline": headline, "books": {}}
 
-    mkt = rets.mean(axis=1)
-    mu = rets.mean(axis=0) * PERIOD
-    vol = rets.std(axis=0, ddof=1) * np.sqrt(PERIOD)
-    cov = np.cov(rets, rowvar=False) * PERIOD
+    finite_rows = np.all(np.isfinite(rets), axis=1)
+    rets_mpt = rets[finite_rows] if int(finite_rows.sum()) >= MIN_OBS else rets
+    if not np.all(np.isfinite(rets_mpt)):
+        rets_mpt = np.where(np.isfinite(rets), rets, 0.0)
+
+    mkt = rets_mpt.mean(axis=1)
+    mu = rets_mpt.mean(axis=0) * PERIOD
+    vol = rets_mpt.std(axis=0, ddof=1) * np.sqrt(PERIOD)
+    cov = np.cov(rets_mpt, rowvar=False) * PERIOD
 
     w_eq = np.ones(len(symbols)) / len(symbols)
     inv = 1.0 / np.maximum(vol, 1e-8)
@@ -332,7 +337,7 @@ def run() -> dict:
 
     rows = []
     for i, sym in enumerate(symbols):
-        r = rets[:, i]
+        r = rets_mpt[:, i]
         down = r[r < 0]
         dvol = (down.std(ddof=1) * np.sqrt(PERIOD)) if len(down) > 2 else float(vol[i])
         ann_ret = float(mu[i])
