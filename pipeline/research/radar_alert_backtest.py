@@ -1,6 +1,9 @@
-"""Backtest KovaView Trend Radar *alert* entries — trade journal style.
+"""Backtest *legacy* Trend Radar alert entries — trade journal style.
 
-Entry alerts mirror what the terminal surfaces today:
+**Not Module 1:** production screener uses `trend_radar.process_ticker` (day % +
+relative volume watchlist). For that ruleset, use `pipeline.research.watchlist_backtest`.
+
+Legacy alerts (this file, `trend_radar_legacy`):
   - GREEN_FLIP  — state flips into GREEN (scoreboard FLIP badge)
   - BREAKOUT_ALERT — GREEN + breakout_active + volume_confirmed
 
@@ -50,7 +53,7 @@ from pipeline.compute.kama_regime import (
 )
 from pipeline.compute.market_regime import regime_series
 from pipeline.compute.trail_exit import CooldownTracker, TrailState
-from pipeline.compute.trend_radar import (
+from pipeline.compute.trend_radar_legacy import (
     ATR_COMPRESSION_RATIO,
     ATR_WINDOW,
     EWMAC_FAST,

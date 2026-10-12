@@ -1,0 +1,62 @@
+mode: watchlist_only       # signal | watchlist_only — discretionary scan only (see research/report.md)
+
+universe:
+  equities: sp500_ndx100   # sp500_ndx100 | all_us
+  include_crypto: false
+  exclude_pharma: false
+ema_period: 200
+atr_period: 14
+history_min_bars: 500
+
+trend:
+  min_days_above: 20
+  slope_lookback: 20
+  min_slope: 0.0
+
+touch:
+  touch_tolerance_atr: 0.25
+  shortlist_atr: 1.5
+  confirm_mode: bar_close   # intrabar | bar_close
+
+# Discretionary UI watchlist (no orders; scan-only)
+watchlist:
+  require_uptrend: true          # min_days_above + positive EMA slope
+  require_close_above_ema: true  # close held the level (not a breakdown)
+  min_days_above: 20
+  min_slope: 0.0
+
+filters:
+  min_price: 5
+  min_adv_usd: 20000000
+  exclude_etf: false
+  earnings_flag_days: 3
+
+state:
+  cooldown_days: 10
+  rearm_atr: 2.0
+
+alerts:
+  max_alerts_per_day: 8
+  min_score: 60
+  channels: [discord, email]
+
+regime:
+  equity_benchmark: SPY
+  crypto_benchmark: BTC/USDT
+
+crypto:
+  top_n: 50
+  daily_close_utc: "00:00"
+
+monitoring:
+  heartbeat_max_age_min: 90
+
+validation:
+  tradingview_tolerance_pct: 0.3
+  reference_symbols: [AAPL, MSFT, SPY, AMZN, NVDA]
+
+nightly:
+  min_history_bars: 550
+  max_vendor_backfill_symbols: 700
+  missing_data_abort_pct: 25.0
+  time_budget_sec: 7200

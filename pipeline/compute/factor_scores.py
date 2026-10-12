@@ -25,6 +25,7 @@ import numpy as np
 from dotenv import load_dotenv
 from supabase import create_client
 
+from pipeline.compute.fundamental_analysis import build_fundamental_analysis
 from pipeline.utils.supabase import fetch_all
 
 load_dotenv()
@@ -269,6 +270,7 @@ def main() -> None:
         sector_quality_pctile[idx_arr] = _percentile_rank(raw_quality[idx_arr])
 
     updates: list[dict] = []
+    verdict_counts: dict[str, int] = {}
     for i, sym in enumerate(symbols):
         composite = int(round(
             WEIGHTS["value"] * value_scores[i]
@@ -277,6 +279,26 @@ def main() -> None:
             + WEIGHTS["earnings_quality"] * earn_q_scores[i]
             + WEIGHTS["leverage"] * leverage_scores[i]
         ))
+
+        row = fundamentals[i]
+        analysis = build_fundamental_analysis(
+            f_score=row.get("f_score"),
+            f_score_detail=row.get("f_score_detail"),
+            composite_factor_score=composite,
+            value_score=int(value_scores[i]),
+            quality_score=int(quality_scores[i]),
+            growth_score=int(growth_scores[i]),
+            earnings_quality_score=int(earn_q_scores[i]),
+            leverage_score=int(leverage_scores[i]),
+            pe_ratio=row.get("pe_ratio"),
+            roe=row.get("roe"),
+            net_margin=row.get("net_margin"),
+            revenue_growth_1y=row.get("revenue_growth_1y"),
+            debt_to_equity=row.get("debt_to_equity"),
+            accruals_ratio=accruals[i],
+            interest_coverage=interest_cov[i],
+        )
+        verdict_counts[analysis.verdict] = verdict_counts.get(analysis.verdict, 0) + 1
 
         updates.append({
             "symbol": sym,
@@ -291,6 +313,7 @@ def main() -> None:
             "accruals_ratio": round(accruals[i], 6) if accruals[i] is not None else None,
             "interest_coverage": round(interest_cov[i], 2) if interest_cov[i] is not None else None,
             "factor_computed_at": now,
+            **analysis.as_row_fields(),
         })
 
     # Batch upsert
@@ -303,10 +326,12 @@ def main() -> None:
             logger.exception("Failed to upsert factor batch %d-%d", j, j + len(batch))
 
     top = sorted(updates, key=lambda x: x["composite_factor_score"], reverse=True)[:5]
+    verdict_dist = " | ".join(f"{k}={v}" for k, v in sorted(verdict_counts.items()))
     logger.info(
-        "=== Factor Scores Complete: %d symbols | Top composite: %s ===",
+        "=== Factor Scores Complete: %d symbols | Top composite: %s | Verdicts: %s ===",
         len(updates),
         ", ".join(f"{t['symbol']}={t['composite_factor_score']}" for t in top),
+        verdict_dist,
     )
 
 

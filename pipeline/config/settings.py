@@ -31,6 +31,7 @@ class UniverseTier:
 
 UNIVERSE_TIERS = {
     "us_large": UniverseTier("S&P 500", "lse", "lse"),
+    "us_nasdaq100": UniverseTier("Nasdaq-100 (non-S&P)", "yfinance", "yfinance"),
     "us_mid": UniverseTier("S&P 400", "lse", "lse"),
     "us_small": UniverseTier("S&P 600", "lse", "lse"),
     "us_micro": UniverseTier("LSE Catalog Remainder", "lse", "lse"),

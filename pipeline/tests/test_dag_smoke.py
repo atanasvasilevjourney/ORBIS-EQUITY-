@@ -58,8 +58,6 @@ class TestPipelineDAGSmoke:
         "pipeline.compute.trend_radar",
         "pipeline.compute.aggregates",
         "pipeline.compute.f_score",
-        "pipeline.ingest.pharma_trials",
-        "pipeline.compute.pharma_signals",
         "pipeline.ingest.earnings",
         "pipeline.ingest.news",
     ]
@@ -103,11 +101,6 @@ class TestPipelineDAGSmoke:
             ):
                 stack.enter_context(patch.object(mod, "LSEClient", return_value=mock_lse))
 
-            if module_path == "pipeline.ingest.pharma_trials":
-                stack.enter_context(
-                    patch.object(mod, "fetch_trials_for_sponsor", return_value=[])
-                )
-
             if module_path == "pipeline.ingest.news":
                 stack.enter_context(
                     patch.object(mod, "fetch_news_for_ticker", return_value=[])
@@ -130,8 +123,6 @@ class TestPipelineDAGSmoke:
             "pipeline.compute.trend_radar",
             "pipeline.compute.aggregates",
             "pipeline.compute.f_score",
-            "pipeline.ingest.pharma_trials",
-            "pipeline.compute.pharma_signals",
             "pipeline.ingest.earnings",
             "pipeline.ingest.news",
         ]

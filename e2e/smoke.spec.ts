@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-const PAGES = ["/", "/screener", "/fundamentals", "/pharma", "/earnings-news"];
+const PAGES = ["/", "/screener", "/fundamentals", "/health", "/earnings-news"];
 
 for (const path of PAGES) {
   test(`page ${path} loads without error`, async ({ page }) => {
@@ -31,7 +31,7 @@ test("nav links traverse all dashboard pages", async ({ page }) => {
 
 test("theme toggle switches label", async ({ page }) => {
   await page.goto("/");
-  const toggle = page.getByRole("button", { name: /PAPER|NEON/ });
+  const toggle = page.getByTestId("theme-toggle");
   await expect(toggle).toBeVisible();
   const before = await toggle.textContent();
   await toggle.click();

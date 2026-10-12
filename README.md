@@ -10,10 +10,10 @@ Systematic equity research terminal — momentum screener, multi-factor fundamen
 
 ## Modules
 
-1. **Swing Screener** — trend radar signals (momentum, EWMAC, breakout, volume)
+1. **Watchlist Screener** — day change, relative volume, distance from session high (no orders)
 2. **Quant Fundamentals** — cross-sectional factor scores (value, quality, growth, earnings quality, leverage) + Piotroski F-Score
-3. **Health Sector** — pharma/biotech fundamentals + clinical-trial catalyst calendar (ClinicalTrials.gov)
-4. **Loop Terminal** — equity breakout paper portfolio (2N ATR sizing, sector caps, orders)
+3. **Health Sector** — Health Care fundamentals + watchlist bias
+4. **Loop Terminal** — Donchian 55 + 20d VWAP paper portfolio (equal weight, sector caps)
 5. **Earnings & News** — calendar + GDELT headlines
 6. **Skew Map** — listed IV surface (skew, term, weekend vol) from yfinance option chains
 7. **Opening Range Breakout** — premarket/open gappers, 15-minute OR, long-only 1R paper brackets
@@ -102,28 +102,21 @@ Optional: `LSE_DATA_API_URL` (defaults to `https://data-api.londonstrategicedge.
 Without these secrets the nightly pipeline will fail immediately with a clear error.
 
 Runs nightly via `.github/workflows/nightly-pipeline.yml`:
-universe → prices → fundamentals → financial reports → trend radar → F-Score → factor scores → portfolio loop → skew map → opening range → stock analysis → Quantropy → daily bias → TEMA/Carver cash → beta rotation → earnings → news → clinical trials → health signals
+universe → prices → fundamentals → financial reports → watchlist screener → F-Score → factor scores → portfolio loop → skew map → opening range → stock analysis → Quantropy → daily bias → TEMA/Carver cash → beta rotation → earnings → news
 
-## Health Sector (free data, no API key)
+## Health Sector
 
-Pharma/biotech catalysts come from the **ClinicalTrials.gov Data API v2** — a free, public-domain, key-less REST API. For every Health Care universe member, the pipeline pulls that company's recent interventional trials (by lead sponsor) and derives forward-looking catalyst signals (upcoming readouts, recent readouts, posted results) with a phase-weighted confidence.
+Health Care names from the active universe with factor scores, F-Score, and watchlist state. Surfaced at `/health` via `GET /api/health`.
 
-```bash
-python -m pipeline.ingest.pharma_trials    # ClinicalTrials.gov → pharma_trials
-python -m pipeline.compute.pharma_signals  # pharma_trials → pharma_signals
-```
+## Loop Terminal (Donchian + VWAP paper book)
 
-Surfaced in the UI at `/health` and via `GET /api/health`. Signals are heuristic and not investment advice.
+Mechanical long-only portfolio on the US index universe:
 
-## Loop Terminal (paper breakout book)
-
-Turns Trend Radar into a mechanical long-only paper portfolio:
-
-- **Entry:** GREEN + rank ≥ 60 + positive momentum/EWMAC + (breakout or volume confirm)
-- **Size:** Turtle-style — `shares = floor((equity × 1%) / (2N))` with N = 14-day ATR
-- **Stop:** 2N below entry; max 8 names, max 2 per sector, 8% open heat
-- **Skip:** earnings in next 5 days, insufficient ATR, posture &lt; 50 (no new entries)
-- **Exit:** stop hit, state RED, rank decay, dual-momentum failure
+- **Universe:** S&P 500 ∪ Nasdaq-100 via `python -m pipeline.ingest.us_index_universe` (pharma/biotech excluded)
+- **Entry:** Close &gt; **55-day** Donchian upper (prior bar) **and** close &gt; **20-day rolling VWAP**
+- **Exit:** Close &lt; **20-day** Donchian lower; rebalance rotation every **5** sessions
+- **Size:** Equal weight — up to **8** names, max **2** per sector (~$100k / N each)
+- **Skip:** posture &lt; 50 (no rebalance entries)
 
 ```bash
 python -m pipeline.compute.portfolio_loop
