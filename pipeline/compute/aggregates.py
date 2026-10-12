@@ -125,6 +125,37 @@ def compute_posture(breadth: dict) -> int:
     return int(min(max(round(raw), 0), 100))
 
 
+def compute_posture_pillars(breadth: dict, radar_rows: list[dict], avg_rank: float) -> dict:
+    """Sub-scores for cockpit UI (0–100 each). Vol is neutral until skew is wired in."""
+    total = len(radar_rows) or 1
+    adv = float(breadth.get("advancers_pct", 0))
+    on_list_pct = float(breadth.get("pct_green", 0))
+    leaders = sum(1 for r in radar_rows if (r.get("quality_rank") or 0) >= 70)
+    leadership = round(leaders / total * 100, 1)
+    trend = int(min(max(round(avg_rank), 0), 100))
+    breadth_p = int(min(max(round(adv), 0), 100))
+    participation = int(min(max(round(on_list_pct), 0), 100))
+    vol = 50
+    heat_cap = int(min(100, max(15, round(adv - max(0, trend - leadership) * 0.35))))
+    if trend >= 55 and leadership < 45:
+        guidance = "Uptrend under pressure — trim size, add cautiously"
+    elif adv >= 60 and participation >= 10:
+        guidance = "Broad up day with active watchlist — stay selective"
+    elif adv <= 40:
+        guidance = "Defensive tape — reduce heat, wait for breadth repair"
+    else:
+        guidance = "Mixed tape — size to posture and sector leaders"
+    return {
+        "trend": trend,
+        "breadth": breadth_p,
+        "leadership": int(leadership),
+        "participation": participation,
+        "vol": vol,
+        "heat_cap_pct": heat_cap,
+        "guidance": guidance,
+    }
+
+
 def compute_posture_label(score: int) -> str:
     """Map posture score to label."""
     if score >= 75:
@@ -198,11 +229,13 @@ def main():
 
     # Average quality rank
     avg_rank = round(sum(r["quality_rank"] for r in radar_data) / len(radar_data), 1)
+    pillars = compute_posture_pillars(breadth, radar_data, avg_rank)
 
     # Build summary
     summary = {
         "posture_score": posture,
         "posture_label": label,
+        "posture_pillars": pillars,
         "breadth": breadth,
         "region_breadth": region_breadth,
         "avg_quality_rank": avg_rank,

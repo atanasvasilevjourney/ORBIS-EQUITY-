@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { BiasChip } from "./BiasChip";
+import { orbisScoreColor } from "@/lib/orbisScore";
 
 export type ScreenerRow = {
   symbol: string;
@@ -26,6 +27,7 @@ export type ScreenerRow = {
   price: number | null;
   marketCap: number | null;
   peRatio: number | null;
+  orbisScore?: number | null;
 };
 
 function formatPrice(price: number | null): string {
@@ -63,6 +65,9 @@ export function ScoreboardRow({ row }: { row: ScreenerRow }) {
       </td>
       <td className="px-3 py-2.5">
         <BiasChip state={row.state} rank={row.rank} entryTiming={row.entryTiming} />
+      </td>
+      <td className="px-3 py-2.5 text-right font-terminal text-xs font-bold" style={{ color: orbisScoreColor(row.orbisScore) }}>
+        {row.orbisScore ?? "—"}
       </td>
       <td className="px-3 py-2.5 text-right font-terminal text-xs" style={{ color: dayColor }}>
         {formatSigned(dayPct, 1, "%")}

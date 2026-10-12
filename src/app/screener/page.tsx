@@ -185,6 +185,7 @@ export default function ScreenerPage() {
                 <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--panel-border)] bg-[var(--panel-header)]">
                   <th className="text-left px-3 py-2">TICKER</th>
                   <th className="text-left px-3 py-2">STATUS</th>
+                  <th className="text-right px-3 py-2">ORBIS</th>
                   <th className="text-right px-3 py-2">DAY</th>
                   <th className="text-right px-3 py-2">REL VOL</th>
                   <th className="text-right px-3 py-2">OFF HIGH</th>
@@ -196,13 +197,13 @@ export default function ScreenerPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">
+                    <td colSpan={9} className="px-3 py-8 text-center text-[var(--text-muted)]">
                       Loading scoreboard…
                     </td>
                   </tr>
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-3 py-4">
+                    <td colSpan={9} className="px-3 py-4">
                       <EmptyState
                         title="No names on this scan"
                         detail="On list needs a day of at least +4% and volume at least 2× the prior 50-day average. Switch to All to see every name sorted by distance from the session high."
