@@ -4,7 +4,7 @@
 # After first deploy:
 #   1. Set env group secrets (SUPABASE_URL, SUPABASE_SERVICE_KEY, optional LSE_*)
 #   2. Manually trigger "orbis-equity-bootstrap" once
-#   3. Weekday crons keep prices/signals fresh
+#   3. Weekday crons (backup, staggered after GitHub Actions 19:30 UTC)
 
 services:
   # One-shot / rare seed job — trigger manually from Render dashboard
@@ -25,9 +25,9 @@ services:
     name: orbis-equity-weekly
     runtime: python
     plan: starter
-    schedule: "0 19 * * 1"  # Mon 19:00 UTC
+    schedule: "0 21 * * 1"  # Mon 21:00 UTC — after GitHub nightly (19:30)
     buildCommand: pip install -r pipeline/requirements.txt
-    startCommand: bash pipeline/scripts/run_weekly.sh && bash pipeline/scripts/run_daily.sh
+    startCommand: bash pipeline/scripts/run_monday.sh
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.0"
@@ -38,7 +38,7 @@ services:
     name: orbis-equity-daily
     runtime: python
     plan: starter
-    schedule: "30 19 * * 2-5"  # Tue–Fri 19:30 UTC
+    schedule: "0 21 * * 2-5"  # Tue–Fri 21:00 UTC — backup after GitHub (19:30)
     buildCommand: pip install -r pipeline/requirements.txt
     startCommand: bash pipeline/scripts/run_daily.sh
     envVars:

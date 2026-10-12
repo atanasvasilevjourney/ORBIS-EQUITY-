@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# Weekday refresh: prices → signals → earnings → news
+# Weekday refresh: ingest → compute (all desks) → earnings → news
+# Mirrors .github/workflows/nightly-pipeline.yml daily path (Render backup cron).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 export PYTHONUNBUFFERED=1
 
-echo "[daily] ingest prices (run pipeline.ingest.us_index_universe weekly to refresh SP500+NDX100 members)"
+echo "[daily] ingest prices"
 python -m pipeline.ingest.prices
 
-echo "[daily] compute trend radar"
-python -m pipeline.compute.trend_radar
+echo "[daily] cash EOD backfill (Yahoo → Stooq)"
+export CASH_EOD_BARS="${CASH_EOD_BARS:-10}"
+export CASH_EOD_LIMIT="${CASH_EOD_LIMIT:-80}"
+export CASH_EOD_MAX_SEC="${CASH_EOD_MAX_SEC:-720}"
+python -m pipeline.ingest.cash_eod || echo "[daily] cash_eod skipped"
 
-echo "[daily] ema200 watchlist features"
-python -m pipeline.ema200_scanner.jobs.nightly || echo "[daily] ema200 nightly skipped (check migration 021 / env)"
-
-echo "[daily] compute aggregates / daily brief"
-python -m pipeline.compute.aggregates
+bash pipeline/scripts/run_compute_signals.sh
 
 echo "[daily] ingest earnings"
 python -m pipeline.ingest.earnings
