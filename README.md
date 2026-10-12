@@ -223,13 +223,13 @@ Do **not** vendor QMIE. Do **not** mix this book into LOOP / ORB / BIAS / ROTATE
 python -m pipeline.compute.perps_desk
 ```
 
-Surfaced at `/cash` (`/perps` redirects) and `GET /api/perps`. Paper harness only. Not investment advice.
+Surfaced at `/cash` and `GET /api/cash` (`/perps` and `/api/perps` redirect for old links). Paper harness only. Not investment advice.
 
 ## Beta rotation (which sectors are trending)
 
 Inspired by [Caltropia's 2026 sector and industry outlook](https://caltropia.substack.com/p/2026-stock-market-sector-and-industry) **structure** and the canary → TEMA-MACD ensemble flow from the Crypto Allocation notebook. Not their published numbers.
 
-**Flow:** macro canary votes → which sectors are trending → drill into that sector's sub-sectors (Energy → Solar / Nuclear / Oil & Gas, …) → TEMA-MACD ensemble in that sleeve → **Carver D-rungs** (HOW MUCH) as discrete DCA partials on the *bigger* sector trend, rotated into the leading sub-sector and its top names (HedgeFund_WiP Strategy 19-lite, isolated from the PERPS Carver book).
+**Flow:** macro canary votes → which sectors are trending → drill into that sector's sub-sectors (Energy → Solar / Nuclear / Oil & Gas, …) → TEMA-MACD ensemble in that sleeve → **Carver D-rungs** (HOW MUCH) as discrete DCA partials on the *bigger* sector trend, rotated into the leading sub-sector and its top names (HedgeFund_WiP Strategy 19-lite, isolated from the CASH TEMA/Carver book).
 
 Parent EWMAC unlocks D1–D4 at |forecast| 5 / 10 / 15 / 20. Rungs land only on canary-aligned sectors, the leading sleeve, and names whose own forecast agrees. Losing sleeves stay FLAT so the same risk budget can rotate. Vol-target 25%, 20% name cap, universe drawdown scalar. Paper $100k sleeve — not a live book.
 

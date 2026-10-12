@@ -92,7 +92,7 @@ export default function CashPage() {
   const [tapeNote, setTapeNote] = useState("Loading listed closes…");
 
   useEffect(() => {
-    fetch("/api/perps")
+    fetch("/api/cash")
       .then((r) => r.json())
       .then((raw: unknown) => {
         const parsed = parseDesk<Data>(raw, "temaBook") ?? parseDesk<Data>(raw, "names");

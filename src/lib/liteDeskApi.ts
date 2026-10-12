@@ -11,7 +11,7 @@ export const LIQUID_NAMES = [
   "COST", "WMT", "BAC", "ORCL", "AMD", "NFLX", "KO", "DIS",
 ] as const;
 
-export const EMPTY_PERPS = {
+export const EMPTY_CASH = {
   summary: null,
   names: [],
   temaBook: [],
@@ -21,6 +21,9 @@ export const EMPTY_PERPS = {
   config: null,
   stale: true,
 };
+
+/** @deprecated Use EMPTY_CASH — legacy name from when the desk lived under /perps */
+export const EMPTY_PERPS = EMPTY_CASH;
 
 export const EMPTY_QUANT = {
   summary: null,
