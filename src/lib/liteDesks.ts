@@ -44,11 +44,14 @@ function alignCloses(book: Map<string, { dates: string[]; close: number[] }>, sy
   let common: Set<string> | null = null;
   for (const row of eligible) {
     const set = new Set(row.dates);
-    common = common === null ? set : new Set([...common].filter((d) => set.has(d)));
+    common =
+      common === null
+        ? set
+        : new Set(Array.from<string>(common).filter((d) => set.has(d)));
   }
   if (!common || common.size < 60) return { labels: [], closes: [] };
 
-  const window = [...common].sort().slice(-252);
+  const window = Array.from(common).sort().slice(-252);
   if (window.length < 60) return { labels: [], closes: [] };
 
   const labels: string[] = [];
