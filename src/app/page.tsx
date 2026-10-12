@@ -6,24 +6,43 @@ import { ModulePanel } from "@/components/ui/ModulePanel";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { PostureGauge } from "@/components/ui/PostureGauge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PostureBreakdown, type PosturePillars } from "@/components/ui/PostureBreakdown";
+import { CrossAssetStrip, type CrossAssetTile } from "@/components/dashboard/CrossAssetStrip";
 
 type DashData = {
   posture: number | null;
   postureLabel: string | null;
   briefText: string | null;
-  breadth: { total: number; greens: number; reds: number; pctGreen: number; pctRed: number } | null;
+  posturePillars?: PosturePillars | null;
+  breadth: {
+    total: number;
+    onList?: number;
+    onListPct?: number;
+    advancersPct?: number;
+    downDay?: number;
+    downDayPct?: number;
+    greens: number;
+    reds: number;
+    pctGreen: number;
+    pctRed: number;
+  } | null;
   avgRank: number;
   bestSector: string | null;
   worstSector: string | null;
   asOfDate: string | null;
   regionBreadth: Record<string, number>;
+  crossAsset: CrossAssetTile[];
+  rotation: {
+    regime: string | null;
+    headline: string | null;
+    leading: number;
+    sectors: { name: string; rs4w: number | null; impulse: number | null; label: string | null; nNames: number }[];
+  };
+  watchlistMovers: { symbol: string; rank: number; dayPct: number | null; orbisScore: number | null }[];
   fundCount: number;
   highFScore: number;
   highComposite: number;
   avgComposite: number;
-  pharmaLong: number;
-  pharmaShort: number;
-  pharmaWatch: number;
   earningsBeats: number;
   earningsMisses: number;
   earningsUpcoming: number;
@@ -49,12 +68,63 @@ export default function Home() {
   const [d, setD] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [showDesks, setShowDesks] = useState(false);
 
   useEffect(() => {
+    fetch("/api/dashboard")
+      .then((r) => r.json())
+      .then((dash) => {
+        if (dash?.error) {
+          setError(true);
+          return;
+        }
+        const f = dash.fundamentals ?? {};
+        setD({
+          posture: dash.posture ?? null,
+          postureLabel: dash.postureLabel ?? null,
+          briefText: dash.briefText ?? null,
+          posturePillars: dash.posturePillars ?? null,
+          breadth: dash.breadth ?? null,
+          avgRank: dash.avgRank ?? 0,
+          bestSector: dash.bestSector ?? null,
+          worstSector: dash.worstSector ?? null,
+          asOfDate: dash.asOfDate ?? null,
+          regionBreadth: dash.regionBreadth ?? {},
+          crossAsset: dash.crossAsset ?? [],
+          rotation: dash.rotation ?? { regime: null, headline: null, leading: 0, sectors: [] },
+          watchlistMovers: dash.watchlistMovers ?? [],
+          fundCount: f.count ?? 0,
+          highFScore: f.highFScore ?? 0,
+          highComposite: f.highComposite ?? 0,
+          avgComposite: f.avgComposite ?? 0,
+          earningsBeats: 0,
+          earningsMisses: 0,
+          earningsUpcoming: 0,
+          newsCount: 0,
+          skewNames: 0,
+          skewAtm: null,
+          skewWeekend: null,
+          orbGappers: 0,
+          orbBreakouts: 0,
+          analysisBuys: 0,
+          analysisSells: 0,
+          quantNames: 0,
+          quantSharpe: null,
+          biasLongs: 0,
+          biasShorts: 0,
+          perpsTema: 0,
+          perpsCarver: 0,
+          rotateRegime: dash.rotation?.regime ?? null,
+          rotateLeading: dash.rotation?.leading ?? 0,
+        });
+      })
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!showDesks || !d) return;
     Promise.all([
-      fetch("/api/summary").then((r) => r.json()).catch(() => null),
-      fetch("/api/fundamentals?limit=1000").then((r) => r.json()).catch(() => null),
-      fetch("/api/pharma").then((r) => r.json()).catch(() => null),
       fetch("/api/earnings-news?days=30").then((r) => r.json()).catch(() => null),
       fetch("/api/skew").then((r) => r.json()).catch(() => null),
       fetch("/api/orb").then((r) => r.json()).catch(() => null),
@@ -62,58 +132,33 @@ export default function Home() {
       fetch("/api/quantropy").then((r) => r.json()).catch(() => null),
       fetch("/api/bias").then((r) => r.json()).catch(() => null),
       fetch("/api/perps").then((r) => r.json()).catch(() => null),
-      fetch("/api/rotate").then((r) => r.json()).catch(() => null),
-    ])
-      .then(([summary, fund, pharma, earnings, skew, orb, analysis, quant, bias, perps, rotate]) => {
-        if (!summary && !fund) {
-          setError(true);
-          return;
-        }
-        const rows = fund?.rows ?? [];
-        const composites = rows.filter((r: { compositeScore: number | null }) => r.compositeScore != null);
-        setD({
-          posture: summary?.posture ?? null,
-          postureLabel: summary?.postureLabel ?? null,
-          briefText: summary?.briefText ?? null,
-          breadth: summary?.breadth ?? null,
-          avgRank: summary?.avgRank ?? 0,
-          bestSector: summary?.bestSector ?? null,
-          worstSector: summary?.worstSector ?? null,
-          asOfDate: summary?.asOfDate ?? null,
-          regionBreadth: summary?.regionBreadth ?? {},
-          fundCount: rows.length,
-          highFScore: rows.filter((r: { fScore?: number }) => (r.fScore ?? 0) >= 7).length,
-          highComposite: composites.filter((r: { compositeScore: number }) => r.compositeScore >= 70).length,
-          avgComposite: composites.length > 0
-            ? Math.round(composites.reduce((s: number, r: { compositeScore: number }) => s + r.compositeScore, 0) / composites.length)
-            : 0,
-          pharmaLong: pharma?.summary?.long ?? 0,
-          pharmaShort: pharma?.summary?.short ?? 0,
-          pharmaWatch: pharma?.summary?.watch ?? 0,
-          earningsBeats: earnings?.summary?.beats ?? 0,
-          earningsMisses: earnings?.summary?.misses ?? 0,
-          earningsUpcoming: earnings?.summary?.upcoming ?? 0,
-          newsCount: earnings?.summary?.totalNews ?? 0,
-          skewNames: skew?.summary?.names ?? 0,
-          skewAtm: skew?.summary?.avgAtmIv ?? null,
-          skewWeekend: skew?.summary?.weekendRichest ?? null,
-          orbGappers: orb?.summary?.names ?? 0,
-          orbBreakouts: orb?.summary?.breakouts ?? 0,
-          analysisBuys: analysis?.summary?.buys ?? 0,
-          analysisSells: analysis?.summary?.sells ?? 0,
-          quantNames: quant?.summary?.names ?? 0,
-          quantSharpe: quant?.summary?.maxSharpe ?? null,
-          biasLongs: bias?.summary?.longs ?? 0,
-          biasShorts: bias?.summary?.shorts ?? 0,
-          perpsTema: perps?.summary?.temaSlots ?? 0,
-          perpsCarver: perps?.summary?.carverSlots ?? 0,
-          rotateRegime: rotate?.summary?.regime ?? null,
-          rotateLeading: rotate?.summary?.leading ?? 0,
-        });
-      })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
-  }, []);
+    ]).then(([earnings, skew, orb, analysis, quant, bias, perps]) => {
+      setD((prev) =>
+        prev
+          ? {
+              ...prev,
+              earningsBeats: earnings?.summary?.beats ?? 0,
+              earningsMisses: earnings?.summary?.misses ?? 0,
+              earningsUpcoming: earnings?.summary?.upcoming ?? 0,
+              newsCount: earnings?.summary?.totalNews ?? 0,
+              skewNames: skew?.summary?.names ?? 0,
+              skewAtm: skew?.summary?.avgAtmIv ?? null,
+              skewWeekend: skew?.summary?.weekendRichest ?? null,
+              orbGappers: orb?.summary?.names ?? 0,
+              orbBreakouts: orb?.summary?.breakouts ?? 0,
+              analysisBuys: analysis?.summary?.buys ?? 0,
+              analysisSells: analysis?.summary?.sells ?? 0,
+              quantNames: quant?.summary?.names ?? 0,
+              quantSharpe: quant?.summary?.maxSharpe ?? null,
+              biasLongs: bias?.summary?.longs ?? 0,
+              biasShorts: bias?.summary?.shorts ?? 0,
+              perpsTema: perps?.summary?.temaSlots ?? 0,
+              perpsCarver: perps?.summary?.carverSlots ?? 0,
+            }
+          : prev
+      );
+    });
+  }, [showDesks, d?.asOfDate]);
 
   const postureColor =
     (d?.posture ?? 50) >= 55
@@ -164,7 +209,10 @@ export default function Home() {
           {loading ? (
             <div className="h-36 animate-pulse bg-[var(--surface-alt)] rounded" />
           ) : (
-            <PostureGauge value={d?.posture ?? null} label={d?.postureLabel} />
+            <>
+              <PostureGauge value={d?.posture ?? null} label={d?.postureLabel} />
+              <PostureBreakdown pillars={d?.posturePillars} />
+            </>
           )}
         </ModulePanel>
 
@@ -201,65 +249,165 @@ export default function Home() {
 
         <ModulePanel
           title="MARKET PULSE"
-          badge="BREADTH"
+          badge="TAPE"
           accent="var(--module-2)"
-          source="TREND RADAR"
+          source="WATCHLIST · EOD"
           className="lg:col-span-4"
         >
           <div className="grid grid-cols-2 gap-2">
             <MetricCard
-              label="BREADTH GREEN"
-              value={d?.breadth ? `${d.breadth.pctGreen}%` : "—"}
-              sub={d?.breadth ? `${d.breadth.greens}/${d.breadth.total} names` : undefined}
+              label="ADVANCERS"
+              value={
+                d?.breadth?.advancersPct != null ? `${d.breadth.advancersPct}%` : "—"
+              }
+              sub={d?.breadth ? `${d.breadth.total} names · drives POSTURE` : undefined}
               color="var(--accent-bull)"
-              bar={d?.breadth?.pctGreen}
+              bar={d?.breadth?.advancersPct}
               barColor="var(--accent-bull)"
             />
             <MetricCard
-              label="BREADTH RED"
-              value={d?.breadth ? `${d.breadth.pctRed}%` : "—"}
-              sub={d?.breadth ? `${d.breadth.reds} names` : undefined}
-              color="var(--accent-bear)"
-              bar={d?.breadth?.pctRed}
-              barColor="var(--accent-bear)"
+              label="ON LIST"
+              value={
+                d?.breadth?.onListPct != null
+                  ? `${d.breadth.onListPct}%`
+                  : d?.breadth
+                    ? `${d.breadth.pctGreen}%`
+                    : "—"
+              }
+              sub={
+                d?.breadth
+                  ? `${d.breadth.onList ?? d.breadth.greens} watchlist · +4% & 2× vol`
+                  : undefined
+              }
+              color="var(--accent-info)"
+              bar={d?.breadth?.onListPct ?? d?.breadth?.pctGreen}
+              barColor="var(--accent-info)"
             />
             <MetricCard
-              label="AVG QUALITY"
-              value={d?.avgRank ?? "—"}
-              sub="Universe rank"
-              color={postureColor}
-              bar={typeof d?.avgRank === "number" ? d.avgRank : undefined}
+              label="DOWN DAY"
+              value={
+                d?.breadth?.downDayPct != null
+                  ? `${d.breadth.downDayPct}%`
+                  : d?.breadth
+                    ? `${d.breadth.pctRed}%`
+                    : "—"
+              }
+              sub={d?.breadth ? `${d.breadth.downDay ?? d.breadth.reds} names` : undefined}
+              color="var(--accent-bear)"
+              bar={d?.breadth?.downDayPct ?? d?.breadth?.pctRed}
+              barColor="var(--accent-bear)"
             />
             <MetricCard
               label="POSTURE"
               value={d?.posture ?? "—"}
-              sub={d?.postureLabel ?? "Bias score"}
+              sub={d?.postureLabel ?? "≈ advancers %"}
               color={postureColor}
               bar={typeof d?.posture === "number" ? d.posture : undefined}
               barColor={postureColor}
             />
           </div>
-          {d?.breadth && (
+          {d?.breadth && d.breadth.advancersPct != null && (
             <div className="mt-3 h-2 rounded-full bg-[var(--gauge-track)] overflow-hidden flex">
               <div
                 className="h-full"
-                style={{ width: `${d.breadth.pctGreen}%`, background: "var(--accent-bull)" }}
+                title="Advancers"
+                style={{
+                  width: `${d.breadth.advancersPct}%`,
+                  background: "var(--accent-bull)",
+                }}
               />
               <div
                 className="h-full"
                 style={{
-                  width: `${Math.max(0, 100 - d.breadth.pctGreen - d.breadth.pctRed)}%`,
+                  width: `${Math.max(
+                    0,
+                    100 - d.breadth.advancersPct - (d.breadth.downDayPct ?? d.breadth.pctRed)
+                  )}%`,
                   background: "var(--surface-alt)",
                 }}
               />
               <div
                 className="h-full"
-                style={{ width: `${d.breadth.pctRed}%`, background: "var(--accent-bear)" }}
+                title="Down day"
+                style={{
+                  width: `${d.breadth.downDayPct ?? d.breadth.pctRed}%`,
+                  background: "var(--accent-bear)",
+                }}
               />
             </div>
           )}
         </ModulePanel>
       </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-3">
+        <ModulePanel
+          title="CROSS-ASSET"
+          badge="TAPE"
+          accent="var(--module-4)"
+          source="PRICES · EOD"
+          className="xl:col-span-5"
+        >
+          <CrossAssetStrip tiles={d?.crossAsset ?? []} />
+        </ModulePanel>
+        <ModulePanel
+          title="LEADERSHIP & ROTATION"
+          badge="SECTORS"
+          accent="var(--module-2)"
+          source={d?.rotation?.regime ?? "ROTATE"}
+          className="xl:col-span-7"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <span className="text-xs font-terminal text-[var(--text-secondary)]">
+              {d?.rotation?.headline ?? "Sector tape from latest rotation run"}
+            </span>
+            <Link href="/rotate" className="text-[10px] font-terminal text-[var(--accent-info)] hover:underline">
+              Open rotation desk →
+            </Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs font-terminal">
+              <thead>
+                <tr className="text-[10px] text-[var(--text-muted)] border-b border-[var(--border)]">
+                  <th className="text-left py-1">SECTOR</th>
+                  <th className="text-left py-1">LABEL</th>
+                  <th className="text-right py-1">RS 4W</th>
+                  <th className="text-right py-1">IMPULSE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(d?.rotation?.sectors ?? []).slice(0, 8).map((s) => (
+                  <tr key={s.name} className="border-b border-[var(--border)]">
+                    <td className="py-1.5">{s.name}</td>
+                    <td className="py-1.5 text-[var(--text-muted)]">{s.label ?? "—"}</td>
+                    <td className="py-1.5 text-right">{s.rs4w == null ? "—" : `${(s.rs4w * 100).toFixed(1)}%`}</td>
+                    <td className="py-1.5 text-right">{s.impulse == null ? "—" : `${(s.impulse * 100).toFixed(1)}%`}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </ModulePanel>
+      </div>
+
+      {(d?.watchlistMovers?.length ?? 0) > 0 && (
+        <ModulePanel title="WATCHLIST MOVERS" badge="HOT" accent="var(--module-1)" source="MODULE 1">
+          <div className="flex flex-wrap gap-2">
+            {d!.watchlistMovers.map((m) => (
+              <Link
+                key={m.symbol}
+                href={`/ticker/${m.symbol}`}
+                className="px-2 py-1 rounded border border-[var(--panel-border)] text-xs font-terminal hover:border-[var(--accent-info)]"
+              >
+                <span className="font-bold">{m.symbol}</span>
+                <span className="text-[var(--text-muted)] ml-2">O {m.orbisScore ?? "—"}</span>
+                <span className="ml-2" style={{ color: "var(--accent-bull)" }}>
+                  {m.dayPct != null ? `+${m.dayPct.toFixed(1)}%` : ""}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </ModulePanel>
+      )}
 
       {/* Region / sector strip */}
       {(regions.length > 0 || d?.bestSector) && (
@@ -304,15 +452,25 @@ export default function Home() {
         </ModulePanel>
       )}
 
-      {/* Module entry panels — Orbis cockpit + cloud desk stack */}
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setShowDesks((v) => !v)}
+          className="text-xs font-terminal px-3 py-1.5 rounded border border-[var(--panel-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+        >
+          {showDesks ? "Hide module desks" : "Show all module desks"}
+        </button>
+      </div>
+
+      {showDesks && (
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {([
           {
-            href: "/screener", title: "SWING SCREENER", badge: "MODULE 1",
-            subtitle: "Momentum & technical bias board", accent: "var(--module-1)", source: "TREND RADAR",
+            href: "/screener", title: "WATCHLIST", badge: "MODULE 1",
+            subtitle: "Day strength and relative volume — scan only", accent: "var(--module-1)", source: "EOD",
             metrics: [
               { label: "POSTURE", value: d?.posture ?? "—", color: postureColor },
-              { label: "GREEN", value: d?.breadth ? `${d.breadth.pctGreen}%` : "—", color: "var(--accent-bull)" },
+              { label: "ON LIST", value: d?.breadth ? d.breadth.greens : "—", color: "var(--accent-bull)" },
               { label: "BEST", value: d?.bestSector ?? "—" },
             ],
           },
@@ -326,20 +484,18 @@ export default function Home() {
             ],
           },
           {
-            href: "/pharma", title: "PHARMA PIPELINE", badge: "MODULE 3",
-            subtitle: "Clinical trial catalysts", accent: "var(--module-3)", source: "CLINICALTRIALS.GOV",
-            metrics: [
-              { label: "LONG", value: loading ? "…" : d?.pharmaLong ?? 0, color: "var(--accent-bull)" },
-              { label: "SHORT", value: loading ? "…" : d?.pharmaShort ?? 0, color: "var(--accent-bear)" },
-              { label: "WATCH", value: loading ? "…" : d?.pharmaWatch ?? 0, color: "var(--accent-warning)" },
-            ],
-          },
-          {
             href: "/loop", title: "LOOP TERMINAL", badge: "MODULE 4",
             subtitle: "Breakout portfolio harness", accent: "var(--module-1)", source: "PAPER BOOK",
             metrics: [
               { label: "POSTURE", value: d?.posture ?? "—", color: postureColor },
-              { label: "GREEN", value: d?.breadth ? `${d.breadth.pctGreen}%` : "—", color: "var(--accent-bull)" },
+              {
+                label: "ADVANCERS",
+                value:
+                  d?.breadth?.advancersPct != null
+                    ? `${d.breadth.advancersPct}%`
+                    : "—",
+                color: "var(--accent-bull)",
+              },
               { label: "BEST", value: d?.bestSector ?? "—" },
             ],
           },
@@ -381,11 +537,11 @@ export default function Home() {
           },
           {
             href: "/quantropy", title: "QUANTROPY", badge: "MODULE 9",
-            subtitle: "Risk, CAPM, Markowitz", accent: "var(--module-4)", source: "QUANT",
+            subtitle: "In-sample MPT · diagnostic only", accent: "var(--module-4)", source: "QUANT",
             metrics: [
               { label: "NAMES", value: d?.quantNames ? String(d.quantNames) : "—" },
               { label: "MAX SH", value: d?.quantSharpe == null ? "—" : d.quantSharpe.toFixed(2), color: "var(--accent-warning)" },
-              { label: "MPT", value: "on", color: "var(--accent-info)" },
+              { label: "SAMPLE", value: "IS", color: "var(--accent-warning)" },
             ],
           },
           {
@@ -416,8 +572,8 @@ export default function Home() {
             ],
           },
           {
-            href: "/health", title: "HEALTH CATALYST", badge: "MODULE 13",
-            subtitle: "Health & catalyst desk", accent: "var(--module-1)", source: "HEALTH",
+            href: "/health", title: "HEALTH SECTOR", badge: "MODULE 13",
+            subtitle: "Health Care fundamentals desk", accent: "var(--module-1)", source: "FUNDAMENTALS",
             metrics: [
               { label: "DESK", value: "ON", color: "var(--accent-info)" },
               { label: "NEWS", value: loading ? "…" : d?.newsCount ?? 0 },
@@ -457,6 +613,7 @@ export default function Home() {
           </Link>
         ))}
       </div>
+      )}
     </div>
   );
 }

@@ -56,7 +56,7 @@ generalPurpose (api):
 ```
 computerUse:
   "Start `npm run dev`, smoke-test dashboard (/), screener (/screener),
-   fundamentals (/fundamentals), pharma (/pharma), earnings-news (/earnings-news).
+   fundamentals (/fundamentals), health (/health), earnings-news (/earnings-news).
    Verify nav links, theme toggle, and no console errors."
 
 bugbot:
@@ -101,7 +101,7 @@ npm run test:e2e
 
 ### Pipeline (pytest)
 
-- **Unit:** `trend_radar` signal math, `f_score` Piotroski criteria, `pharma_signals` rules
+- **Unit:** `trend_radar` watchlist math, `watchlist_backtest` (production module 1), `f_score` Piotroski criteria
 - **Integration:** DAG smoke test mirroring `.github/workflows/nightly-pipeline.yml`
 - **Location:** `pipeline/tests/`
 
@@ -113,7 +113,6 @@ npm run test:e2e
 | `/api/summary` | Breadth stats, stale detection |
 | `/api/fundamentals` | Row flattening, sector list |
 | `/api/fundamentals/[ticker]` | Ticker validation, report trends |
-| `/api/pharma` | Signal summary, invalid ticker |
 | `/api/earnings-news` | Earnings + news payload |
 | `/api/ticker/[ticker]` | Detail payload, 404/500 paths |
 
@@ -121,7 +120,7 @@ npm run test:e2e
 
 ### UI (Playwright)
 
-- Dashboard, screener, fundamentals, pharma, earnings-news pages load
+- Dashboard, screener, fundamentals, health, earnings-news pages load
 - **Location:** `e2e/`
 
 ## Success Criteria

@@ -21,28 +21,8 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
-def _scrape_sp500() -> list[dict]:
-    """Scrape S&P 500 constituents from Wikipedia using pandas."""
-    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-    resp = requests.get(url, timeout=30, headers={"User-Agent": "OrbisEquity-Bootstrap/1.0"})
-    resp.raise_for_status()
-    from io import StringIO
-    tables = pd.read_html(StringIO(resp.text))
-    if not tables:
-        return []
-    df = tables[0]
-    stocks = []
-    for _, row in df.iterrows():
-        symbol = str(row.get("Symbol", "")).replace(".", "-")
-        if not symbol:
-            continue
-        stocks.append({
-            "symbol": symbol,
-            "company_name": row.get("Security", ""),
-            "sector": row.get("GICS Sector", ""),
-            "industry": row.get("GICS Sub-Industry", ""),
-        })
-    return stocks
+from pipeline.ingest.us_index_universe import build_merged_universe
+from pipeline.universe_filters import is_pharma_stock
 
 
 def main():
@@ -62,25 +42,31 @@ def main():
     sb = create_client(sb_url, sb_key)
 
     # ── Step 1: Universe ──────────────────────────────────────────
-    logger.info("=== Step 1: Scraping S&P 500 from Wikipedia ===")
-    stocks = _scrape_sp500()
-    logger.info("Scraped %d S&P 500 tickers", len(stocks))
+    logger.info("=== Step 1: S&P 500 + Nasdaq-100 (no pharma) ===")
+    stocks, ustats = build_merged_universe()
+    logger.info(
+        "Merged universe: %d names (%d Nasdaq-only), %d pharma excluded",
+        ustats["merged"],
+        ustats["nasdaq100_only"],
+        ustats.get("pharma_excluded", 0),
+    )
 
     now = datetime.now(timezone.utc).isoformat()
     universe_rows = []
     for s in stocks:
+        pharma = is_pharma_stock(s)
         universe_rows.append({
             "symbol": s["symbol"],
             "company_name": s["company_name"],
             "sector": s["sector"],
             "industry": s["industry"],
             "country": "US",
-            "exchange": "NYSE",
+            "exchange": s["exchange"],
             "currency": "USD",
-            "tier": "us_large",
+            "tier": s["tier"],
             "data_source": "yfinance",
             "fundamentals_source": "yfinance",
-            "is_active": True,
+            "is_active": not pharma,
             "updated_at": now,
         })
 
@@ -90,7 +76,7 @@ def main():
         sb.table("universe_members").upsert(batch, on_conflict="symbol").execute()
     logger.info("Upserted %d universe members", len(universe_rows))
 
-    symbols = [s["symbol"] for s in stocks]
+    symbols = [s["symbol"] for s in stocks if not is_pharma_stock(s)]
 
     # ── Step 2: Prices ────────────────────────────────────────────
     logger.info("=== Step 2: Fetching prices via yfinance (last 400 days) ===")

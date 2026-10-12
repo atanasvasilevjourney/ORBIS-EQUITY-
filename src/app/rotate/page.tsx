@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { CanaryBoard } from "@/components/charts/CanaryBoard";
 import { CorrHeatmap } from "@/components/charts/CorrHeatmap";
+import { RotationRRG } from "@/components/rotate/RotationRRG";
 import { deskList, parseDesk } from "@/lib/deskPayload";
 import type { CorrMatrix } from "@/lib/corr";
 
@@ -281,6 +282,7 @@ export default function RotatePage() {
   const [loading, setLoading] = useState(true);
   const [sector, setSector] = useState<string | null>(null);
   const [industry, setIndustry] = useState<string | null>(null);
+  const [rotationView, setRotationView] = useState<"board" | "rrg">("board");
 
   useEffect(() => {
     fetch("/api/rotate")
@@ -491,39 +493,87 @@ export default function RotatePage() {
         </table>
       </div>
 
-      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">2 · ROTATION · CLICK A SECTOR TO OPEN ITS SLEEVES</h2>
-      {loading ? (
-        <p className="text-[var(--text-muted)] font-terminal px-3 py-8 text-center">Loading…</p>
-      ) : !d?.sectors?.length ? (
-        <p className="text-[var(--text-muted)] font-terminal px-3 py-8 text-center">Empty. Run: python -m pipeline.compute.sector_rotation</p>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest">
+          2 · ROTATION · {rotationView === "board" ? "CLICK A SECTOR TO OPEN ITS SLEEVES" : "RRG MAP (RS 4W vs IMPULSE)"}
+        </h2>
+        <div className="flex gap-1 text-[10px] font-terminal">
+          <button
+            type="button"
+            onClick={() => setRotationView("board")}
+            className="px-2 py-1 rounded border border-[var(--border)]"
+            style={{
+              background: rotationView === "board" ? "rgba(56, 189, 248, 0.15)" : "var(--card-bg)",
+              color: rotationView === "board" ? "var(--accent-info)" : "var(--text-secondary)",
+            }}
+          >
+            BOARD
+          </button>
+          <button
+            type="button"
+            onClick={() => setRotationView("rrg")}
+            className="px-2 py-1 rounded border border-[var(--border)]"
+            style={{
+              background: rotationView === "rrg" ? "rgba(56, 189, 248, 0.15)" : "var(--card-bg)",
+              color: rotationView === "rrg" ? "var(--accent-info)" : "var(--text-secondary)",
+            }}
+          >
+            RRG
+          </button>
+        </div>
+      </div>
+      {rotationView === "rrg" ? (
+        loading ? (
+          <p className="text-[var(--text-muted)] font-terminal px-3 py-8 text-center">Loading…</p>
+        ) : (
+          <div className="mb-6 rounded border border-[var(--border)] p-3 bg-[var(--card-bg)]">
+            <RotationRRG
+              points={(d?.sectors ?? []).map((s) => ({
+                name: s.name,
+                rs4w: s.rs4w,
+                impulse: s.impulse,
+                label: s.label,
+                nNames: s.nNames,
+              }))}
+            />
+          </div>
+        )
       ) : (
-        <GroupTable rows={d.sectors} kind="SECTOR" selected={sector} onSelect={pickSector} />
-      )}
+        <>
+          {loading ? (
+            <p className="text-[var(--text-muted)] font-terminal px-3 py-8 text-center">Loading…</p>
+          ) : !d?.sectors?.length ? (
+            <p className="text-[var(--text-muted)] font-terminal px-3 py-8 text-center">Empty. Run: python -m pipeline.compute.sector_rotation</p>
+          ) : (
+            <GroupTable rows={d.sectors} kind="SECTOR" selected={sector} onSelect={pickSector} />
+          )}
 
-      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">
-        2b · SUB-SECTORS · {sector ? `${sector.toUpperCase()} → ${ (nested[sector] ?? []).map((g) => g.name).join(" / ") || "—" }` : "EVERY SECTOR NEST"}
-      </h2>
-      {loading ? null : !d?.industries?.length ? (
-        <p className="text-[var(--text-muted)] font-terminal px-3 py-8 text-center">No sub-sectors. Re-seed sleeves then re-run sector_rotation.</p>
-      ) : (
-        visibleParents.map((parent) => {
-          const kids = nested[parent] ?? [];
-          if (!kids.length) return (
-            <p key={parent} className="text-[var(--text-muted)] font-terminal px-3 py-4 text-sm">
-              {parent} has no industry sleeves in this universe.
-            </p>
-          );
-          return (
-            <div key={parent}>
-              {!sector && (
-                <h3 className="text-[11px] font-terminal tracking-widest mb-2 px-1" style={{ color: "var(--accent-info)" }}>
-                  {parent.toUpperCase()} · {kids.length} sleeves
-                </h3>
-              )}
-              <GroupTable rows={kids} kind="SUB-SECTOR" selected={industry} onSelect={pickIndustry} />
-            </div>
-          );
-        })
+          <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2 mt-4">
+            2b · SUB-SECTORS · {sector ? `${sector.toUpperCase()} → ${ (nested[sector] ?? []).map((g) => g.name).join(" / ") || "—" }` : "EVERY SECTOR NEST"}
+          </h2>
+          {loading ? null : !d?.industries?.length ? (
+            <p className="text-[var(--text-muted)] font-terminal px-3 py-8 text-center">No sub-sectors. Re-seed sleeves then re-run sector_rotation.</p>
+          ) : (
+            visibleParents.map((parent) => {
+              const kids = nested[parent] ?? [];
+              if (!kids.length) return (
+                <p key={parent} className="text-[var(--text-muted)] font-terminal px-3 py-4 text-sm">
+                  {parent} has no industry sleeves in this universe.
+                </p>
+              );
+              return (
+                <div key={parent}>
+                  {!sector && (
+                    <h3 className="text-[11px] font-terminal tracking-widest mb-2 px-1" style={{ color: "var(--accent-info)" }}>
+                      {parent.toUpperCase()} · {kids.length} sleeves
+                    </h3>
+                  )}
+                  <GroupTable rows={kids} kind="SUB-SECTOR" selected={industry} onSelect={pickIndustry} />
+                </div>
+              );
+            })
+          )}
+        </>
       )}
 
       <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">

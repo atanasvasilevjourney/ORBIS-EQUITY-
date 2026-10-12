@@ -1,12 +1,14 @@
 type BiasChipProps = {
   state: 1 | 0 | -1;
   rank: number;
+  entryTiming?: string | null;
 };
 
-function getLabel(state: number, rank: number) {
-  if (state === 0) return "NEUTRAL";
-  if (state === 1) return rank >= 70 ? "BULLISH" : "SLIGHT BULL";
-  return rank >= 70 ? "BEARISH" : "SLIGHT BEAR";
+function getLabel(state: number, entryTiming?: string | null) {
+  if (entryTiming === "hot") return "HOT";
+  if (entryTiming === "watch" || state === 1) return "WATCH";
+  if (state === -1) return "OFF";
+  return "UP";
 }
 
 function getColor(state: number) {
@@ -15,8 +17,8 @@ function getColor(state: number) {
   return "var(--accent-neutral)";
 }
 
-export function BiasChip({ state, rank }: BiasChipProps) {
-  const label = getLabel(state, rank);
+export function BiasChip({ state, rank, entryTiming }: BiasChipProps) {
+  const label = getLabel(state, entryTiming);
   const color = getColor(state);
 
   return (

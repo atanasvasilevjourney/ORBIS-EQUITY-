@@ -15,15 +15,16 @@ export async function GET() {
       .limit(1)
       .maybeSingle();
 
-    const radar = await fetchAll<{ state: number; quality_rank: number }>(
+    const radar = await fetchAll<{ state: number; quality_rank: number; z_mom: number | null }>(
       sb,
       "trend_radar",
-      "state, quality_rank"
+      "state, quality_rank, z_mom"
     );
 
     const total = radar.length;
     const greens = radar.filter((r) => r.state === 1).length;
     const reds = radar.filter((r) => r.state === -1).length;
+    const advancers = radar.filter((r) => (r.z_mom ?? 0) > 0).length;
     const avgRank = total > 0
       ? Math.round(radar.reduce((s, r) => s + r.quality_rank, 0) / total)
       : 0;
@@ -48,6 +49,15 @@ export async function GET() {
       postureLabel: inputs.posture_label ?? null,
       breadth: {
         total,
+        /** Names on the module-1 watchlist (day ≥ +4%, vol ≥ 2× avg). */
+        onList: greens,
+        onListPct: total > 0 ? Math.round((greens / total) * 100) : 0,
+        /** Names with a down day (close below prior close). */
+        downDay: reds,
+        downDayPct: total > 0 ? Math.round((reds / total) * 100) : 0,
+        /** Share of universe up on the day — matches pipeline posture. */
+        advancersPct: total > 0 ? Math.round((advancers / total) * 100) : 0,
+        /** @deprecated Use onListPct — old label implied market breadth. */
         greens,
         reds,
         pctGreen: total > 0 ? Math.round((greens / total) * 100) : 0,
@@ -57,6 +67,7 @@ export async function GET() {
       bestSector: breadth?.best_sector ?? null,
       worstSector: breadth?.worst_sector ?? null,
       regionBreadth: inputs.region_breadth ?? {},
+      posturePillars: inputs.posture_pillars ?? null,
       stale,
     });
   } catch (err) {

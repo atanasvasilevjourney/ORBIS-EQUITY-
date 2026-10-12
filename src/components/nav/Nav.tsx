@@ -6,7 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { ThemeToggle } from "@/components/cards/ThemeToggle";
 
 const NAV_LINKS = [
-  { href: "/screener", label: "SCREENER" },
+  { href: "/screener", label: "WATCHLIST" },
+  { href: "/ema200", label: "EMA200" },
   { href: "/loop", label: "LOOP" },
   { href: "/orb", label: "ORB" },
   { href: "/skew", label: "SKEW" },
@@ -17,7 +18,6 @@ const NAV_LINKS = [
   { href: "/quantropy", label: "QUANT" },
   { href: "/fundamentals", label: "FUNDAMENTALS" },
   { href: "/health", label: "HEALTH" },
-  { href: "/pharma", label: "PHARMA" },
   { href: "/perps", label: "PERPS" },
   { href: "/earnings-news", label: "EARNINGS" },
 ];
@@ -48,7 +48,7 @@ export function Nav() {
           >
             ORBIS EQUITY
           </Link>
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden md:flex items-center gap-1 max-w-[min(72rem,calc(100vw-22rem))] overflow-x-auto">
             {NAV_LINKS.map((l) => {
               const isActive = pathname === l.href || pathname.startsWith(l.href + "/");
               return (
