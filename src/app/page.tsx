@@ -58,8 +58,8 @@ type DashData = {
   quantSharpe: number | null;
   biasLongs: number;
   biasShorts: number;
-  perpsTema: number;
-  perpsCarver: number;
+  cashTema: number;
+  cashCarver: number;
   rotateRegime: string | null;
   rotateLeading: number;
 };
@@ -112,8 +112,8 @@ export default function Home() {
           quantSharpe: null,
           biasLongs: 0,
           biasShorts: 0,
-          perpsTema: 0,
-          perpsCarver: 0,
+          cashTema: 0,
+          cashCarver: 0,
           rotateRegime: dash.rotation?.regime ?? null,
           rotateLeading: dash.rotation?.leading ?? 0,
         });
@@ -131,8 +131,8 @@ export default function Home() {
       fetch("/api/analysis").then((r) => r.json()).catch(() => null),
       fetch("/api/quantropy").then((r) => r.json()).catch(() => null),
       fetch("/api/bias").then((r) => r.json()).catch(() => null),
-      fetch("/api/perps").then((r) => r.json()).catch(() => null),
-    ]).then(([earnings, skew, orb, analysis, quant, bias, perps]) => {
+      fetch("/api/cash").then((r) => r.json()).catch(() => null),
+    ]).then(([earnings, skew, orb, analysis, quant, bias, cash]) => {
       setD((prev) =>
         prev
           ? {
@@ -152,8 +152,8 @@ export default function Home() {
               quantSharpe: quant?.summary?.maxSharpe ?? null,
               biasLongs: bias?.summary?.longs ?? 0,
               biasShorts: bias?.summary?.shorts ?? 0,
-              perpsTema: perps?.summary?.temaSlots ?? 0,
-              perpsCarver: perps?.summary?.carverSlots ?? 0,
+              cashTema: cash?.summary?.temaSlots ?? 0,
+              cashCarver: cash?.summary?.carverSlots ?? 0,
             }
           : prev
       );
@@ -557,8 +557,8 @@ export default function Home() {
             href: "/cash", title: "TEMA + CARVER CASH", badge: "MODULE 11",
             subtitle: "Cash-sized TEMA & Carver", accent: "var(--module-3)", source: "CASH",
             metrics: [
-              { label: "TEMA", value: String(d?.perpsTema ?? 0), color: "var(--accent-info)" },
-              { label: "CARVER", value: String(d?.perpsCarver ?? 0), color: "var(--accent-warning)" },
+              { label: "TEMA", value: String(d?.cashTema ?? 0), color: "var(--accent-info)" },
+              { label: "CARVER", value: String(d?.cashCarver ?? 0), color: "var(--accent-warning)" },
               { label: "VENUE", value: "CASH", color: "var(--accent-bull)" },
             ],
           },
@@ -578,15 +578,6 @@ export default function Home() {
               { label: "DESK", value: "ON", color: "var(--accent-info)" },
               { label: "NEWS", value: loading ? "…" : d?.newsCount ?? 0 },
               { label: "EOD", value: d?.asOfDate ?? "—" },
-            ],
-          },
-          {
-            href: "/perps", title: "PERPS DESK", badge: "MODULE 14",
-            subtitle: "TEMA / Carver perps book", accent: "var(--module-2)", source: "PERPS",
-            metrics: [
-              { label: "TEMA", value: String(d?.perpsTema ?? 0), color: "var(--accent-info)" },
-              { label: "CARVER", value: String(d?.perpsCarver ?? 0), color: "var(--accent-warning)" },
-              { label: "BOOK", value: "QMIE", color: "var(--accent-bull)" },
             ],
           },
         ] as const).map((m) => (
