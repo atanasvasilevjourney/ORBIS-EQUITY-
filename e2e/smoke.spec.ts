@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 
-const PAGES = ["/", "/screener", "/fundamentals", "/health", "/earnings-news"];
+/** Core routes exercised in smoke (subset of primary nav). */
+const PAGES = ["/", "/screener", "/ema200", "/fundamentals", "/health", "/earnings-news"];
 
 for (const path of PAGES) {
   test(`page ${path} loads without error`, async ({ page }) => {
@@ -18,14 +19,16 @@ for (const path of PAGES) {
 }
 
 test("nav links traverse all dashboard pages", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 720 });
+  // Wide enough that overflow nav links (e.g. EARNINGS) stay clickable in CI.
+  await page.setViewportSize({ width: 1600, height: 900 });
   await page.goto("/");
 
   for (const path of PAGES.slice(1)) {
-    const link = page.locator(`nav a[href="${path}"]`);
-    await expect(link.first()).toBeVisible();
-    await link.first().click();
-    await expect(page).toHaveURL(new RegExp(path.replace("/", "\\/")));
+    const link = page.locator(`nav a[href="${path}"]`).first();
+    await expect(link).toBeVisible();
+    await link.scrollIntoViewIfNeeded();
+    await link.click();
+    await expect(page).toHaveURL(new RegExp(`${path.replace("/", "\\/")}(\\?|$)`));
   }
 });
 
