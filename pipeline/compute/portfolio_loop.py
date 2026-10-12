@@ -370,6 +370,14 @@ def main() -> None:
     if orders:
         sb.table("paper_orders").upsert(orders, on_conflict="id").execute()
 
+    for p in surviving_list:
+        opened = p.get("opened_at") or "?"
+        note(
+            "INFO",
+            f"MTM {p['symbol']} · opened {opened} · entry {p.get('entry')} · "
+            f"last {p.get('last')} · PnL ${p.get('unrealized_pnl_usd')}",
+        )
+
     note("INFO", f"Loop complete · {headline}")
     logger.info("=== Portfolio Loop Complete: %s ===", headline)
 

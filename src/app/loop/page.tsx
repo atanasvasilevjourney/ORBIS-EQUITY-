@@ -20,6 +20,8 @@ type BookRow = {
   green: boolean | null;
   unrealizedPnlUsd: number | null;
   daysHeld: number | null;
+  openedAt: string | null;
+  priceAsOfDate: string | null;
 };
 
 type OrderRow = {
@@ -32,6 +34,7 @@ type OrderRow = {
   reason: string | null;
   sector: string | null;
   riskUsd: number | null;
+  createdAt: string | null;
 };
 
 type SectorExp = { sector: string; exposurePct: number; capPct: number; utilizationPct: number; names: number };
@@ -56,6 +59,9 @@ type LoopData = {
   log: LogEntry[];
   headline: string | null;
   stale: boolean;
+  priceAsOfDate?: string | null;
+  priceStaleDays?: number | null;
+  loopRunStaleDays?: number | null;
 };
 
 const usd = (v: number | null | undefined, d = 2) =>
@@ -83,6 +89,7 @@ export default function LoopPage() {
     { label: "OPEN RISK", value: s ? pct(s.openRiskPct) : "—", color: (s?.openRiskPct ?? 0) > 0.064 ? "var(--accent-warning)" : "var(--accent-bull)" },
     { label: "NAMES", value: s ? `${s.names ?? 0} / ${cfg?.maxNames ?? 8}` : "—", color: "" },
     { label: "LAST LOOP", value: s?.asOfDate ?? "—", color: d?.stale ? "var(--accent-warning)" : "" },
+    { label: "PX AS OF", value: d?.priceAsOfDate ?? "—", color: (d?.priceStaleDays ?? 0) > 1 ? "var(--accent-warning)" : "" },
   ];
 
   return (
@@ -103,7 +110,15 @@ export default function LoopPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+      {(d?.loopRunStaleDays ?? 0) > 1 && (
+        <div className="px-4 py-2 mb-4 rounded border border-[var(--accent-warning)] bg-[var(--badge-bg)] text-xs font-terminal text-[var(--text-secondary)]">
+          Loop engine last ran on <strong>{s?.asOfDate}</strong>
+          {(d?.loopRunStaleDays ?? 0) > 0 && <> ({d?.loopRunStaleDays} calendar days ago)</>}.
+          LAST / P&amp;L below are marked from <strong>{d?.priceAsOfDate ?? "prices_daily"}</strong> EOD bars when the nightly job has not refreshed the book.
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
         {cards.map((c) => (
           <div key={c.label} className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
             <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">{c.label}</div>
@@ -122,6 +137,8 @@ export default function LoopPage() {
               <th className="text-left px-3 py-2">TICKER</th>
               <th className="text-left px-3 py-2">SIDE</th>
               <th className="text-right px-3 py-2">SHARES</th>
+              <th className="text-left px-3 py-2">OPENED</th>
+              <th className="text-right px-3 py-2">DAYS</th>
               <th className="text-right px-3 py-2">ENTRY</th>
               <th className="text-right px-3 py-2">LAST</th>
               <th className="text-right px-3 py-2">DC20 LOW</th>
@@ -133,9 +150,9 @@ export default function LoopPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
+              <tr><td colSpan={12} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
             ) : !d?.book?.length ? (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-[var(--text-muted)]">No open positions. Run: python -m pipeline.compute.portfolio_loop</td></tr>
+              <tr><td colSpan={12} className="px-3 py-8 text-center text-[var(--text-muted)]">No open positions. Run: python -m pipeline.compute.portfolio_loop</td></tr>
             ) : (
               d.book.map((r) => {
                 const pnlColor = (r.unrealizedPnlUsd ?? 0) >= 0 ? "var(--accent-bull)" : "var(--accent-bear)";
@@ -147,8 +164,12 @@ export default function LoopPage() {
                     </td>
                     <td className="px-3 py-2 font-bold" style={{ color: "var(--accent-bull)" }}>{r.side}</td>
                     <td className="px-3 py-2 text-right">{r.shares}</td>
+                    <td className="px-3 py-2 text-left text-xs">{r.openedAt ?? "—"}</td>
+                    <td className="px-3 py-2 text-right">{r.daysHeld ?? "—"}</td>
                     <td className="px-3 py-2 text-right">{px(r.entry)}</td>
-                    <td className="px-3 py-2 text-right">{px(r.last)}</td>
+                    <td className="px-3 py-2 text-right" title={r.priceAsOfDate ? `EOD ${r.priceAsOfDate}` : undefined}>
+                      {px(r.last)}
+                    </td>
                     <td className="px-3 py-2 text-right" style={{ color: "var(--accent-bear)" }}>{px(r.stop)}</td>
                     <td className="px-3 py-2 text-right">{r.rank ?? "—"}</td>
                     <td className="px-3 py-2 text-right">—</td>
@@ -228,6 +249,7 @@ export default function LoopPage() {
         <table className="w-full text-sm font-terminal">
           <thead>
             <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
+              <th className="text-left px-3 py-2">DATE</th>
               <th className="text-left px-3 py-2">ACTION</th>
               <th className="text-left px-3 py-2">TICKER</th>
               <th className="text-left px-3 py-2">TYPE</th>
@@ -239,12 +261,13 @@ export default function LoopPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
+              <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
             ) : !d?.orders?.length ? (
-              <tr><td colSpan={7} className="px-3 py-8 text-center text-[var(--text-muted)]">No orders this run — book unchanged.</td></tr>
+              <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">No orders this run — book unchanged.</td></tr>
             ) : (
               d.orders.map((o) => (
                 <tr key={o.id} className="border-b border-[var(--border)]">
+                  <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{o.createdAt ?? s?.asOfDate ?? "—"}</td>
                   <td className="px-3 py-2 font-bold" style={{ color: o.action === "BUY" ? "var(--accent-bull)" : "var(--accent-bear)" }}>{o.action}</td>
                   <td className="px-3 py-2 font-bold">
                     <Link href={`/ticker/${o.ticker}`} className="hover:text-[var(--accent-info)]">{o.ticker}</Link>
@@ -274,7 +297,7 @@ export default function LoopPage() {
       </div>
 
       <p className="text-[10px] text-[var(--text-muted)] font-terminal mt-3">
-        Paper harness: {cfg ? `${(cfg.riskPerTradePct * 100).toFixed(0)}% risk / name · ${(cfg.maxOpenRiskPct * 100).toFixed(0)}% max heat · ${cfg.stopMultipleN}N stop · rank ≥${cfg.minRank} · ${cfg.earningsBlackoutDays}d earnings blackout` : "—"}.
+        Paper harness: Donchian {cfg?.entryChannel ?? 55} + VWAP {cfg?.vwapWindow ?? 20} · equal weight · max {cfg?.maxNames ?? 8} names · rebalance every {cfg?.rebalanceDays ?? 5} sessions.
         Systematic sizing only — not investment advice. No live broker orders.
       </p>
     </div>

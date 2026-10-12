@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { enrichLoopBookWithPrices, tradingStaleDays } from "@/lib/loopBookMtm";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -40,6 +41,7 @@ export async function GET() {
       green: boolean | null;
       unrealized_pnl_usd: number | null;
       days_held: number | null;
+      opened_at: string | null;
     };
     type OrderRow = {
       id: string;
@@ -52,6 +54,7 @@ export async function GET() {
       reason: string | null;
       sector: string | null;
       risk_usd: number | null;
+      created_at: string | null;
     };
 
     const runs = await fetchAll<RunRow>(
@@ -76,12 +79,26 @@ export async function GET() {
     const [book, allOrders] = await Promise.all([
       fetchAll<BookRow>(sb, "paper_book", `
         symbol, company_name, side, shares, entry, last, stop, n, risk_usd,
-        sector, reason, rank, breakout, green, unrealized_pnl_usd, days_held
+        sector, reason, rank, breakout, green, unrealized_pnl_usd, days_held, opened_at
       `),
-      fetchAll<OrderRow>(sb, "paper_orders", "id, run_id, ticker, action, type, shares, limit_price, reason, sector, risk_usd"),
+      fetchAll<OrderRow>(
+        sb,
+        "paper_orders",
+        "id, run_id, ticker, action, type, shares, limit_price, reason, sector, risk_usd, created_at"
+      ),
     ]);
 
     const orders = allOrders.filter((o) => o.run_id === latest.run_id);
+
+    const entryDateByTicker = new Map<string, string>();
+    const enterOrders = allOrders
+      .filter((o) => o.type === "ENTER" && o.action === "BUY")
+      .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
+    for (const o of enterOrders) {
+      const d = o.created_at?.slice(0, 10);
+      if (!d || entryDateByTicker.has(o.ticker)) continue;
+      entryDateByTicker.set(o.ticker, d);
+    }
     const harness = (latest.harness && typeof latest.harness === "object")
       ? latest.harness as {
           sectorExposure?: unknown[];
@@ -96,6 +113,84 @@ export async function GET() {
       stale = diff > 3;
     }
 
+    const bookBase = book
+      .map((p) => ({
+        ticker: p.symbol,
+        companyName: p.company_name ?? "",
+        side: p.side,
+        shares: p.shares,
+        entry: p.entry,
+        last: p.last,
+        stop: p.stop,
+        n: p.n,
+        riskUsd: p.risk_usd,
+        sector: p.sector ?? "",
+        reason: p.reason ?? "",
+        rank: p.rank,
+        breakout: p.breakout,
+        green: p.green,
+        unrealizedPnlUsd: p.unrealized_pnl_usd,
+        daysHeld: p.days_held,
+        openedAt: p.opened_at?.slice(0, 10) ?? entryDateByTicker.get(p.symbol) ?? null,
+      }))
+      .sort((a, b) => (b.riskUsd ?? 0) - (a.riskUsd ?? 0));
+
+    const tickers = bookBase.map((r) => r.ticker);
+    let priceAsOfDate: string | null = null;
+    let priceStaleDays: number | null = null;
+    let bookOut = bookBase.map((r) => ({
+      ...r,
+      priceAsOfDate: null as string | null,
+    }));
+
+    if (tickers.length > 0) {
+      const cutoff = new Date();
+      cutoff.setUTCDate(cutoff.getUTCDate() - 30);
+      const cutoffIso = cutoff.toISOString().slice(0, 10);
+      const pxRows = await fetchAll<{
+        symbol: string;
+        date: string;
+        close: number | null;
+        adj_close: number | null;
+      }>(
+        sb,
+        "prices_daily",
+        "symbol, date, close, adj_close",
+        (q) => q.in("symbol", tickers).gte("date", cutoffIso).order("date", { ascending: false })
+      );
+      const enriched = enrichLoopBookWithPrices(
+        bookBase.map((r) => ({
+          ticker: r.ticker,
+          shares: r.shares,
+          entry: r.entry,
+          last: r.last,
+          openedAt: r.openedAt,
+          unrealizedPnlUsd: r.unrealizedPnlUsd,
+          daysHeld: r.daysHeld,
+        })),
+        pxRows.map((r) => ({
+          symbol: r.symbol,
+          date: r.date,
+          close: r.close,
+          adj_close: r.adj_close,
+        }))
+      );
+      priceAsOfDate = enriched.priceAsOfDate;
+      priceStaleDays = tradingStaleDays(priceAsOfDate);
+      if (priceStaleDays != null && priceStaleDays > 3) stale = true;
+      bookOut = bookBase.map((base) => {
+        const hit = enriched.rows.find((e) => e.ticker === base.ticker);
+        if (!hit) return { ...base, priceAsOfDate: null };
+        return {
+          ...base,
+          last: hit.last,
+          unrealizedPnlUsd: hit.unrealizedPnlUsd,
+          daysHeld: hit.daysHeld,
+          priceAsOfDate: hit.priceAsOfDate,
+        };
+      });
+    }
+
     return NextResponse.json({
       summary: {
         equity: latest.equity,
@@ -108,26 +203,7 @@ export async function GET() {
         status: latest.status,
         posture: latest.posture,
       },
-      book: book
-        .map((p) => ({
-          ticker: p.symbol,
-          companyName: p.company_name ?? "",
-          side: p.side,
-          shares: p.shares,
-          entry: p.entry,
-          last: p.last,
-          stop: p.stop,
-          n: p.n,
-          riskUsd: p.risk_usd,
-          sector: p.sector ?? "",
-          reason: p.reason ?? "",
-          rank: p.rank,
-          breakout: p.breakout,
-          green: p.green,
-          unrealizedPnlUsd: p.unrealized_pnl_usd,
-          daysHeld: p.days_held,
-        }))
-        .sort((a, b) => (b.riskUsd ?? 0) - (a.riskUsd ?? 0)),
+      book: bookOut,
       orders: orders.map((o) => ({
         id: o.id,
         ticker: o.ticker,
@@ -138,6 +214,7 @@ export async function GET() {
         reason: o.reason,
         sector: o.sector,
         riskUsd: o.risk_usd,
+        createdAt: o.created_at?.slice(0, 10) ?? null,
       })),
       harness: {
         sectorExposure: harness.sectorExposure ?? [],
@@ -147,6 +224,9 @@ export async function GET() {
       log: Array.isArray(latest.log) ? latest.log : [],
       headline: latest.headline,
       stale,
+      priceAsOfDate,
+      priceStaleDays,
+      loopRunStaleDays: latest.asof_date ? tradingStaleDays(latest.asof_date.slice(0, 10)) : null,
     });
   } catch (err) {
     console.error("Loop API error:", err);
