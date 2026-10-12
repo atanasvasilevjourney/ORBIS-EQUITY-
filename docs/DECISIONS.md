@@ -23,4 +23,21 @@
 
 ## Phase scope
 
-- **This branch:** Phase 1 only (universe, vendors, indicators, nightly job, schema). Phases 2–5 intentionally not started.
+- **Phase 1:** Universe, vendors, indicators, nightly job, schema.
+- **Phase 2 (research):** `pipeline/research/ema200_backtest.py` + notebook `pipeline/research/notebooks/ema200_touch_is_oos_validation.ipynb`.
+
+### Phase 2 gate (2019-01-01 → present, adjusted daily)
+
+Initial run on AMZN, SPY, AAPL, QQQ, NVDA:
+
+- **EMA200 is not clearly special vs EMA150/250** on 5d forward returns (e.g. AMZN: EMA200 −0.10% vs EMA250 +0.75% mean 5d).
+- **Touch events underperform regime-matched random** 5d entries on several names (e.g. AMZN, SPY).
+- **Long simulation** OOS Sharpe negative on AMZN/SPY vs positive buy-and-hold; Monte Carlo p95 of mean trade return still < 0 on AMZN.
+
+**Action:** `mode` set to `watchlist_only` in YAML until a broader universe event study (incl. delisted) or intraday confirmation changes the verdict. Do not ship Discord “signal” alerts until user approves.
+
+Manual TradingView spot-check on 15m/1m remains out of scope for this daily harness (Phase 3).
+
+## Phase scope (alerts)
+
+- Phases 3–5 (intraday, alerts, journal) blocked until signal mode approval.

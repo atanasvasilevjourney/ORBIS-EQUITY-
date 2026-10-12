@@ -1,4 +1,4 @@
-mode: signal               # signal | watchlist_only
+mode: watchlist_only       # signal | watchlist_only — Phase 2 gate: daily EMA200 touch underperforms baselines (see research/report.md)
 ema_period: 200
 atr_period: 14
 history_min_bars: 500
