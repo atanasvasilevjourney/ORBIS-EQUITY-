@@ -41,3 +41,12 @@ Manual TradingView spot-check on 15m/1m remains out of scope for this daily harn
 ## Phase scope (alerts)
 
 - Phases 3–5 (intraday, alerts, journal) blocked until signal mode approval.
+
+## Discretionary watchlist UI
+
+- **`mode: watchlist_only`** — terminal shows retracements at `/ema200` and `GET /api/ema200`; no “take this trade” copy.
+- Default filter: within `shortlist_atr` of EMA200, prior uptrend (`days_above`, slope), **close ≥ EMA200** (held the level).
+- Optional `?near=1` relaxes trend/hold rules for broader “near EMA” browsing.
+- Populated by nightly `pipeline.ema200_scanner.jobs.nightly` → `ema200_features`.
+- **Universe:** `universe.equities: sp500_ndx100` — merged S&P 500 + Nasdaq-100 (~600 names) via Wikipedia + Nasdaq API; crypto off by default.
+- **UI filter:** API returns only `RETRACE_HELD` (retrace + close ≥ EMA200 + rising trend), not every name near the line.

@@ -1,4 +1,9 @@
-mode: watchlist_only       # signal | watchlist_only — Phase 2 gate: daily EMA200 touch underperforms baselines (see research/report.md)
+mode: watchlist_only       # signal | watchlist_only — discretionary scan only (see research/report.md)
+
+universe:
+  equities: sp500_ndx100   # sp500_ndx100 | all_us
+  include_crypto: false
+  exclude_pharma: false
 ema_period: 200
 atr_period: 14
 history_min_bars: 500
@@ -52,6 +57,6 @@ validation:
 
 nightly:
   min_history_bars: 550
-  max_vendor_backfill_symbols: 200
-  missing_data_abort_pct: 15.0
-  time_budget_sec: 3600
+  max_vendor_backfill_symbols: 700
+  missing_data_abort_pct: 25.0
+  time_budget_sec: 7200

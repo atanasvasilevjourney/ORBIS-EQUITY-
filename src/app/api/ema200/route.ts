@@ -40,8 +40,9 @@ type FundRow = {
 export async function GET(req: NextRequest) {
   try {
     const sp = req.nextUrl.searchParams;
-    const limit = Math.min(parseInt(sp.get("limit") ?? "200", 10), 500);
+    const limit = Math.min(parseInt(sp.get("limit") ?? "500", 10), 500);
     const showAllNear = sp.get("near") === "1";
+    const retraceOnly = sp.get("near") !== "1";
 
     const sb = createServerClient();
 
@@ -70,7 +71,24 @@ export async function GET(req: NextRequest) {
       (max, r) => (r.bar_date > max ? r.bar_date : max),
       features[0].bar_date
     );
-    const latestRows = features.filter((r) => r.bar_date === latestDate);
+    type ScannerUniverseRow = { symbol: string; index_tag: string | null; asset_class: string | null };
+    let scannerUniverse: ScannerUniverseRow[] = [];
+    try {
+      scannerUniverse = await fetchAll<ScannerUniverseRow>(
+        sb,
+        "ema200_universe",
+        "symbol, index_tag, asset_class",
+        (q) => q.eq("active", true).eq("asset_class", "equity")
+      );
+    } catch (err) {
+      if (!isMissingRelation(err)) throw err;
+    }
+    const allowedSymbols = new Set(scannerUniverse.map((u) => u.symbol));
+    const indexMap = new Map(scannerUniverse.map((u) => [u.symbol, u.index_tag]));
+
+    const latestRows = features.filter(
+      (r) => r.bar_date === latestDate && (allowedSymbols.size === 0 || allowedSymbols.has(r.symbol))
+    );
 
     const opts = showAllNear
       ? { ...EMA200_DEFAULTS, requireUptrend: false, requireCloseAboveEma: false }
@@ -107,13 +125,16 @@ export async function GET(req: NextRequest) {
         };
         const setup = classifyEma200Setup(feat, opts);
         if (!setup) return null;
+        if (retraceOnly && setup !== "RETRACE_HELD") return null;
         const u = uMap.get(r.symbol);
         const f = fMap.get(r.symbol);
+        const tag = indexMap.get(r.symbol);
         return {
           symbol: r.symbol,
           companyName: u?.company_name ?? "",
           sector: u?.sector ?? "",
-          country: u?.country ?? "",
+          country: u?.country ?? "US",
+          indexTag: tag ?? null,
           barDate: r.bar_date,
           setup,
           close: r.close,
@@ -135,9 +156,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       mode: "watchlist_only",
       asOfDate: latestDate,
+      universe: "sp500_ndx100",
+      universeCount: allowedSymbols.size || null,
       disclaimer:
-        "EMA200 retrace watchlist for discretionary review only. You decide entries and exits in IBKR. No automated orders.",
-      filter: showAllNear ? "near_ema_relaxed" : "retrace_held_default",
+        "S&P 500 + Nasdaq-100 only. Names appear when price retraces to the rising 200 EMA and the daily close holds the level. Discretionary — you trade manually in IBKR.",
+      filter: showAllNear ? "near_ema_relaxed" : "retrace_held_only",
       rows,
     });
   } catch (err) {

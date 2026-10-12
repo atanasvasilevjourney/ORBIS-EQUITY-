@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 export PYTHONUNBUFFERED=1
 
-echo "[daily] ingest prices"
+echo "[daily] ingest prices (run pipeline.ingest.us_index_universe weekly to refresh SP500+NDX100 members)"
 python -m pipeline.ingest.prices
 
 echo "[daily] compute trend radar"

@@ -45,6 +45,10 @@ describe("GET /api/ema200", () => {
           error: null,
         }),
         fundamentals_snapshot: () => ({ data: [], error: null }),
+        ema200_universe: () => ({
+          data: [{ symbol: "AMZN", index_tag: "sp500", asset_class: "equity" }],
+          error: null,
+        }),
       })
     );
 

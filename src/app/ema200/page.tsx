@@ -4,13 +4,13 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ModuleHeader } from "@/components/ui/ModuleHeader";
 import { ModulePanel } from "@/components/ui/ModulePanel";
-import { FilterChip } from "@/components/ui/FilterChip";
 import { EmptyState } from "@/components/ui/EmptyState";
 
 type Ema200Row = {
   symbol: string;
   companyName: string;
   sector: string;
+  indexTag: string | null;
   setup: string;
   close: number | null;
   ema200: number | null;
@@ -26,31 +26,35 @@ type Ema200Row = {
 type ApiPayload = {
   mode: string;
   asOfDate: string | null;
+  universe: string;
+  universeCount: number | null;
   disclaimer: string;
-  filter: string;
   rows: Ema200Row[];
 };
+
+function indexLabel(tag: string | null): string {
+  if (tag === "sp500") return "S&P 500";
+  if (tag === "ndx100") return "NDX-100";
+  return tag ?? "—";
+}
 
 export default function Ema200WatchlistPage() {
   const [data, setData] = useState<ApiPayload | null>(null);
   const [loading, setLoading] = useState(true);
-  const [relaxed, setRelaxed] = useState(false);
   const [error, setError] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(false);
     try {
-      const q = relaxed ? "?near=1" : "";
-      const res = await fetch(`/api/ema200${q}`);
-      const json = await res.json();
-      setData(json);
+      const res = await fetch("/api/ema200");
+      setData(await res.json());
     } catch {
       setError(true);
     } finally {
       setLoading(false);
     }
-  }, [relaxed]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -63,8 +67,8 @@ export default function Ema200WatchlistPage() {
       <ModuleHeader
         module="EMA200"
         title="RETRACE WATCHLIST"
-        description="Shows names that pulled back to the rising 200 EMA and held the level (daily EOD). Discretionary only — you trade manually in IBKR."
-        source="NIGHTLY FEATURES"
+        description="S&P 500 + Nasdaq-100 (~600 names scanned nightly). Listed only when price pulls back to a rising 200 EMA and the daily close holds the level. You decide entries in IBKR."
+        source="SP500 ∪ NDX-100 · EOD"
         accent="var(--accent-info)"
       />
 
@@ -74,21 +78,10 @@ export default function Ema200WatchlistPage() {
         </p>
       )}
 
-      <div className="flex flex-wrap gap-2 items-center">
-        <FilterChip
-          label="Retrace + held"
-          active={!relaxed}
-          onClick={() => setRelaxed(false)}
-        />
-        <FilterChip
-          label="Near EMA (all)"
-          active={relaxed}
-          onClick={() => setRelaxed(true)}
-        />
-        <span className="text-[10px] text-[var(--text-muted)] font-terminal ml-2">
-          As of {data?.asOfDate ?? "—"} · mode {data?.mode ?? "watchlist_only"}
-        </span>
-      </div>
+      <p className="text-[10px] font-terminal text-[var(--text-muted)]">
+        Universe: {data?.universeCount ?? "—"} symbols · as of {data?.asOfDate ?? "—"} · showing{" "}
+        {rows.length} retracements
+      </p>
 
       <ModulePanel
         title="AT 200 EMA"
@@ -104,7 +97,7 @@ export default function Ema200WatchlistPage() {
               <thead>
                 <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--panel-border)] bg-[var(--panel-header)]">
                   <th className="text-left px-3 py-2">TICKER</th>
-                  <th className="text-left px-3 py-2">SETUP</th>
+                  <th className="text-left px-3 py-2">INDEX</th>
                   <th className="text-right px-3 py-2">DIST (ATR)</th>
                   <th className="text-right px-3 py-2">DAYS↑</th>
                   <th className="text-right px-3 py-2">SLOPE</th>
@@ -126,8 +119,8 @@ export default function Ema200WatchlistPage() {
                   <tr>
                     <td colSpan={10} className="px-3 py-4">
                       <EmptyState
-                        title="No retracements on this filter"
-                        detail="Either nothing is within 1.5 ATR of the 200 EMA with your trend rules, or nightly ema200_features has not run yet."
+                        title="No retracements today"
+                        detail="Nothing in S&P 500 / Nasdaq-100 met the retrace + hold rules on the latest EOD bar, or nightly ema200_features has not run yet."
                       />
                     </td>
                   </tr>
@@ -145,7 +138,7 @@ export default function Ema200WatchlistPage() {
                           {r.companyName}
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-xs">{r.setup.replace(/_/g, " ")}</td>
+                      <td className="px-3 py-2 text-xs">{indexLabel(r.indexTag)}</td>
                       <td className="px-3 py-2 text-right">{r.distAtr?.toFixed(2) ?? "—"}</td>
                       <td className="px-3 py-2 text-right">{r.daysAbove ?? "—"}</td>
                       <td className="px-3 py-2 text-right">
