@@ -212,10 +212,19 @@ def main() -> None:
     logger.info("=== Price Ingest Start ===")
 
     sb = _get_supabase_client()
+    from datetime import date
+    from pipeline.utils.pipeline_runs import PipelineRunRecorder
+
+    with PipelineRunRecorder(sb, "ingest.prices", asof_date=date.today()) as run:
+        _run_price_ingest(sb, run)
+
+
+def _run_price_ingest(sb, run) -> None:
     members = _fetch_universe(sb)
 
     if not members:
         logger.error("No universe members found — run universe sync first.")
+        run.mark_error("no universe members")
         return
 
     # Split by price_source
@@ -262,6 +271,7 @@ def main() -> None:
 
     if not all_rows:
         logger.warning("No price rows collected — nothing to upsert.")
+        run.mark_error("no price rows")
         return
 
     # Normalize dates and filter out rows with missing critical fields
@@ -306,6 +316,8 @@ def main() -> None:
         "=== Price Ingest Complete: %d/%d rows upserted ===",
         upserted, len(clean_rows),
     )
+    run.set_row_counts(upserted=upserted, collected=len(clean_rows))
+    run.set_headline(f"upserted {upserted}/{len(clean_rows)} price rows")
 
 
 if __name__ == "__main__":

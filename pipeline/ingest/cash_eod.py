@@ -121,6 +121,24 @@ def _write_run(
         sb.table("ingest_runs").upsert(payload, on_conflict="run_id").execute()
     except Exception:
         logger.warning("ingest_runs write skipped (apply migration 020)", exc_info=True)
+    try:
+        sb.table("pipeline_runs").upsert(
+            {
+                "run_id": run_id,
+                "source": "ingest.cash_eod",
+                "status": "ok" if fail == 0 else "partial",
+                "row_counts": {"symbols_ok": ok, "symbols_fail": fail, "rows_upserted": rows},
+                "asof_date": date.today().isoformat(),
+                "started_at": started.isoformat(),
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "headline": headline,
+                "error": None if fail == 0 else f"{fail} symbol failures",
+                "config": payload.get("config"),
+            },
+            on_conflict="run_id",
+        ).execute()
+    except Exception:
+        logger.warning("pipeline_runs write skipped (apply migration 024)", exc_info=True)
 
 
 def fetch_members(sb: Client, limit: int | None = None) -> list[dict]:

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { EMPTY_PERPS } from "@/lib/liteDeskApi";
+import { evaluateFreshness } from "@/lib/freshness";
+import { gateSide, staleHeadline } from "@/lib/signalGate";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -152,10 +154,17 @@ export async function GET() {
       .filter((n) => n.inCarverBook)
       .sort((a, b) => Math.abs(b.carverForecast ?? 0) - Math.abs(a.carverForecast ?? 0));
 
-    let stale = false;
-    if (latest.asof_date) {
-      stale = (Date.now() - new Date(latest.asof_date).getTime()) / 86400000 > 3;
-    }
+    const fresh = evaluateFreshness(latest.asof_date);
+    const stale = fresh.stale;
+    const suppress = fresh.signalsSuppressed;
+    const maskName = (n: ReturnType<typeof mapName>) => ({
+      ...n,
+      temaSide: gateSide(n.temaSide, suppress) ?? "FLAT",
+      carverSide: gateSide(n.carverSide, suppress) ?? "FLAT",
+      inTemaBook: suppress ? false : n.inTemaBook,
+      inCarverBook: suppress ? false : n.inCarverBook,
+    });
+    const maskedNames = names.map(maskName);
     const listed = names.filter((n) => n.venueListed).length;
     const cfg = latest.config && typeof latest.config === "object" ? latest.config : {};
     return NextResponse.json({
@@ -177,13 +186,14 @@ export async function GET() {
         maxDrawdown: typeof cfg.maxDrawdown === "number" ? cfg.maxDrawdown : null,
         activeForecasts: typeof cfg.activeForecasts === "number" ? cfg.activeForecasts : null,
       },
-      names: names.sort((a, b) => a.ticker.localeCompare(b.ticker)),
-      temaBook,
-      macdClosed,
-      carverBook,
-      headline: latest.headline,
+      names: maskedNames.sort((a, b) => a.ticker.localeCompare(b.ticker)),
+      temaBook: suppress ? [] : temaBook,
+      macdClosed: suppress ? [] : macdClosed,
+      carverBook: suppress ? [] : carverBook,
+      headline: staleHeadline(latest.headline, suppress),
       config: latest.config,
       stale,
+      signalsSuppressed: suppress,
     });
   } catch (err) {
     console.error("Perps API error:", err);

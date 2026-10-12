@@ -20,6 +20,7 @@ const NAV_LINKS = [
   { href: "/health", label: "HEALTH" },
   { href: "/perps", label: "PERPS" },
   { href: "/earnings-news", label: "EARNINGS" },
+  { href: "/status", label: "STATUS" },
 ];
 
 export function Nav() {

@@ -173,6 +173,13 @@ def main() -> None:
         return
 
     sb = create_client(sb_url, sb_key)
+    from pipeline.utils.pipeline_runs import PipelineRunRecorder
+
+    with PipelineRunRecorder(sb, "compute.trend_radar", asof_date=date.today()) as run:
+        _run_trend_radar(sb, run)
+
+
+def _run_trend_radar(sb, run) -> None:
 
     from pipeline.utils.supabase import fetch_all
 
@@ -215,6 +222,7 @@ def main() -> None:
 
     if not all_prices:
         logger.warning("No price data found")
+        run.mark_error("no price data")
         return
 
     prices_df = pd.DataFrame(all_prices)
@@ -264,6 +272,8 @@ def main() -> None:
     on_list = sum(1 for r in results if r["state"] == 1)
     hot = sum(1 for r in results if r["entry_timing"] == "hot")
     logger.info("Watchlist: %d on list, %d hot, %d total", on_list, hot, len(results))
+    run.set_row_counts(computed=len(results), on_list=on_list, hot=hot, errors=errors)
+    run.set_headline(f"watchlist {on_list} on list, {hot} hot")
 
 
 if __name__ == "__main__":
