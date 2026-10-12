@@ -76,8 +76,10 @@ Optional: LSE key → `LSE_API_KEY` (production fundamentals/US prices). Without
 
 4. Approve services:
    - `orbis-equity-bootstrap` (manual)
-   - `orbis-equity-weekly` (Mon 19:00 UTC)
-   - `orbis-equity-daily` (Tue–Fri 19:30 UTC)
+   - `orbis-equity-weekly` (Mon **21:00 UTC** — weekly ingest + full daily chain)
+   - `orbis-equity-daily` (Tue–Fri **21:00 UTC** — full daily chain)
+
+   **Dual schedulers (recommended):** keep **GitHub Actions** (`nightly-pipeline.yml`, **19:30 UTC** Mon–Fri) as primary and **Render** at **21:00 UTC** as backup. Both write the same Supabase tables (idempotent upserts). Stagger avoids two heavy price ingests at once.
 
 5. **Critical first run:** Render → `orbis-equity-bootstrap` → **Manual Trigger**.  
    Wait until it finishes (S&P history + radar). Without this, daily jobs lack ≥148 price days and radar stays empty.
@@ -92,16 +94,23 @@ Scripts:
 
 ---
 
-## 4. (Optional) Fix GitHub Actions too
+## 4. GitHub Actions (primary cron)
 
-Repo → Settings → Secrets and variables → Actions — add the same:
+Repo → Settings → Secrets and variables → Actions — add:
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_KEY`
 - `LSE_API_KEY`
 - `LSE_DATA_API_URL` (optional)
+- `RESEND_API_KEY`, `ALERT_EMAIL`, `ALERT_EMAIL_FROM` (optional — EOD digest)
 
-Nightly workflow has been failing because these were empty. Render can replace Actions; you do not need both.
+Schedule (already in repo): **Mon–Fri 19:30 UTC** (`.github/workflows/nightly-pipeline.yml`). Manual run: Actions → **Orbis Equity Nightly Pipeline** → **Run workflow**.
+
+Use **Render + GitHub together** per section 3 (primary + backup). Shell entrypoints:
+
+- `pipeline/scripts/run_daily.sh` — ingest + `run_compute_signals.sh` + earnings/news
+- `pipeline/scripts/run_monday.sh` — `run_weekly.sh` + deep `cash_eod` + `run_daily.sh`
+- `pipeline/scripts/run_compute_signals.sh` — desk compute (keep aligned with the workflow file)
 
 ---
 
