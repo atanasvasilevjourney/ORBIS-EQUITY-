@@ -96,8 +96,12 @@ export default function OrbPage() {
 
   useEffect(() => {
     fetch("/api/orb")
-      .then((r) => r.json())
-      .then((data: unknown) => {
+      .then(async (r) => {
+        if (!r.ok) {
+          setD(null);
+          return;
+        }
+        const data: unknown = await r.json();
         const desk = parseDesk<OrbData>(data, "watch");
         setD(desk);
         if (desk?.watch?.[0]) setSel(desk.watch[0].ticker);

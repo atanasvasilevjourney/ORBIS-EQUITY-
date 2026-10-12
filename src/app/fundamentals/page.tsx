@@ -34,12 +34,15 @@ type FundRow = {
   compositeScore: number | null;
   sectorValuePctile: number | null;
   sectorQualityPctile: number | null;
+  verdict: string | null;
+  summary: string | null;
 };
 
 type SortKey = keyof FundRow;
 
-const COLUMNS: { key: SortKey; label: string; fmt?: "pct" | "ratio" | "score" | "cap" | "factor" }[] = [
+const COLUMNS: { key: SortKey; label: string; fmt?: "pct" | "ratio" | "score" | "cap" | "factor" | "verdict" }[] = [
   { key: "symbol", label: "TICKER" },
+  { key: "verdict", label: "VERDICT", fmt: "verdict" },
   { key: "compositeScore", label: "COMP", fmt: "factor" },
   { key: "valueScore", label: "VAL", fmt: "factor" },
   { key: "qualityScore", label: "QLT", fmt: "factor" },
@@ -53,8 +56,10 @@ const COLUMNS: { key: SortKey; label: string; fmt?: "pct" | "ratio" | "score" | 
   { key: "marketCap", label: "MKTCAP", fmt: "cap" },
 ];
 
-function fmtVal(v: number | null, fmt?: string): string {
+function fmtVal(v: number | string | null, fmt?: string): string {
   if (v == null) return "—";
+  if (fmt === "verdict") return String(v);
+  if (typeof v !== "number") return String(v);
   if (fmt === "pct") return (v * 100).toFixed(1) + "%";
   if (fmt === "cap") {
     if (v >= 1e12) return (v / 1e12).toFixed(1) + "T";
@@ -67,8 +72,16 @@ function fmtVal(v: number | null, fmt?: string): string {
   return v.toFixed(2);
 }
 
-function valColor(v: number | null, fmt?: string): string {
+function valColor(v: number | string | null, fmt?: string): string {
   if (v == null) return "";
+  if (fmt === "verdict") {
+    const s = String(v);
+    if (s === "STRONG" || s === "ATTRACTIVE") return "var(--accent-bull)";
+    if (s === "WEAK" || s === "DISTRESSED") return "var(--accent-bear)";
+    if (s === "NEUTRAL") return "var(--accent-warning)";
+    return "";
+  }
+  if (typeof v !== "number") return "";
   if (fmt === "pct") return v > 0 ? "var(--accent-bull)" : v < 0 ? "var(--accent-bear)" : "";
   if (fmt === "score") return v >= 7 ? "var(--accent-bull)" : v <= 3 ? "var(--accent-bear)" : "";
   if (fmt === "factor") return v >= 70 ? "var(--accent-bull)" : v <= 30 ? "var(--accent-bear)" : "";
@@ -83,6 +96,7 @@ export default function FundamentalsPage() {
   const [minF, setMinF] = useState(0);
   const [minComposite, setMinComposite] = useState(0);
   const [valTier, setValTier] = useState<"" | "value" | "growth" | "quality" | "multifactor">("");
+  const [verdictFilter, setVerdictFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("compositeScore");
   const [sortAsc, setSortAsc] = useState(false);
 
@@ -90,6 +104,7 @@ export default function FundamentalsPage() {
     const params = new URLSearchParams();
     if (minF > 0) params.set("min_f", String(minF));
     if (minComposite > 0) params.set("min_composite", String(minComposite));
+    if (verdictFilter) params.set("verdict", verdictFilter);
     params.set("limit", "500");
 
     fetch(`/api/fundamentals?${params}`)
@@ -100,7 +115,7 @@ export default function FundamentalsPage() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [minF, minComposite]);
+  }, [minF, minComposite, verdictFilter]);
 
   const filtered = useMemo(() => {
     let rows = [...data];
@@ -141,8 +156,8 @@ export default function FundamentalsPage() {
       <ModuleHeader
         module="MODULE 2"
         title="QUANT FUNDAMENTALS"
-        description="Multi-factor scores (0-100) — value, quality, growth, earnings quality, leverage — for systematic equity screening"
-        source="FUNDAMENTALS · EOD"
+        description="Financial statements + multi-factor scores + automated fundamental verdict (F-Score detail, accruals, leverage)"
+        source="STATEMENTS · FACTORS · EOD"
         accent="var(--module-2)"
       />
 
@@ -152,7 +167,7 @@ export default function FundamentalsPage() {
           { label: "SHOWING", value: String(filtered.length) },
           { label: "COMPOSITE 70+", value: String(highComposite), color: "var(--accent-bull)" },
           { label: "AVG COMPOSITE", value: avgComposite > 0 ? String(avgComposite) : "—" },
-          { label: "UNIVERSE", value: String(data.length) },
+          { label: "STRONG / ATTRACTIVE", value: String(filtered.filter((r) => r.verdict === "STRONG" || r.verdict === "ATTRACTIVE").length), color: "var(--accent-bull)" },
         ].map((c) => (
           <div key={c.label} className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
             <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">{c.label}</div>
@@ -197,6 +212,14 @@ export default function FundamentalsPage() {
                 : "border-[var(--border)] text-[var(--text-muted)]"
             }`}>{f === 0 ? "F: Any" : `F >= ${f}`}</button>
         ))}
+
+        <select value={verdictFilter} onChange={(e) => setVerdictFilter(e.target.value)}
+          className="px-2 py-1.5 text-xs font-terminal rounded border border-[var(--border)] bg-[var(--card-bg)] text-[var(--text-primary)]">
+          <option value="">All Verdicts</option>
+          {["STRONG", "ATTRACTIVE", "NEUTRAL", "WEAK", "DISTRESSED", "INSUFFICIENT"].map((v) => (
+            <option key={v} value={v}>{v}</option>
+          ))}
+        </select>
       </div>
 
       <div className="overflow-x-auto rounded border border-[var(--border)]">
@@ -226,7 +249,7 @@ export default function FundamentalsPage() {
                       </td>
                     );
                   }
-                  const v = r[col.key] as number | null;
+                  const v = r[col.key] as number | string | null;
                   return (
                     <td key={col.key} className="px-3 py-2.5 text-right" style={{ color: valColor(v, col.fmt) || undefined }}>
                       {fmtVal(v, col.fmt)}

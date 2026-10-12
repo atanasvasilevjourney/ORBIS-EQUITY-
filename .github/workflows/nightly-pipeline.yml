@@ -316,7 +316,6 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: Run Quantropy risk + Markowitz allocation
-        continue-on-error: true
         run: python -m pipeline.compute.quantropy
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
