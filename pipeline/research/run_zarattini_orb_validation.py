@@ -160,8 +160,59 @@ def run_validation(
     out_json = ARTIFACT_DIR / "validation_summary.json"
     out_json.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     (NOTEBOOK_OUT / "validation_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+
+    _write_results_md(summary, NOTEBOOK_OUT / "RESULTS.md")
+    _write_results_md(summary, ARTIFACT_DIR / "RESULTS.md")
+    _symbol_pnl_chart(summary, "slippage_2c", ARTIFACT_DIR / "symbol_pnl_slippage_2c.png")
+    _symbol_pnl_chart(summary, "slippage_2c", NOTEBOOK_OUT / "symbol_pnl_slippage_2c.png")
+
     print(f"\nWrote {out_json}")
     return summary
+
+
+def _write_results_md(summary: dict, path: Path) -> None:
+    lines = [
+        "# Zarattini ORB — Orbis LIQUID universe",
+        "",
+        f"Period: **{summary['period']}** · Symbols: **{len(summary['symbols'])}**",
+        "",
+        "| Scenario | Trades | Net PnL | Final equity | Win % | Sharpe | Max DD |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for scen, block in summary["scenarios"].items():
+        p = block["portfolio"]
+        lines.append(
+            f"| `{scen}` | {p['trades']} | ${p['net_pnl']:,.0f} | ${p['final_equity']:,.0f} | "
+            f"{100 * p['win_rate']:.1f}% | {p['sharpe_daily']:.2f} | {100 * p['max_drawdown']:.1f}% |"
+        )
+    lines.extend(
+        [
+            "",
+            "Paper research — not investment advice.",
+            "",
+            "Regenerate: `PYTHONPATH=. python3 -m pipeline.research.run_zarattini_orb_validation`",
+        ]
+    )
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _symbol_pnl_chart(summary: dict, scen: str, path: Path) -> None:
+    per = summary["scenarios"].get(scen, {}).get("per_symbol", {})
+    if not per:
+        return
+    df = pd.DataFrame(per).T
+    if "net_pnl" not in df.columns:
+        return
+    df = df.sort_values("net_pnl")
+    fig, ax = plt.subplots(figsize=(10, max(4, len(df) * 0.22)))
+    colors = ["#dc2626" if v < 0 else "#16a34a" for v in df["net_pnl"]]
+    ax.barh(df.index, df["net_pnl"], color=colors)
+    ax.axvline(0, color="#666", linewidth=0.8)
+    ax.set_xlabel("Net PnL ($) per symbol sleeve ($25k each)")
+    ax.set_title(f"Zarattini ORB · {scen} · ~60d Yahoo 5m")
+    fig.tight_layout()
+    fig.savefig(path, dpi=140)
+    plt.close(fig)
 
 
 def main() -> None:
