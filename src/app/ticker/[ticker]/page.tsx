@@ -415,30 +415,6 @@ export default function TickerPage() {
     return () => ac.abort();
   }, [ticker, chartTf]);
 
-  if (loading) {
-    return <div className="px-4 py-12 text-center text-[var(--text-muted)] font-terminal">Loading {ticker}...</div>;
-  }
-
-  const r = data?.radar;
-  const f = data?.fundamentals;
-  const u = data?.universe;
-
-  const signals = r
-    ? [
-        r.z_mom >= 4,
-        r.f_ewmac >= 2,
-        r.z_52 >= -0.01,
-      ]
-    : [false, false, false];
-
-  const tabs = [
-    { key: "chart", label: "CHART" },
-    { key: "swing", label: "WATCH" },
-    { key: "fundamentals", label: "FUNDAMENTALS" },
-    { key: "earnings", label: "EARNINGS" },
-    { key: "insider", label: "INSIDER" },
-  ] as const;
-
   const overlayOk = useMemo(() => {
     if (!chart || chart.interval !== "5m") return true;
     const last5 = chart.candles?.[chart.candles.length - 1]?.close;
@@ -473,6 +449,30 @@ export default function TickerPage() {
     }
     return out;
   }, [bias, overlayOk]);
+
+  if (loading) {
+    return <div className="px-4 py-12 text-center text-[var(--text-muted)] font-terminal">Loading {ticker}...</div>;
+  }
+
+  const r = data?.radar;
+  const f = data?.fundamentals;
+  const u = data?.universe;
+
+  const signals = r
+    ? [
+        r.z_mom >= 4,
+        r.f_ewmac >= 2,
+        r.z_52 >= -0.01,
+      ]
+    : [false, false, false];
+
+  const tabs = [
+    { key: "chart", label: "CHART" },
+    { key: "swing", label: "WATCH" },
+    { key: "fundamentals", label: "FUNDAMENTALS" },
+    { key: "earnings", label: "EARNINGS" },
+    { key: "insider", label: "INSIDER" },
+  ] as const;
 
   return (
     <div className="px-4 py-6">
