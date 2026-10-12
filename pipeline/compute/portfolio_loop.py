@@ -76,6 +76,13 @@ def main() -> None:
     )
     logger.info("=== Portfolio Loop Start (Donchian 55 + VWAP 20) ===")
     sb = _sb()
+    from pipeline.utils.pipeline_runs import PipelineRunRecorder
+
+    with PipelineRunRecorder(sb, "compute.portfolio_loop", asof_date=date.today()) as run:
+        _run_portfolio_loop(sb, run)
+
+
+def _run_portfolio_loop(sb, run) -> None:
     today = date.today()
     run_id = f"run_{today.isoformat()}_{datetime.now(timezone.utc).strftime('%H%M%S')}"
     now = datetime.now(timezone.utc).isoformat()
@@ -380,6 +387,13 @@ def main() -> None:
 
     note("INFO", f"Loop complete · {headline}")
     logger.info("=== Portfolio Loop Complete: %s ===", headline)
+    run.set_row_counts(
+        names=len(surviving_list),
+        orders=len(orders),
+        enters=n_enter,
+        exits=n_exit,
+    )
+    run.set_headline(headline)
 
 
 def _position_row(

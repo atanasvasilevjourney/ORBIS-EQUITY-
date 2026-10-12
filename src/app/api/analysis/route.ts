@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { evaluateFreshness } from "@/lib/freshness";
+import { staleHeadline } from "@/lib/signalGate";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -120,24 +122,30 @@ export async function GET() {
       .map(mapName)
       .sort((a, b) => (b.buyCount ?? 0) - (a.buyCount ?? 0) || a.ticker.localeCompare(b.ticker));
 
-    let stale = false;
-    if (latest.asof_date) {
-      const diff = (Date.now() - new Date(latest.asof_date).getTime()) / 86400000;
-      stale = diff > 3;
-    }
+    const fresh = evaluateFreshness(latest.asof_date);
+    const stale = fresh.stale;
+    const gatedNames = fresh.signalsSuppressed
+      ? names.map((n) => ({
+          ...n,
+          vote: 3,
+          buyCount: 0,
+          sellCount: 0,
+        }))
+      : names;
 
     return NextResponse.json({
       summary: {
         names: latest.names,
-        buys: latest.buys,
-        sells: latest.sells,
+        buys: fresh.signalsSuppressed ? 0 : latest.buys,
+        sells: fresh.signalsSuppressed ? 0 : latest.sells,
         asOfDate: latest.asof_date,
         runId: latest.run_id,
         lastRunAt: latest.computed_at,
       },
-      names,
-      headline: latest.headline,
+      names: gatedNames,
+      headline: staleHeadline(latest.headline, fresh.signalsSuppressed),
       stale,
+      signalsSuppressed: fresh.signalsSuppressed,
     });
   } catch (err) {
     console.error("Analysis API error:", err);

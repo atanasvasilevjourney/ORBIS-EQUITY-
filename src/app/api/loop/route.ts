@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { enrichLoopBookWithPrices, tradingStaleDays } from "@/lib/loopBookMtm";
+import { evaluateFreshness } from "@/lib/freshness";
+import { gateOrders, staleHeadline } from "@/lib/signalGate";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -107,11 +109,8 @@ export async function GET() {
         }
       : { sectorExposure: [], skipped: [], config: null };
 
-    let stale = false;
-    if (latest.asof_date) {
-      const diff = (Date.now() - new Date(latest.asof_date).getTime()) / 86400000;
-      stale = diff > 3;
-    }
+    let freshVerdict = evaluateFreshness(latest.asof_date, null);
+    let stale = freshVerdict.stale;
 
     const bookBase = book
       .map((p) => ({
@@ -177,7 +176,8 @@ export async function GET() {
       );
       priceAsOfDate = enriched.priceAsOfDate;
       priceStaleDays = tradingStaleDays(priceAsOfDate);
-      if (priceStaleDays != null && priceStaleDays > 3) stale = true;
+      freshVerdict = evaluateFreshness(latest.asof_date, priceAsOfDate);
+      stale = freshVerdict.stale;
       bookOut = bookBase.map((base) => {
         const hit = enriched.rows.find((e) => e.ticker === base.ticker);
         if (!hit) return { ...base, priceAsOfDate: null };
@@ -204,26 +204,31 @@ export async function GET() {
         posture: latest.posture,
       },
       book: bookOut,
-      orders: orders.map((o) => ({
-        id: o.id,
-        ticker: o.ticker,
-        action: o.action,
-        shares: o.shares,
-        type: o.type,
-        limitPrice: o.limit_price,
-        reason: o.reason,
-        sector: o.sector,
-        riskUsd: o.risk_usd,
-        createdAt: o.created_at?.slice(0, 10) ?? null,
-      })),
+      orders: gateOrders(
+        orders.map((o) => ({
+          id: o.id,
+          ticker: o.ticker,
+          action: o.action,
+          shares: o.shares,
+          type: o.type,
+          limitPrice: o.limit_price,
+          reason: o.reason,
+          sector: o.sector,
+          riskUsd: o.risk_usd,
+          createdAt: o.created_at?.slice(0, 10) ?? null,
+        })),
+        freshVerdict.signalsSuppressed
+      ),
       harness: {
         sectorExposure: harness.sectorExposure ?? [],
         skipped: harness.skipped ?? [],
         config: harness.config ?? null,
       },
       log: Array.isArray(latest.log) ? latest.log : [],
-      headline: latest.headline,
+      headline: staleHeadline(latest.headline, freshVerdict.signalsSuppressed),
       stale,
+      signalsSuppressed: freshVerdict.signalsSuppressed,
+      expectedEodDate: freshVerdict.expectedEodDate,
       priceAsOfDate,
       priceStaleDays,
       loopRunStaleDays: latest.asof_date ? tradingStaleDays(latest.asof_date.slice(0, 10)) : null,

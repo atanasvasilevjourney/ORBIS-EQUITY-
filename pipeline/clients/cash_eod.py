@@ -125,19 +125,25 @@ def fetch_yahoo_daily(symbol: str, *, bars: int = DEFAULT_BARS) -> list[DailyBar
     lookback_days = max(40, int(bars * 1.7) + 10)
     period2 = int(time.time())
     period1 = period2 - lookback_days * 86400
-    resp = requests.get(
-        YAHOO_CHART.format(ticker=ticker),
-        params={
-            "period1": period1,
-            "period2": period2,
-            "interval": "1d",
-            "events": "history",
-            "includeAdjustedClose": "true",
-        },
-        headers={"User-Agent": YAHOO_UA},
-        timeout=REQUEST_TIMEOUT,
-    )
-    resp.raise_for_status()
+    from pipeline.utils.retry import retry_call
+
+    def _fetch():
+        r = requests.get(
+            YAHOO_CHART.format(ticker=ticker),
+            params={
+                "period1": period1,
+                "period2": period2,
+                "interval": "1d",
+                "events": "history",
+                "includeAdjustedClose": "true",
+            },
+            headers={"User-Agent": YAHOO_UA},
+            timeout=REQUEST_TIMEOUT,
+        )
+        r.raise_for_status()
+        return r
+
+    resp = retry_call(_fetch, max_attempts=3, retry_on=(requests.RequestException,))
     payload = resp.json()
     result = ((payload.get("chart") or {}).get("result") or [None])[0]
     if not result:

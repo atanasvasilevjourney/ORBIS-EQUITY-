@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { evaluateFreshness } from "@/lib/freshness";
 
 export const revalidate = 900;
 
@@ -33,12 +34,15 @@ export async function GET() {
       ? brief.inputs as Record<string, unknown>
       : {};
 
-    let stale = false;
-    if (brief?.asof_date) {
-      const asOf = new Date(brief.asof_date);
-      const diffDays = (Date.now() - asOf.getTime()) / (1000 * 60 * 60 * 24);
-      stale = diffDays > 3;
-    }
+    const { data: pxRow } = await sb
+      .from("prices_daily")
+      .select("date")
+      .order("date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const pricesAsOf = pxRow?.date?.slice?.(0, 10) ?? null;
+    const freshVerdict = evaluateFreshness(brief?.asof_date ?? null, pricesAsOf);
+    const stale = freshVerdict.stale;
 
     const breadth = inputs.breadth as Record<string, unknown> | undefined;
 
@@ -69,6 +73,9 @@ export async function GET() {
       regionBreadth: inputs.region_breadth ?? {},
       posturePillars: inputs.posture_pillars ?? null,
       stale,
+      signalsSuppressed: freshVerdict.signalsSuppressed,
+      expectedEodDate: freshVerdict.expectedEodDate,
+      pricesAsOf,
     });
   } catch (err) {
     console.error("Summary API error:", err);
