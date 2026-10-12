@@ -13,6 +13,13 @@ touch:
   shortlist_atr: 1.5
   confirm_mode: bar_close   # intrabar | bar_close
 
+# Discretionary UI watchlist (no orders; scan-only)
+watchlist:
+  require_uptrend: true          # min_days_above + positive EMA slope
+  require_close_above_ema: true  # close held the level (not a breakdown)
+  min_days_above: 20
+  min_slope: 0.0
+
 filters:
   min_price: 5
   min_adv_usd: 20000000

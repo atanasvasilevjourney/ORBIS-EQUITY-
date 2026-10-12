@@ -10,6 +10,9 @@ python -m pipeline.ingest.prices
 echo "[daily] compute trend radar"
 python -m pipeline.compute.trend_radar
 
+echo "[daily] ema200 watchlist features"
+python -m pipeline.ema200_scanner.jobs.nightly || echo "[daily] ema200 nightly skipped (check migration 021 / env)"
+
 echo "[daily] compute aggregates / daily brief"
 python -m pipeline.compute.aggregates
 
