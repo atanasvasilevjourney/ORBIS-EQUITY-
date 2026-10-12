@@ -329,11 +329,24 @@ def fill() -> bool:
             "sectorExposure": [],
             "skipped": [],
         },
-        "log": [{
-            "at": now.isoformat(),
-            "level": "INFO",
-            "message": "Fresh $100,000 book filled at the session open.",
-        }],
+        "log": [
+            {
+                "at": now.isoformat(),
+                "level": "INFO",
+                "message": f"Fresh ${EQUITY:,.0f} book filled at {session.isoformat()} session open.",
+            },
+            *[
+                {
+                    "at": now.isoformat(),
+                    "level": "ORDER",
+                    "message": (
+                        f"ENTER {r['symbol']} {r['shares']} @ {r['entry']:.2f} "
+                        f"· opened {session.isoformat()}"
+                    ),
+                }
+                for r in rows
+            ],
+        ],
         "computed_at": now.isoformat(),
     }, on_conflict="run_id").execute()
     # drop anything left from the old book
