@@ -65,6 +65,7 @@ supabase/migrations/018_rotate_carver.sql
 supabase/migrations/019_cash_book.sql
 supabase/migrations/020_ingest_runs.sql
 supabase/migrations/021_rls_lockdown.sql
+supabase/migrations/024_pipeline_runs.sql
 ```
 
 ### Web
