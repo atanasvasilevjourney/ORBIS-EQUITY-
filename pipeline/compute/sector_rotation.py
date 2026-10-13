@@ -115,16 +115,20 @@ def run() -> dict:
         if r.get("symbol") and vs is not None:
             value_ok[r["symbol"]] = float(vs) >= 50
 
+    from pipeline.utils.price_series import effective_close
+
     prices = fetch_all(
         sb, "prices_daily",
-        "symbol, date, high, low, close",
+        "symbol, date, high, low, close, adj_close",
         order=("date", False),
     )
     by_sym: dict[str, list[tuple]] = defaultdict(list)
     for p in prices:
-        if not p.get("symbol") or p.get("close") is None:
+        if not p.get("symbol"):
             continue
-        c = float(p["close"])
+        c = effective_close(p)
+        if c is None:
+            continue
         by_sym[p["symbol"]].append((
             p["date"],
             float(p.get("high") or c),

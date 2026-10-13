@@ -136,7 +136,7 @@ def _run_portfolio_loop(sb, run) -> None:
     while True:
         resp = (
             sb.table("prices_daily")
-            .select("symbol,date,open,high,low,close,volume")
+            .select("symbol,date,open,high,low,close,adj_close,volume")
             .gte("date", cutoff)
             .order("symbol")
             .order("date")
@@ -149,6 +149,8 @@ def _run_portfolio_loop(sb, run) -> None:
             break
         offset += page
 
+    from pipeline.utils.price_series import ohlcv_frame
+
     px_df = pd.DataFrame(all_px) if all_px else pd.DataFrame()
     snapshots: dict[str, dict] = {}
     prior_snaps: dict[str, dict] = {}
@@ -156,7 +158,7 @@ def _run_portfolio_loop(sb, run) -> None:
         for sym, g in px_df.groupby("symbol"):
             if sym not in uni:
                 continue
-            g = g.sort_values("date")
+            g = ohlcv_frame(g.to_dict("records"))
             snap = latest_snapshot(g)
             if snap:
                 snapshots[sym] = snap

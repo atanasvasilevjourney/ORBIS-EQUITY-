@@ -51,7 +51,7 @@ export const EMPTY_ROTATE = {
 };
 
 type UniRow = { symbol: string; sector?: string | null; company_name?: string | null };
-type PxRow = { symbol: string; date: string; close: number | string | null };
+type PxRow = { symbol: string; date: string; close: number | string | null; adj_close?: number | string | null };
 
 function uniq(xs: string[]): string[] {
   const seen: Record<string, true> = {};
@@ -106,15 +106,19 @@ export async function fetchLitePrices(sb: SupabaseClient, symbols: string[]): Pr
   const rows = await fetchAll<PxRow>(
     sb,
     "prices_daily",
-    "symbol, date, close",
+    "symbol, date, close, adj_close",
     (q) => q.in("symbol", uniqSyms).gte("date", since).order("date", { ascending: true })
   ).catch(() => []);
   return rows
-    .filter((r) => r.symbol && r.close != null && Number.isFinite(Number(r.close)))
+    .filter((r) => {
+      if (!r.symbol) return false;
+      const px = r.adj_close ?? r.close;
+      return px != null && Number.isFinite(Number(px));
+    })
     .map((r) => ({
       symbol: r.symbol,
       date: String(r.date).slice(0, 10),
-      close: Number(r.close),
+      close: Number(r.adj_close ?? r.close),
     }));
 }
 
