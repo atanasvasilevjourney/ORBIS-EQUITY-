@@ -232,24 +232,30 @@ def _run_portfolio_loop(sb, run) -> None:
                     break
             note("INFO", f"Rebalance target: {target_syms}")
 
-        # Exit names not in target (rebalance rotation)
-        for sym in list(held.keys()):
-            if sym in target_syms:
-                continue
-            pos = held[sym]
-            snap = snapshots.get(sym)
-            add_order(
-                ticker=sym,
-                action="SELL",
-                type="EXIT",
-                shares=int(pos.get("shares") or 0),
-                limit_price=round(snap["close"], 2) if snap else None,
-                reason="Rebalance · dropped from top basket",
-                sector=pos.get("sector") or "",
-                risk_usd=None,
+        # Rotate out only when rebuilding into a non-empty basket (never flat the book on 0 eligibles)
+        if target_syms:
+            for sym in list(held.keys()):
+                if sym in target_syms:
+                    continue
+                pos = held[sym]
+                snap = snapshots.get(sym)
+                add_order(
+                    ticker=sym,
+                    action="SELL",
+                    type="EXIT",
+                    shares=int(pos.get("shares") or 0),
+                    limit_price=round(snap["close"], 2) if snap else None,
+                    reason="Rebalance · dropped from top basket",
+                    sector=pos.get("sector") or "",
+                    risk_usd=None,
+                )
+                note("ORDER", f"EXIT {sym} · rebalance rotate-out")
+                held.pop(sym, None)
+        elif do_rebalance and held:
+            note(
+                "INFO",
+                f"Rebalance skipped rotate-out · 0 eligible · keeping {len(held)} open name(s)",
             )
-            note("ORDER", f"EXIT {sym} · rebalance rotate-out")
-            held.pop(sym, None)
 
     # Keep remaining held into surviving unless we rebuild all on rebalance
     for sym, pos in held.items():
