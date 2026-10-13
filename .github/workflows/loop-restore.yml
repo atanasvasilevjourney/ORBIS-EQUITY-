@@ -1,0 +1,33 @@
+# One-shot or manual restore of LOOP paper_book (service_role required).
+# Trigger: push `.github/run-loop-restore.flag` on main, or workflow_dispatch.
+
+name: LOOP book restore
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/run-loop-restore.flag"
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Restore CRWD / PANW / A paper book
+        run: python -m pipeline.compute.restore_loop_book --tickers CRWD,PANW,A
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
