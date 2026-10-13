@@ -3,6 +3,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { enrichLoopBookWithPrices, tradingStaleDays } from "@/lib/loopBookMtm";
 import { latestPriceAsOf } from "@/lib/liteDeskGate";
+import { sectorExposureFromBook } from "@/lib/loopSectorHarness";
 import { evaluateFreshness } from "@/lib/freshness";
 import { gateOrders, staleHeadline } from "@/lib/signalGate";
 
@@ -225,11 +226,30 @@ export async function GET() {
         })),
         freshVerdict.signalsSuppressed
       ),
-      harness: {
-        sectorExposure: harness.sectorExposure ?? [],
-        skipped: harness.skipped ?? [],
-        config: harness.config ?? null,
-      },
+      harness: (() => {
+        const cfg = harness.config ?? null;
+        const maxNames = typeof cfg?.maxNames === "number" ? cfg.maxNames : 8;
+        const maxPerSector = typeof cfg?.maxPerSector === "number" ? cfg.maxPerSector : 2;
+        const stored = Array.isArray(harness.sectorExposure) ? harness.sectorExposure : [];
+        const sectorExposure =
+          stored.length > 0
+            ? stored
+            : sectorExposureFromBook(
+                bookOut.map((r) => ({
+                  sector: r.sector,
+                  shares: r.shares,
+                  last: r.last,
+                })),
+                latest.equity,
+                maxNames,
+                maxPerSector
+              );
+        return {
+          sectorExposure,
+          skipped: harness.skipped ?? [],
+          config: cfg,
+        };
+      })(),
       log: Array.isArray(latest.log) ? latest.log : [],
       headline: staleHeadline(latest.headline, freshVerdict.signalsSuppressed),
       stale,
