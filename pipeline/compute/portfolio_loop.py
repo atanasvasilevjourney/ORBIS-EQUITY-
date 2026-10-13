@@ -221,6 +221,12 @@ def _run_portfolio_loop(sb, run) -> None:
                     continue
                 sec = uni[sym].get("sector") or "Unknown"
                 cands.append((sym, float(prev["strength"]), sec))
+            eligible_n = len(cands)
+            note(
+                "INFO",
+                f"Prior-bar eligible: {eligible_n} / {len(prior_snaps)} "
+                f"(universe {len(uni)} · bars {len(snapshots)})",
+            )
             cands.sort(key=lambda x: -x[1])
             for sym, _, sec in cands:
                 if sector_count[sec] >= MAX_PER_SECTOR:
