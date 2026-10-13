@@ -3,6 +3,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { fetchLitePrices, LIQUID_NAMES } from "@/lib/liteDeskApi";
 import { orbisScore } from "@/lib/orbisScore";
+import { fetchCockpitDeskSummaries } from "@/lib/cockpitDeskSummaries";
 
 export const revalidate = 900;
 
@@ -136,9 +137,12 @@ export async function GET() {
         orbisScore: orbisScore(r.quality_rank, null),
       }));
 
-    const crossPrices = await fetchLitePrices(sb, [
-      ...CROSS_ASSET_META.map((c) => c.symbol),
-      ...LIQUID_NAMES.slice(0, 4),
+    const [crossPrices, desks] = await Promise.all([
+      fetchLitePrices(sb, [
+        ...CROSS_ASSET_META.map((c) => c.symbol),
+        ...LIQUID_NAMES.slice(0, 4),
+      ]),
+      fetchCockpitDeskSummaries(sb),
     ]);
 
     let stale = false;
@@ -183,6 +187,7 @@ export async function GET() {
         highFScore: fundRows.filter((r) => (r.f_score ?? 0) >= 7).length,
         avgComposite,
       },
+      desks,
     });
   } catch (err) {
     console.error("Dashboard API error:", err);

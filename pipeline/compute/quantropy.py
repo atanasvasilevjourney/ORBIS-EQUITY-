@@ -262,14 +262,17 @@ def run() -> dict:
                     filters=lambda q: q.eq("is_active", True))
     names = {r["symbol"]: r.get("company_name") or "" for r in uni if r.get("symbol")}
     funds = {r["symbol"]: r for r in fetch_all(sb, "fundamentals_snapshot", "*") if r.get("symbol")}
-    prices = fetch_all(sb, "prices_daily", "symbol, date, close", order=("date", False))
+    from pipeline.utils.price_series import effective_close
+
+    prices = fetch_all(sb, "prices_daily", "symbol, date, close, adj_close", order=("date", False))
     by_sym: dict[str, list[tuple[str, float]]] = defaultdict(list)
     last_px: dict[str, float] = {}
     for p in prices:
-        if p.get("close") is None or not p.get("symbol"):
+        px = effective_close(p)
+        if px is None or not p.get("symbol"):
             continue
-        by_sym[p["symbol"]].append((p["date"], float(p["close"])))
-        last_px[p["symbol"]] = float(p["close"])
+        by_sym[p["symbol"]].append((p["date"], px))
+        last_px[p["symbol"]] = px
 
     symbols, rets = _align_returns(by_sym)
     if len(symbols) < 2:

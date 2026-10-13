@@ -88,13 +88,15 @@ def _ingest_lse_prices(symbols: list[str]) -> list[dict]:
                 continue
 
             for c in candles:
+                close = c.get("close") or c.get("c")
                 rows.append({
                     "symbol": symbol,
                     "date": c.get("date") or c.get("t") or c.get("timestamp"),
                     "open": c.get("open") or c.get("o"),
                     "high": c.get("high") or c.get("h"),
                     "low": c.get("low") or c.get("l"),
-                    "close": c.get("close") or c.get("c"),
+                    "close": close,
+                    "adj_close": close,
                     "volume": c.get("volume") or c.get("v"),
                     "source": "lse",
                 })
@@ -170,13 +172,15 @@ def _ingest_yfinance_prices(symbols: list[str]) -> list[dict]:
 
             for date_idx, row in ticker_data.iterrows():
                 date_str = date_idx.strftime("%Y-%m-%d") if hasattr(date_idx, "strftime") else str(date_idx)
+                close = float(row.get("Close", 0)) if row.get("Close") is not None else None
                 rows.append({
                     "symbol": symbol,
                     "date": date_str,
                     "open": float(row.get("Open", 0)) if row.get("Open") is not None else None,
                     "high": float(row.get("High", 0)) if row.get("High") is not None else None,
                     "low": float(row.get("Low", 0)) if row.get("Low") is not None else None,
-                    "close": float(row.get("Close", 0)) if row.get("Close") is not None else None,
+                    "close": close,
+                    "adj_close": close,
                     "volume": int(row.get("Volume", 0)) if row.get("Volume") is not None else None,
                     "source": "yfinance",
                 })
@@ -274,13 +278,15 @@ def _run_price_ingest(sb, run) -> None:
         run.mark_error("no price rows")
         return
 
+    from pipeline.utils.price_series import finalize_price_row
+
     # Normalize dates and filter out rows with missing critical fields
     clean_rows: list[dict] = []
     for row in all_rows:
         row["date"] = _normalize_date(row.get("date"))
         if row["date"] and row.get("symbol"):
             # Remove NaN/None numeric fields that would fail upsert
-            for field in ("open", "high", "low", "close", "volume"):
+            for field in ("open", "high", "low", "close", "adj_close", "volume"):
                 val = row.get(field)
                 if val is not None:
                     try:
@@ -288,7 +294,7 @@ def _run_price_ingest(sb, run) -> None:
                             row[field] = None
                     except (ValueError, TypeError):
                         row[field] = None
-            clean_rows.append(row)
+            clean_rows.append(finalize_price_row(row))
 
     logger.info("Upserting %d price rows into prices_daily...", len(clean_rows))
 

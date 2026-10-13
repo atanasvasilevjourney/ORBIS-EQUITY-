@@ -66,6 +66,7 @@ supabase/migrations/019_cash_book.sql
 supabase/migrations/020_ingest_runs.sql
 supabase/migrations/021_rls_lockdown.sql
 supabase/migrations/024_pipeline_runs.sql
+supabase/migrations/025_fundamental_analysis_columns.sql
 ```
 
 ### Web
