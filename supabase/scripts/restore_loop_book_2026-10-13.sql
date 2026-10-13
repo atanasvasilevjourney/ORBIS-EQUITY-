@@ -7,6 +7,43 @@ BEGIN;
 DELETE FROM paper_orders
 WHERE run_id = 'run_2026-10-13_040311';
 
+INSERT INTO paper_loop_runs (
+  run_id, asof_date, equity, deployed_pct, open_risk_pct, names, posture,
+  status, headline, harness, log, computed_at
+) VALUES (
+  'run_2026-10-13_restore_manual',
+  '2026-10-13',
+  100000,
+  0.9980,
+  0.9980,
+  3,
+  70,
+  'OK',
+  'Restored · 3 names · deployed 99.8% (undo empty rebalance)',
+  jsonb_build_object(
+    'lastRebalanceDate', '2026-09-28',
+    'restoredFrom', 'run_2026-10-13_040311',
+    'sectorExposure', '[]'::jsonb,
+    'skipped', '[]'::jsonb
+  ),
+  jsonb_build_array(
+    jsonb_build_object(
+      'at', now(),
+      'level', 'INFO',
+      'message', 'Manual SQL restore: CRWD, PANW, A'
+    )
+  ),
+  now()
+)
+ON CONFLICT (run_id) DO UPDATE SET
+  names = EXCLUDED.names,
+  deployed_pct = EXCLUDED.deployed_pct,
+  open_risk_pct = EXCLUDED.open_risk_pct,
+  headline = EXCLUDED.headline,
+  harness = EXCLUDED.harness,
+  log = EXCLUDED.log,
+  computed_at = EXCLUDED.computed_at;
+
 INSERT INTO paper_book (
   symbol, run_id, company_name, side, shares, entry, last, stop,
   n, risk_usd, sector, reason, rank, breakout, green,
@@ -45,42 +82,5 @@ ON CONFLICT (symbol) DO UPDATE SET
   days_held = EXCLUDED.days_held,
   opened_at = EXCLUDED.opened_at,
   updated_at = EXCLUDED.updated_at;
-
-INSERT INTO paper_loop_runs (
-  run_id, asof_date, equity, deployed_pct, open_risk_pct, names, posture,
-  status, headline, harness, log, computed_at
-) VALUES (
-  'run_2026-10-13_restore_manual',
-  '2026-10-13',
-  100000,
-  0.9980,
-  0.9980,
-  3,
-  70,
-  'OK',
-  'Restored · 3 names · deployed 99.8% (undo empty rebalance)',
-  jsonb_build_object(
-    'lastRebalanceDate', '2026-09-28',
-    'restoredFrom', 'run_2026-10-13_040311',
-    'sectorExposure', '[]'::jsonb,
-    'skipped', '[]'::jsonb
-  ),
-  jsonb_build_array(
-    jsonb_build_object(
-      'at', now(),
-      'level', 'INFO',
-      'message', 'Manual SQL restore: CRWD, PANW, A'
-    )
-  ),
-  now()
-)
-ON CONFLICT (run_id) DO UPDATE SET
-  names = EXCLUDED.names,
-  deployed_pct = EXCLUDED.deployed_pct,
-  open_risk_pct = EXCLUDED.open_risk_pct,
-  headline = EXCLUDED.headline,
-  harness = EXCLUDED.harness,
-  log = EXCLUDED.log,
-  computed_at = EXCLUDED.computed_at;
 
 COMMIT;

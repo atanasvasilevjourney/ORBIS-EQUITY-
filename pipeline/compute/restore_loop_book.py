@@ -156,8 +156,7 @@ def restore(
             sb.table("paper_orders").delete().eq("id", o["id"]).execute()
         logger.info("deleted %d orders from %s", len(bad), delete_exit_run)
 
-    sb.table("paper_book").upsert(rows, on_conflict="symbol").execute()
-    sb.table("paper_loop_runs").upsert({
+    run_row = {
         "run_id": run_id,
         "asof_date": today.isoformat(),
         "equity": EQUITY,
@@ -189,7 +188,10 @@ def restore(
             "message": f"Manual restore: {', '.join(tickers)}",
         }],
         "computed_at": now,
-    }, on_conflict="run_id").execute()
+    }
+    # paper_book.run_id FK requires the run row first
+    sb.table("paper_loop_runs").upsert(run_row, on_conflict="run_id").execute()
+    sb.table("paper_book").upsert(rows, on_conflict="symbol").execute()
     logger.info("restore complete")
 
 
