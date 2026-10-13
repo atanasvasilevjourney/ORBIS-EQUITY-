@@ -21,9 +21,13 @@ Phase 1 **core** shipped in PR #50. This doc tracks the deferred layer.
 
 ## Ops (DB)
 
-- [ ] Apply **`supabase/migrations/025_fundamental_analysis_columns.sql`** if factor_scores fails on `fundamental_summary` (same as 021).
+- [x] Apply **`supabase/migrations/025_fundamental_analysis_columns.sql`** (fundamental_summary / verdict columns).
 
 ## Tests
 
 - [x] Entrypoint regression for `portfolio_loop` CLI.
 - [x] `price_series` unit tests.
+
+---
+
+**Next:** strategy platform — see [`PHASE2_PLAN.md`](./PHASE2_PLAN.md).
