@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { evaluateFreshness } from "@/lib/freshness";
+import { staleHeadline } from "@/lib/signalGate";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -101,11 +103,8 @@ export async function GET() {
       return best;
     }, null);
 
-    let stale = false;
-    if (latest.asof_date) {
-      const diff = (Date.now() - new Date(latest.asof_date).getTime()) / 86400000;
-      stale = diff > 3;
-    }
+    const fresh = evaluateFreshness(latest.asof_date);
+    const suppress = fresh.signalsSuppressed;
 
     return NextResponse.json({
       summary: {
@@ -120,8 +119,9 @@ export async function GET() {
         weekendRichestRatio: richest?.weekendRatio ?? null,
       },
       names,
-      headline: latest.headline,
-      stale,
+      headline: staleHeadline(latest.headline, suppress),
+      stale: fresh.stale,
+      signalsSuppressed: suppress,
     });
   } catch (err) {
     console.error("Skew API error:", err);

@@ -471,3 +471,6 @@ def _append_position(
         "updated_at": now,
     }
 
+
+if __name__ == "__main__":
+    main()

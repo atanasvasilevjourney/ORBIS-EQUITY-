@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { evaluateFreshness } from "@/lib/freshness";
+import { gateSide, staleHeadline } from "@/lib/signalGate";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -83,22 +85,28 @@ export async function GET() {
         if (d !== 0) return d;
         return (a.ticker || "").localeCompare(b.ticker || "");
       });
-    let stale = false;
-    if (latest.asof_date) {
-      stale = (Date.now() - new Date(latest.asof_date).getTime()) / 86400000 > 3;
-    }
+    const fresh = evaluateFreshness(latest.asof_date);
+    const suppress = fresh.signalsSuppressed;
+    const gatedNames = suppress
+      ? names.map((n) => ({
+          ...n,
+          bias: gateSide(n.bias, true) ?? "NEUTRAL",
+          ideas: [],
+        }))
+      : names;
     return NextResponse.json({
       summary: {
         names: latest.names,
-        longs: latest.longs,
-        shorts: latest.shorts,
+        longs: suppress ? 0 : latest.longs,
+        shorts: suppress ? 0 : latest.shorts,
         asOfDate: latest.asof_date,
         runId: latest.run_id,
         lastRunAt: latest.computed_at,
       },
-      names,
-      headline: latest.headline,
-      stale,
+      names: gatedNames,
+      headline: staleHeadline(latest.headline, suppress),
+      stale: fresh.stale,
+      signalsSuppressed: suppress,
     });
   } catch (err) {
     console.error("Bias API error:", err);

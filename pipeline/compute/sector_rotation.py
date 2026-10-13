@@ -405,11 +405,19 @@ def run() -> dict:
 
 
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
-    print(run()["headline"])
+    from pipeline.utils.run_recorded import run_recorded
+
+    def _body(_sb, rec) -> None:
+        result = run()
+        rec.set_headline(str(result.get("headline", "")))
+        rec.set_row_counts(
+            names=int(result.get("names", 0)),
+            n_triggers=int(result.get("n_triggers", 0)),
+            n_carver=int(result.get("n_carver", 0)),
+        )
+        print(result["headline"])
+
+    run_recorded("compute.sector_rotation", _body)
 
 
 if __name__ == "__main__":

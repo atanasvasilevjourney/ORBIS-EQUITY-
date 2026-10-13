@@ -171,19 +171,12 @@ def compute_posture_label(score: int) -> str:
 
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+    from pipeline.utils.run_recorded import run_recorded
 
-    sb_url = os.getenv("SUPABASE_URL", "")
-    sb_key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-    if not sb_url or not sb_key:
-        logger.error("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
-        return
+    run_recorded("compute.aggregates", _run_aggregates)
 
-    sb = create_client(sb_url, sb_key)
 
+def _run_aggregates(sb, run) -> None:
     from pipeline.utils.supabase import fetch_all
 
     radar_data = fetch_all(sb, "trend_radar", "symbol,state,quality_rank,z_mom")
@@ -196,6 +189,7 @@ def main():
 
     if not radar_data:
         logger.warning("No trend_radar data found. Run trend_radar compute first.")
+        run.mark_partial("no trend_radar rows")
         return
 
     logger.info(f"Computing aggregates for {len(radar_data)} tickers")
@@ -261,6 +255,8 @@ def main():
         f"Worst: {breadth['worst_sector']} ({breadth['worst_sector_score']})"
     )
     logger.info(f"Region breadth: {region_breadth}")
+    run.set_headline(f"{label} · posture {posture} · {len(radar_data)} names")
+    run.set_row_counts(names=len(radar_data))
 
 
 if __name__ == "__main__":

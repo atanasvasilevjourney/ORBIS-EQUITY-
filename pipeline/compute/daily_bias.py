@@ -385,11 +385,19 @@ def run() -> dict:
 
 
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
-    print(run()["headline"])
+    from pipeline.utils.run_recorded import run_recorded
+
+    def _body(_sb, rec) -> None:
+        result = run()
+        rec.set_headline(str(result.get("headline", "")))
+        rec.set_row_counts(
+            names=int(result.get("names", 0)),
+            longs=int(result.get("longs", 0)),
+            shorts=int(result.get("shorts", 0)),
+        )
+        print(result["headline"])
+
+    run_recorded("compute.daily_bias", _body)
 
 
 if __name__ == "__main__":

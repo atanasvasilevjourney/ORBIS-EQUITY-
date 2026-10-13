@@ -182,19 +182,13 @@ def _fetch_financial_extras(sb) -> dict[str, dict]:
 
 
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+    from pipeline.utils.run_recorded import run_recorded
+
+    run_recorded("compute.factor_scores", _run_factor_scores)
+
+
+def _run_factor_scores(sb, run) -> None:
     logger.info("=== Factor Scores Compute Start ===")
-
-    sb_url = os.getenv("SUPABASE_URL", "")
-    sb_key = os.getenv("SUPABASE_SERVICE_KEY", "")
-    if not sb_url or not sb_key:
-        logger.error("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
-        return
-
-    sb = create_client(sb_url, sb_key)
 
     # Load fundamentals + universe sector map
     fundamentals = fetch_all(sb, "fundamentals_snapshot", "*")
@@ -333,6 +327,8 @@ def main() -> None:
         ", ".join(f"{t['symbol']}={t['composite_factor_score']}" for t in top),
         verdict_dist,
     )
+    run.set_headline(f"{len(updates)} symbols · {verdict_dist[:100]}")
+    run.set_row_counts(symbols=len(updates))
 
 
 if __name__ == "__main__":

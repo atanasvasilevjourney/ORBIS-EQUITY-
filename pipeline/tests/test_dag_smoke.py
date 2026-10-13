@@ -113,6 +113,9 @@ class TestPipelineDAGSmoke:
                 stack.enter_context(
                     patch("pipeline.utils.pipeline_runs.PipelineRunRecorder", _DummyRun)
                 )
+                stack.enter_context(
+                    patch("pipeline.utils.run_recorded.supabase_client", return_value=mock_supabase)
+                )
 
             if hasattr(mod, "_sb"):
                 stack.enter_context(patch.object(mod, "_sb", return_value=mock_supabase))
