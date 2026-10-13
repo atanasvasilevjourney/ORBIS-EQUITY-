@@ -7,12 +7,32 @@ vi.mock("@/lib/supabase/server", () => ({
   createServerClient: () => mockCreateServerClient(),
 }));
 
+vi.mock("@/lib/liteDeskGate", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("@/lib/liteDeskGate")>();
+  return {
+    ...orig,
+    deskFreshnessForLite: async () => ({
+      stale: false,
+      signalsSuppressed: false,
+      expectedEodDate: "2026-10-12",
+      minFreshDate: "2026-10-09",
+      asOfDate: null,
+    }),
+    blockLiteDesk: () => false,
+  };
+});
+
 function px(symbol: string, n = 80, g = 1.002) {
-  return Array.from({ length: n }, (_, i) => ({
-    symbol,
-    date: new Date(Date.UTC(2024, 0, 1 + i)).toISOString().slice(0, 10),
-    close: 50 * g ** i,
-  }));
+  const end = new Date();
+  return Array.from({ length: n }, (_, i) => {
+    const d = new Date(end);
+    d.setUTCDate(d.getUTCDate() - (n - 1 - i));
+    return {
+      symbol,
+      date: d.toISOString().slice(0, 10),
+      close: 50 * g ** i,
+    };
+  });
 }
 
 describe("GET /api/quantropy", () => {

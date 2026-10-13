@@ -8,6 +8,9 @@ import {
   parseCorr,
   tapePoints,
 } from "@/lib/liteDeskApi";
+import { evaluateFreshness } from "@/lib/freshness";
+import { gateSide, staleHeadline } from "@/lib/signalGate";
+import { blockLiteDesk, deskFreshnessForLite } from "@/lib/liteDeskGate";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -138,8 +141,17 @@ export async function GET() {
     );
     const latest = runs[0] ?? null;
     if (!latest) {
+      const fresh = await deskFreshnessForLite(sb, null);
+      if (blockLiteDesk(fresh.signalsSuppressed)) {
+        return NextResponse.json({
+          ...EMPTY_ROTATE,
+          stale: true,
+          signalsSuppressed: true,
+          headline: "STALE — rotate snapshot unavailable",
+        });
+      }
       const lite = await liteRotatePayload(sb);
-      return NextResponse.json(lite);
+      return NextResponse.json({ ...lite, signalsSuppressed: fresh.signalsSuppressed });
     }
     const [rows, canaryRows, triggerRows, carverRows] = await Promise.all([
       fetchAll<GroupRow>(sb, "sector_rotation_groups", "*"),
@@ -207,20 +219,37 @@ export async function GET() {
       }))
       .sort((a, b) => b.rungs - a.rungs || (a.sleeveRank ?? 99) - (b.sleeveRank ?? 99) || (a.xsRank ?? 99) - (b.xsRank ?? 99));
 
-    let stale = false;
-    if (latest.asof_date) {
-      stale = (Date.now() - new Date(latest.asof_date).getTime()) / 86400000 > 3;
-    }
+    const fresh = evaluateFreshness(latest.asof_date);
+    const suppress = fresh.signalsSuppressed;
     const leading = sectors.filter((s) => s.label === "LEAD" || s.label === "ACCEL").length;
     const fading = sectors.filter((s) => s.label === "FADE" || s.label === "LAG").length;
     const corr = parseCorr((latest.config as { corr?: unknown } | null)?.corr);
     if (!canaries.length && !sectors.length) {
+      if (blockLiteDesk(suppress)) {
+        return NextResponse.json({
+          ...EMPTY_ROTATE,
+          stale: true,
+          signalsSuppressed: true,
+          headline: staleHeadline(latest.headline, true),
+        });
+      }
       const lite = await liteRotatePayload(sb);
       return NextResponse.json({
         ...lite,
         headline: latest.headline || lite.headline,
+        signalsSuppressed: suppress,
       });
     }
+    const gatedTriggers = suppress
+      ? triggers.map((t) => ({
+          ...t,
+          temaSide: gateSide(t.temaSide, true) ?? "FLAT",
+          triggered: null,
+        }))
+      : triggers;
+    const gatedCarver = suppress
+      ? carver.map((c) => ({ ...c, side: "FLAT", action: "FLAT" }))
+      : carver;
     return NextResponse.json({
       summary: {
         names: latest.names,
@@ -241,12 +270,13 @@ export async function GET() {
       sectors,
       industries,
       canaries,
-      triggers,
-      carver,
-      headline: latest.headline,
+      triggers: gatedTriggers,
+      carver: gatedCarver,
+      headline: staleHeadline(latest.headline, suppress),
       config: latest.config,
       corr,
-      stale,
+      stale: fresh.stale,
+      signalsSuppressed: suppress,
       lite: false,
     });
   } catch (err) {

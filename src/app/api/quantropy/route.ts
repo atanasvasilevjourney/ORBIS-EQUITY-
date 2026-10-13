@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { EMPTY_QUANT, liteQuantPayload, parseCorr } from "@/lib/liteDeskApi";
+import { evaluateFreshness } from "@/lib/freshness";
+import { staleHeadline } from "@/lib/signalGate";
+import { blockLiteDesk, deskFreshnessForLite } from "@/lib/liteDeskGate";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -51,8 +54,17 @@ export async function GET() {
     );
     const latest = runs[0] ?? null;
     if (!latest || !latest.names) {
+      const fresh = await deskFreshnessForLite(sb, null);
+      if (blockLiteDesk(fresh.signalsSuppressed)) {
+        return NextResponse.json({
+          ...EMPTY_QUANT,
+          stale: true,
+          signalsSuppressed: true,
+          headline: "STALE — Quantropy snapshot unavailable",
+        });
+      }
       const lite = await liteQuantPayload(sb);
-      return NextResponse.json(lite);
+      return NextResponse.json({ ...lite, signalsSuppressed: fresh.signalsSuppressed });
     }
     const rows = await fetchAll<NameRow>(
       sb,
@@ -87,10 +99,8 @@ export async function GET() {
       }))
       .sort((a, b) => (b.sharpe ?? -999) - (a.sharpe ?? -999));
 
-    let stale = false;
-    if (latest.asof_date) {
-      stale = (Date.now() - new Date(latest.asof_date).getTime()) / 86400000 > 3;
-    }
+    const fresh = evaluateFreshness(latest.asof_date);
+    const suppress = fresh.signalsSuppressed;
     const distressed = names.filter((n) => n.altmanZone === "distress").length;
     const alloc = latest.allocations && typeof latest.allocations === "object" ? latest.allocations : {};
     const corr = parseCorr((alloc as { corr?: unknown }).corr);
@@ -110,9 +120,10 @@ export async function GET() {
       names,
       allocations: books,
       frontier: Array.isArray(latest.frontier) ? latest.frontier : [],
-      headline: latest.headline,
+      headline: staleHeadline(latest.headline, suppress),
       corr,
-      stale,
+      stale: fresh.stale,
+      signalsSuppressed: suppress,
       lite: false,
     });
   } catch (err) {

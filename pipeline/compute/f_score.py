@@ -207,14 +207,14 @@ def compute_f_score(
 
 
 def main() -> None:
-    """Compute F-Score for all universe members and update fundamentals_snapshot."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
-    logger.info("=== F-Score Compute Start ===")
+    from pipeline.utils.run_recorded import run_recorded
 
-    sb = _get_supabase_client()
+    run_recorded("compute.f_score", _run_f_score)
+
+
+def _run_f_score(sb, run) -> None:
+    """Compute F-Score for all universe members and update fundamentals_snapshot."""
+    logger.info("=== F-Score Compute Start ===")
 
     from pipeline.utils.supabase import fetch_all
 
@@ -281,6 +281,8 @@ def main() -> None:
         computed,
         dist,
     )
+    run.set_headline(f"{computed} scored · {dist[:120]}")
+    run.set_row_counts(scored=computed, updates=len(updates))
 
 
 if __name__ == "__main__":

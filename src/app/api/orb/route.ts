@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { evaluateFreshness } from "@/lib/freshness";
+import { gateOrders, staleHeadline } from "@/lib/signalGate";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -106,37 +108,44 @@ export async function GET() {
       }))
       .sort((a, b) => Math.abs(b.gapPct ?? 0) - Math.abs(a.gapPct ?? 0));
 
-    let stale = false;
-    if (latest.session_date) {
-      const diff = (Date.now() - new Date(latest.session_date).getTime()) / 86400000;
-      stale = diff > 3;
-    }
+    const fresh = evaluateFreshness(latest.asof_date ?? latest.session_date);
+    const suppress = fresh.signalsSuppressed;
+    const gatedWatch = suppress
+      ? names.map((n) => ({
+          ...n,
+          status: n.status === "BREAKOUT" || n.status === "ACTIVE" ? "WATCH" : n.status,
+        }))
+      : names;
 
     return NextResponse.json({
       summary: {
         names: latest.names,
-        breakouts: latest.breakouts,
+        breakouts: suppress ? 0 : latest.breakouts,
         asOfDate: latest.asof_date,
         sessionDate: latest.session_date,
         runId: latest.run_id,
         lastRunAt: latest.computed_at,
       },
-      watch: names,
-      orders: orders
-        .filter((o) => o.run_id === latest.run_id)
-        .map((o) => ({
-          id: o.id,
-          ticker: o.ticker,
-          action: o.action,
-          type: o.type,
-          shares: o.shares,
-          limitPrice: o.limit_price,
-          stopPrice: o.stop_price,
-          takeProfit: o.take_profit,
-          reason: o.reason,
-        })),
-      headline: latest.headline,
-      stale,
+      watch: gatedWatch,
+      orders: gateOrders(
+        orders
+          .filter((o) => o.run_id === latest.run_id)
+          .map((o) => ({
+            id: o.id,
+            ticker: o.ticker,
+            action: o.action,
+            type: o.type,
+            shares: o.shares,
+            limitPrice: o.limit_price,
+            stopPrice: o.stop_price,
+            takeProfit: o.take_profit,
+            reason: o.reason,
+          })),
+        suppress
+      ),
+      headline: staleHeadline(latest.headline, suppress),
+      stale: fresh.stale,
+      signalsSuppressed: suppress,
     });
   } catch (err) {
     console.error("ORB API error:", err);
