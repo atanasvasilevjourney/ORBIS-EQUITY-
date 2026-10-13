@@ -1,1 +1,1 @@
-kick 2026-10-12T20:58:00Z populate pipeline_runs after migration 024 + dual-cron merge
+kick 2026-10-13T03:58:00Z phase1 LOOP __main__ fix + pipeline_runs wiring
