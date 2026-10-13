@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { vwapOverlaysForIntraday } from "@/lib/vwap";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -74,11 +75,15 @@ export async function GET(
     if (requested === "5m") {
       const candles = await yahoo5m(ticker);
       if (candles.length >= 20) {
+        const { session, anchored, anchorLabel } = vwapOverlaysForIntraday(candles);
         return NextResponse.json({
           ticker,
           interval: "5m",
           source: "yahoo",
           candles,
+          vwapSession: session,
+          vwapAnchored: anchored,
+          vwapAnchorLabel: anchorLabel,
         });
       }
     }

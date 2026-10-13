@@ -23,6 +23,10 @@ export type ChartLevel = {
 type Props = {
   candles: Candle[];
   sma?: (number | null)[];
+  /** Session VWAP (5m / intraday; resets each US/Eastern day). */
+  vwapSession?: (number | null)[];
+  /** Anchored VWAP (5m; week anchor in ET by default from API). */
+  vwapAnchored?: (number | null)[];
   levels: ChartLevel[];
   height?: number;
 };
@@ -45,7 +49,11 @@ function levelsKey(levels: ChartLevel[]) {
     .join("|");
 }
 
-export function TradingChart({ candles, sma, levels, height = 420 }: Props) {
+function lineOverlayData(candles: Candle[], values: (number | null)[]) {
+  return candles.flatMap((c, i) => (values[i] == null ? [] : [{ time: c.time as never, value: values[i] as number }]));
+}
+
+export function TradingChart({ candles, sma, vwapSession, vwapAnchored, levels, height = 420 }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof import("lightweight-charts").createChart> | null>(null);
   const seriesRef = useRef<ReturnType<
@@ -153,9 +161,31 @@ export function TradingChart({ candles, sma, levels, height = 420 }: Props) {
           lastValueVisible: false,
           title: "SMA 20",
         });
-        line.setData(
-          candles.flatMap((c, i) => (sma[i] == null ? [] : [{ time: c.time as never, value: sma[i] as number }]))
-        );
+        line.setData(lineOverlayData(candles, sma));
+      }
+
+      const warn = cssVar("--accent-warning", "#ffaa00");
+      const violet = cssVar("--accent-violet", "#b388ff");
+      if (vwapSession && vwapSession.some((v) => v != null)) {
+        const line = chart.addLineSeries({
+          color: warn,
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          title: "VWAP",
+        });
+        line.setData(lineOverlayData(candles, vwapSession));
+      }
+      if (vwapAnchored && vwapAnchored.some((v) => v != null)) {
+        const line = chart.addLineSeries({
+          color: violet,
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          title: "AVWAP",
+        });
+        line.setData(lineOverlayData(candles, vwapAnchored));
       }
 
       chart.timeScale().fitContent();
@@ -185,7 +215,7 @@ export function TradingChart({ candles, sma, levels, height = 420 }: Props) {
       chartRef.current = null;
       seriesRef.current = null;
     };
-  }, [candles, sma, height, theme]);
+  }, [candles, sma, vwapSession, vwapAnchored, height, theme]);
 
   useEffect(() => {
     const series = seriesRef.current;

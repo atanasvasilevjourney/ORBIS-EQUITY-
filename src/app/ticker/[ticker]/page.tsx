@@ -377,7 +377,15 @@ export default function TickerPage() {
   const [upcomingEarnings, setUpcomingEarnings] = useState(0);
   const [bias, setBias] = useState<any>(null);
   const [chartTf, setChartTf] = useState<"1d" | "5m">("1d");
-  const [chart, setChart] = useState<{ candles: Candle[]; sma20: (number | null)[]; source: string; interval: string } | null>(null);
+  const [chart, setChart] = useState<{
+    candles: Candle[];
+    sma20: (number | null)[];
+    vwapSession?: (number | null)[];
+    vwapAnchored?: (number | null)[];
+    vwapAnchorLabel?: string;
+    source: string;
+    interval: string;
+  } | null>(null);
 
   useEffect(() => {
     fetch(`/api/ticker/${ticker}`)
@@ -572,13 +580,15 @@ export default function TickerPage() {
               {ticker} · Daily Bias · {chart?.interval ?? chartTf} · {chart?.source ?? "…"}
               {chart?.interval === "5m"
                 ? overlayOk
-                  ? " · live Yahoo 5m, levels from EOD book"
-                  : " · live Yahoo 5m · EOD levels hidden (price disagree)"
+                  ? " · Yahoo 5m · session VWAP + week AVWAP · EOD levels"
+                  : " · Yahoo 5m · VWAP on tape · EOD levels hidden (price disagree)"
                 : ""}
             </div>
             <TradingChart
               candles={chart?.candles ?? []}
               sma={chart?.interval === "1d" ? chart?.sma20 : undefined}
+              vwapSession={chart?.interval === "5m" ? chart?.vwapSession : undefined}
+              vwapAnchored={chart?.interval === "5m" ? chart?.vwapAnchored : undefined}
               levels={chartLevels}
             />
           </div>
