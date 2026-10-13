@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { enrichLoopBookWithPrices, tradingStaleDays } from "@/lib/loopBookMtm";
+import { latestPriceAsOf } from "@/lib/liteDeskGate";
 import { evaluateFreshness } from "@/lib/freshness";
 import { gateOrders, staleHeadline } from "@/lib/signalGate";
 
@@ -142,7 +143,12 @@ export async function GET() {
       priceAsOfDate: null as string | null,
     }));
 
-    if (tickers.length > 0) {
+    if (tickers.length === 0) {
+      priceAsOfDate = await latestPriceAsOf(sb);
+      priceStaleDays = priceAsOfDate ? tradingStaleDays(priceAsOfDate) : null;
+      freshVerdict = evaluateFreshness(latest.asof_date, priceAsOfDate);
+      stale = freshVerdict.stale;
+    } else if (tickers.length > 0) {
       const cutoff = new Date();
       cutoff.setUTCDate(cutoff.getUTCDate() - 30);
       const cutoffIso = cutoff.toISOString().slice(0, 10);

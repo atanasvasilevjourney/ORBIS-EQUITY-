@@ -152,7 +152,20 @@ export default function LoopPage() {
             {loading ? (
               <tr><td colSpan={12} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
             ) : !d?.book?.length ? (
-              <tr><td colSpan={12} className="px-3 py-8 text-center text-[var(--text-muted)]">No open positions. Run: python -m pipeline.compute.portfolio_loop</td></tr>
+              <tr>
+                <td colSpan={12} className="px-3 py-8 text-center text-[var(--text-muted)] text-xs leading-relaxed">
+                  {d?.summary ? (
+                    <>
+                      No open positions. Loop ran on <strong>{d.summary.asOfDate}</strong>
+                      {d.headline ? <> ({d.headline})</> : null}.
+                      <br />
+                      No names in the rebalance basket — prior bar must close above the 55-day Donchian upper band and 20-day VWAP (posture ≥ 50).
+                    </>
+                  ) : (
+                    <>No loop run yet. Run: python -m pipeline.compute.portfolio_loop</>
+                  )}
+                </td>
+              </tr>
             ) : (
               d.book.map((r) => {
                 const pnlColor = (r.unrealizedPnlUsd ?? 0) >= 0 ? "var(--accent-bull)" : "var(--accent-bear)";
