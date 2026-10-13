@@ -18,9 +18,17 @@ Render Cron (pipeline) ─────→ Supabase
 | [Render](https://render.com) | Run weekday data jobs |
 | GitHub repo connected to both | This repository |
 
-Apply migrations in Supabase SQL editor (or CLI) if the project is empty: run **all** files in `supabase/migrations/` in filename order (`001` → `021`, including desk/KAMA migrations). Do not stop at `005` — cloud desk modules need `006`+.
+Apply migrations in Supabase SQL editor (or CLI) if the project is empty: run **all** files in `supabase/migrations/` in filename order (`001` through `025`). Do not stop at `005` — cloud desk modules need `006`+.
 
-If Supabase emailed `rls_disabled_in_public`, run `supabase/migrations/021_rls_lockdown.sql` in the SQL editor immediately. A git deploy does not enable RLS.
+### Critical: `rls_disabled_in_public` email
+
+Supabase flags tables where **Row Level Security is off** — anyone with your project URL and **anon** key can read, update, and delete via PostgREST.
+
+1. [Supabase SQL editor](https://supabase.com/dashboard/project/izekfemxwqirsjvmrtyc/sql/new) → New query.
+2. Paste and run **`supabase/scripts/fix_rls_disabled_in_public.sql`** (same SQL as `migrations/023_rls_lockdown.sql`).
+3. Run **`supabase/scripts/verify_rls.sql`** — result must be **empty** (no tables without RLS).
+
+A Vercel or GitHub deploy **does not** change database RLS; only the SQL editor or `supabase db push` does.
 
 ---
 
