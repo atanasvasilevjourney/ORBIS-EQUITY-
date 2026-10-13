@@ -31,7 +31,7 @@ export function sectorExposureFromBook(
     cur.mv += last * r.shares;
     bySector.set(sector, cur);
   }
-  return [...bySector.entries()]
+  return Array.from(bySector.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([sector, { names, mv }]) => ({
       sector,
