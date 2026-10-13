@@ -131,40 +131,36 @@ def _run_portfolio_loop(sb, run) -> None:
     )
 
     cutoff = (today - timedelta(days=PRICE_HISTORY_DAYS)).isoformat()
-    all_px: list[dict] = []
-    offset, page = 0, 5000
-    while True:
-        resp = (
-            sb.table("prices_daily")
-            .select("symbol,date,open,high,low,close,adj_close,volume")
-            .gte("date", cutoff)
-            .order("symbol")
-            .order("date")
-            .range(offset, offset + page - 1)
-            .execute()
-        )
-        rows = resp.data or []
-        all_px.extend(rows)
-        if len(rows) < page:
-            break
-        offset += page
-
     from pipeline.utils.price_series import ohlcv_frame
 
-    px_df = pd.DataFrame(all_px) if all_px else pd.DataFrame()
-    snapshots: dict[str, dict] = {}
-    prior_snaps: dict[str, dict] = {}
-    if not px_df.empty:
+    all_px = fetch_all(
+        sb,
+        "prices_daily",
+        "symbol,date,open,high,low,close,adj_close,volume",
+        filters=lambda q: q.gte("date", cutoff),
+        order=("symbol", False),
+    )
+    note("INFO", f"Price tape · {len(all_px)} rows since {cutoff}")
+
+    def _build_snaps(rows: list[dict]) -> tuple[dict[str, dict], dict[str, dict]]:
+        out_latest: dict[str, dict] = {}
+        out_prior: dict[str, dict] = {}
+        if not rows:
+            return out_latest, out_prior
+        px_df = pd.DataFrame(rows)
         for sym, g in px_df.groupby("symbol"):
             if sym not in uni:
                 continue
             g = ohlcv_frame(g.to_dict("records"))
             snap = latest_snapshot(g)
             if snap:
-                snapshots[sym] = snap
+                out_latest[sym] = snap
             prev = prior_bar_snapshot(g)
             if prev:
-                prior_snaps[sym] = prev
+                out_prior[sym] = prev
+        return out_latest, out_prior
+
+    snapshots, prior_snaps = _build_snaps(all_px)
 
     skipped: list[dict] = []
 
@@ -266,11 +262,15 @@ def _run_portfolio_loop(sb, run) -> None:
     # Keep remaining held into surviving unless we rebuild all on rebalance
     for sym, pos in held.items():
         snap = snapshots.get(sym)
-        if not snap:
-            continue
-        _append_position(
-            surviving, sym, pos, snap, uni, run_id, now, today, keep_entry=True,
-        )
+        if snap:
+            _append_position(
+                surviving, sym, pos, snap, uni, run_id, now, today, keep_entry=True,
+            )
+        else:
+            _append_position_stale(
+                surviving, sym, pos, uni, run_id, now, today,
+            )
+            note("WARN", f"{sym} · no price bars in tape — carrying book row unchanged")
 
     # --- 3. Enter / resize target names ---
     if do_rebalance and posture >= POSTURE_ENTRY_MIN and target_syms:
@@ -379,14 +379,21 @@ def _run_portfolio_loop(sb, run) -> None:
 
     existing_syms = {p["symbol"] for p in book_rows}
     new_syms = {p["symbol"] for p in surviving_list}
-    for sym in existing_syms - new_syms:
-        try:
-            sb.table("paper_book").delete().eq("symbol", sym).execute()
-        except Exception:
-            logger.exception("Failed to delete %s from paper_book", sym)
+    if existing_syms and not surviving_list:
+        note(
+            "ERROR",
+            "Refusing to clear paper_book — had open names but zero survivors "
+            "(check price ingest / pagination)",
+        )
+    else:
+        for sym in existing_syms - new_syms:
+            try:
+                sb.table("paper_book").delete().eq("symbol", sym).execute()
+            except Exception:
+                logger.exception("Failed to delete %s from paper_book", sym)
 
-    if surviving_list:
-        sb.table("paper_book").upsert(surviving_list, on_conflict="symbol").execute()
+        if surviving_list:
+            sb.table("paper_book").upsert(surviving_list, on_conflict="symbol").execute()
 
     if orders:
         sb.table("paper_orders").upsert(orders, on_conflict="id").execute()
@@ -443,6 +450,44 @@ def _position_row(
         "unrealized_pnl_usd": 0.0,
         "days_held": 0,
         "opened_at": today.isoformat(),
+        "updated_at": now,
+    }
+
+
+def _append_position_stale(
+    surviving: dict,
+    sym: str,
+    pos: dict,
+    uni: dict,
+    run_id: str,
+    now: str,
+    today: date,
+) -> None:
+    """Keep an open line when EOD bars are missing (do not drop the book)."""
+    entry = float(pos.get("entry") or 0)
+    last = float(pos.get("last") or entry)
+    opened = _parse_date(pos.get("opened_at")) or today
+    u = uni.get(sym) or {}
+    shares = int(pos.get("shares") or 0)
+    surviving[sym] = {
+        "symbol": sym,
+        "run_id": run_id,
+        "company_name": pos.get("company_name") or u.get("company_name"),
+        "side": "LONG",
+        "shares": shares,
+        "entry": entry,
+        "last": round(last, 2),
+        "stop": pos.get("stop"),
+        "n": None,
+        "risk_usd": None,
+        "sector": pos.get("sector") or u.get("sector") or "",
+        "reason": pos.get("reason") or "",
+        "rank": pos.get("rank"),
+        "breakout": pos.get("breakout"),
+        "green": pos.get("green"),
+        "unrealized_pnl_usd": round((last - entry) * shares, 2),
+        "days_held": (today - opened).days,
+        "opened_at": opened.isoformat(),
         "updated_at": now,
     }
 
