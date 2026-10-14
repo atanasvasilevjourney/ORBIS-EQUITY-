@@ -3,11 +3,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from typing import Literal
 
 import numpy as np
 import pandas as pd
 import yfinance as yf
 
+from pipeline.compute.atr_risk import compute_atr
 from pipeline.compute.donchian_vwap import (
     ENTRY_CHANNEL,
     EQUITY as INITIAL_EQUITY,
@@ -23,6 +25,15 @@ from pipeline.compute.donchian_vwap import (
 from pipeline.ingest.us_index_universe import build_merged_universe
 from pipeline.research.loop_backtest import _bar_on, _download_panel
 from pipeline.universe_filters import is_loop_tradable, is_pharma_stock
+
+ExitMode = Literal["donchian20", "atr_trail", "tighter"]
+
+
+@dataclass
+class TrailState:
+    entry_price: float
+    peak_price: float
+    stop_price: float
 
 
 @dataclass
@@ -52,6 +63,61 @@ def _donchian_signals(df: pd.DataFrame) -> pd.DataFrame:
     return donchian_frame(d)
 
 
+def _atr_on_bar(ohlcv: pd.DataFrame, d: date, period: int) -> float | None:
+    ts = pd.Timestamp(d)
+    hits = ohlcv.index.normalize() == ts
+    if not hits.any():
+        return None
+    loc = int(np.where(hits)[0][0])
+    if loc < period:
+        return None
+    window = ohlcv.iloc[: loc + 1]
+    atr_s = compute_atr(window.reset_index(drop=True), period=period)
+    val = float(atr_s.iloc[-1])
+    return val if np.isfinite(val) and val > 0 else None
+
+
+def _init_trail(entry: float, atr: float, mult: float) -> TrailState:
+    stop = entry - mult * atr
+    return TrailState(entry_price=entry, peak_price=entry, stop_price=stop)
+
+
+def _update_trail(state: TrailState, high: float, atr: float, mult: float) -> TrailState:
+    peak = max(state.peak_price, high)
+    chandelier = peak - mult * atr
+    stop = max(state.stop_price, chandelier)
+    return TrailState(entry_price=state.entry_price, peak_price=peak, stop_price=stop)
+
+
+def _bar_ohlc(ohlcv: pd.DataFrame, d: date) -> tuple[float, float, float] | None:
+    ts = pd.Timestamp(d)
+    hits = ohlcv.index.normalize() == ts
+    if not hits.any():
+        return None
+    row = ohlcv.iloc[int(np.where(hits)[0][0])]
+    return float(row["high"]), float(row["low"]), float(row["close"])
+
+
+def build_research_panels(data_start: str = "2022-06-01") -> tuple[dict[str, pd.DataFrame], dict[str, pd.DataFrame]]:
+    """Download universe OHLCV and precompute Donchian signal frames."""
+    sym_sector = _universe()
+    symbols = sorted(sym_sector.keys())
+    panels = _download_panel(symbols, data_start)
+    if "SPY" not in panels:
+        spy = yf.download("SPY", start=data_start, progress=False, auto_adjust=True)
+        panels["SPY"] = spy.rename(columns=str.lower)[["open", "high", "low", "close", "volume"]].dropna()
+
+    signals: dict[str, pd.DataFrame] = {}
+    for sym, ohlcv in panels.items():
+        if sym == "SPY" or len(ohlcv) < ENTRY_CHANNEL + 5:
+            continue
+        try:
+            signals[sym] = _donchian_signals(ohlcv)
+        except Exception:
+            continue
+    return panels, signals
+
+
 def _metrics(label: str, start: date, end: date, daily_returns: pd.Series) -> PeriodMetrics:
     mask = (daily_returns.index >= pd.Timestamp(start)) & (daily_returns.index <= pd.Timestamp(end))
     r = daily_returns.loc[mask].dropna()
@@ -69,50 +135,61 @@ def run_donchian_vwap_portfolio(
     end: date,
     *,
     data_start: str = "2022-06-01",
+    exit_mode: ExitMode = "donchian20",
+    atr_period: int = 14,
+    atr_mult: float = 2.5,
+    panels: dict[str, pd.DataFrame] | None = None,
+    signals: dict[str, pd.DataFrame] | None = None,
 ) -> tuple[pd.Series, pd.DataFrame]:
     """
     Weekly rebalance: hold up to TOP_N names with Donchian(55) break + close > 20d VWAP.
-    Exit names on 20-day Donchian lower break between rebalances.
+    Exit between rebalances:
+      - donchian20: close < 20-day Donchian lower
+      - atr_trail: close < ratcheting chandelier (peak - atr_mult * ATR)
+      - tighter: either exit fires
     Equal weight; max MAX_PER_SECTOR per sector.
     Returns (daily_return_series indexed by date, equity_curve dataframe).
     """
     sym_sector = _universe()
-    symbols = sorted(sym_sector.keys())
-    panels = _download_panel(symbols, data_start)
-    if "SPY" not in panels:
-        spy = yf.download("SPY", start=data_start, progress=False, auto_adjust=True)
-        panels["SPY"] = spy.rename(columns=str.lower)[["open", "high", "low", "close", "volume"]].dropna()
-
-    signals: dict[str, pd.DataFrame] = {}
-    for sym, ohlcv in panels.items():
-        if sym == "SPY" or len(ohlcv) < ENTRY_CHANNEL + 5:
-            continue
-        try:
-            signals[sym] = _donchian_signals(ohlcv)
-        except Exception:
-            continue
+    if panels is None or signals is None:
+        panels, signals = build_research_panels(data_start)
 
     cal = panels["SPY"]
     days = [d.date() if hasattr(d, "date") else d for d in cal.index]
     days = [d for d in days if start <= d <= end]
 
     holdings: dict[str, float] = {}  # symbol -> weight
+    trails: dict[str, TrailState] = {}
     equity = INITIAL_EQUITY
     eq_rows: list[dict] = []
-    prev_eq = equity
 
     for i, d in enumerate(days):
         # exits between rebalances
         to_drop = []
         for sym in list(holdings.keys()):
             sig = signals.get(sym)
-            if sig is None:
-                continue
-            row = _bar_on(sig, d)
-            if row is not None and bool(row.get("exit_signal", False)):
+            ohlcv = panels.get(sym)
+            row = _bar_on(sig, d) if sig is not None else None
+            dc_exit = row is not None and bool(row.get("exit_signal", False))
+            atr_exit = False
+            if exit_mode in ("atr_trail", "tighter") and ohlcv is not None:
+                bar = _bar_ohlc(ohlcv, d)
+                if bar is not None and sym in trails:
+                    hi, _, close = bar
+                    atr = _atr_on_bar(ohlcv, d, atr_period)
+                    if atr is not None:
+                        trails[sym] = _update_trail(trails[sym], hi, atr, atr_mult)
+                        if close < trails[sym].stop_price:
+                            atr_exit = True
+            if exit_mode == "donchian20" and dc_exit:
+                to_drop.append(sym)
+            elif exit_mode == "atr_trail" and atr_exit:
+                to_drop.append(sym)
+            elif exit_mode == "tighter" and (dc_exit or atr_exit):
                 to_drop.append(sym)
         for sym in to_drop:
             holdings.pop(sym, None)
+            trails.pop(sym, None)
 
         signal_day = days[max(0, i - 1)]  # prior close — no same-bar lookahead
         if i % REBALANCE_DAYS == 0 or not holdings:
@@ -137,7 +214,22 @@ def run_donchian_vwap_portfolio(
                     break
             if new_hold:
                 w = 1.0 / len(new_hold)
+                prev_syms = set(holdings.keys())
                 holdings = {s: w for s in new_hold}
+                for sym in new_hold:
+                    if sym in trails:
+                        continue
+                    ohlcv = panels.get(sym)
+                    if ohlcv is None:
+                        continue
+                    bar = _bar_ohlc(ohlcv, d)
+                    atr = _atr_on_bar(ohlcv, d, atr_period)
+                    if bar is None or atr is None:
+                        continue
+                    _, _, close = bar
+                    trails[sym] = _init_trail(close, atr, atr_mult)
+                for sym in prev_syms - set(new_hold.keys()):
+                    trails.pop(sym, None)
 
         day_ret = 0.0
         if holdings:
@@ -180,3 +272,74 @@ def is_oos_split() -> tuple[tuple[date, date], tuple[date, date]]:
     is_period = (date(2023, 1, 1), date(2024, 12, 31))
     oos_period = (date(2025, 1, 1), date(2026, 9, 26))
     return is_period, oos_period
+
+
+@dataclass
+class GridResult:
+    atr_period: int
+    atr_mult: float
+    exit_mode: ExitMode
+    is_return_pct: float
+    is_sharpe: float
+    is_max_dd_pct: float
+    oos_return_pct: float
+    oos_sharpe: float
+    oos_max_dd_pct: float
+    full_sharpe: float
+
+
+def default_atr_param_grid() -> list[tuple[int, float]]:
+    periods = (10, 14, 20)
+    mults = (2.0, 2.5, 3.0, 3.5, 4.0)
+    return [(p, m) for p in periods for m in mults]
+
+
+def grid_search_atr_trail(
+    *,
+    exit_mode: ExitMode = "atr_trail",
+    data_start: str = "2022-06-01",
+    param_grid: list[tuple[int, float]] | None = None,
+) -> pd.DataFrame:
+    """Rank ATR chandelier trail parameters on fixed IS/OOS split (same as notebook)."""
+    (is_start, is_end), (oos_start, oos_end) = is_oos_split()
+    full_start, full_end = is_start, oos_end
+    grid = param_grid or default_atr_param_grid()
+    panels, signals = build_research_panels(data_start)
+
+    rows: list[GridResult] = []
+    for atr_period, atr_mult in grid:
+        daily, _ = run_donchian_vwap_portfolio(
+            full_start,
+            full_end,
+            data_start=data_start,
+            exit_mode=exit_mode,
+            atr_period=atr_period,
+            atr_mult=atr_mult,
+            panels=panels,
+            signals=signals,
+        )
+        if daily.empty:
+            continue
+        is_m = _metrics("IS", is_start, is_end, daily)
+        oos_m = _metrics("OOS", oos_start, oos_end, daily)
+        full_m = _metrics("full", full_start, full_end, daily)
+        rows.append(
+            GridResult(
+                atr_period=atr_period,
+                atr_mult=atr_mult,
+                exit_mode=exit_mode,
+                is_return_pct=is_m.total_return_pct,
+                is_sharpe=is_m.sharpe,
+                is_max_dd_pct=is_m.max_drawdown_pct,
+                oos_return_pct=oos_m.total_return_pct,
+                oos_sharpe=oos_m.sharpe,
+                oos_max_dd_pct=oos_m.max_drawdown_pct,
+                full_sharpe=full_m.sharpe,
+            )
+        )
+
+    df = pd.DataFrame([r.__dict__ for r in rows])
+    if df.empty:
+        return df
+    df = df.sort_values(["oos_sharpe", "is_sharpe"], ascending=False).reset_index(drop=True)
+    return df

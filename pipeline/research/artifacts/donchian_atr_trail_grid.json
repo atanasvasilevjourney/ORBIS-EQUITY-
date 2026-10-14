@@ -1,0 +1,11 @@
+{
+  "exit_mode": "atr_trail",
+  "best_atr_period": 14,
+  "best_atr_mult": 2.0,
+  "is_return_pct": 160.54375564056903,
+  "oos_return_pct": 307.02853701676656,
+  "is_sharpe": 2.9296058128249465,
+  "oos_sharpe": 3.7317169364653835,
+  "is_max_dd_pct": -11.569226694232103,
+  "oos_max_dd_pct": -8.955978747920422
+}
