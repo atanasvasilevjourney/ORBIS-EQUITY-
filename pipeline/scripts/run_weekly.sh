@@ -19,4 +19,7 @@ python -m pipeline.ingest.financial_reports
 echo "[weekly] F-Score"
 python -m pipeline.compute.f_score
 
+echo "[weekly] research pack (Money Machine × ORBIS)"
+python -m pipeline.research_framework.generate || echo "[weekly] research_framework.generate skipped"
+
 echo "[weekly] done — follow with run_daily.sh on the same day"

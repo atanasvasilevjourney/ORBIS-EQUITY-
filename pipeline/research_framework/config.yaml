@@ -1,0 +1,62 @@
+# Money Machine × ORBIS weekly research pack — transparent rules (paper / research only).
+version: 1
+
+macro:
+  benchmarks:
+    - symbol: SPY
+      label: S&P 500
+    - symbol: QQQ
+      label: Nasdaq 100
+  ma200_period: 200
+  swing_lookback: 40
+  min_history_bars: 220
+
+internals:
+  # Pulled from daily_brief.inputs + trend_radar aggregates when present.
+  use_daily_brief: true
+  use_trend_radar_breadth: true
+
+sector_rotation:
+  top_groups: 3
+  group_types: [sector, subsector]
+
+setups:
+  max_count: 5
+  min_orbis_score: 70
+  min_quality_rank: 55
+  min_composite_factor: null
+  require_radar_green: true
+  require_breakout_or_volume: false
+  sides: [LONG]
+  desk_sources:
+    - trend_radar
+    - screener
+  entry_model: breakout_prior_high
+  atr_period: 14
+  min_history_bars: 60
+  rules:
+    stop_atr_mult: 0.75
+    target_atr_mult: 1.5
+    min_rr: 1.2
+  validation:
+    no_trade_until_entry: true
+    status_default: pending
+
+risk:
+  risk_per_trade_pct: 1.0
+  max_concurrent_setups: 5
+  trailing_stop_hint: "After +1R, trail stop to breakeven or 0.5× ATR below last swing low."
+  monthly_pl_mindset: "Track paper P&L by calendar month; size so one full stop ≈ risk_per_trade_pct of notional."
+
+themes:
+  semis:
+    match_sectors: [Semiconductors, Semiconductor Equipment & Materials]
+  cyber:
+    match_sectors: [Software, IT Services, Communications Equipment]
+  fintech:
+    match_sectors: [Financial Services, Banks, Capital Markets]
+  healthcare:
+    match_sectors: [Healthcare, Biotechnology, Pharmaceuticals]
+  energy:
+    match_sectors: [Energy, Oil & Gas]
+  default_bucket: general
