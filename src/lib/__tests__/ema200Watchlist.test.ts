@@ -36,6 +36,7 @@ describe("classifyEma200Setup", () => {
         symbol: "MA",
         close: 562.73,
         ema200: 539.46,
+        dist_atr: 2.733,
         ribbon_dist_atr: 2.15,
         days_above: 57,
         ema200_slope: 0.01224,
