@@ -14,6 +14,7 @@ type Ema200Row = {
   setup: string;
   close: number | null;
   ema200: number | null;
+  ema200High: number | null;
   distAtr: number | null;
   daysAbove: number | null;
   ema200Slope: number | null;
@@ -67,7 +68,7 @@ export default function Ema200WatchlistPage() {
       <ModuleHeader
         module="EMA200"
         title="RETRACE WATCHLIST"
-        description="S&P 500 + Nasdaq-100 (~600 names scanned nightly). Listed only when price pulls back to a rising 200 EMA and the daily close holds the level. You decide entries in IBKR."
+        description="S&P 500 + Nasdaq-100 (~600 names scanned nightly). Double-stacked 200 EMA (close + high, PB-EMA style). Listed when price retests that ribbon and the close holds the lower line — e.g. MA on 30 Sep 2026. You decide entries in IBKR."
         source="SP500 ∪ NDX-100 · EOD"
         accent="var(--accent-info)"
       />
@@ -104,7 +105,7 @@ export default function Ema200WatchlistPage() {
                   <th className="text-right px-3 py-2">RVOL</th>
                   <th className="text-left px-3 py-2">REGIME</th>
                   <th className="text-right px-3 py-2">CLOSE</th>
-                  <th className="text-right px-3 py-2">EMA200</th>
+                  <th className="text-right px-3 py-2">EMA200 LO / HI</th>
                   <th className="text-left px-3 py-2">CHART</th>
                 </tr>
               </thead>
@@ -147,7 +148,10 @@ export default function Ema200WatchlistPage() {
                       <td className="px-3 py-2 text-right">{r.rvol?.toFixed(2) ?? "—"}</td>
                       <td className="px-3 py-2">{r.regime ?? "—"}</td>
                       <td className="px-3 py-2 text-right">{r.close?.toFixed(2) ?? "—"}</td>
-                      <td className="px-3 py-2 text-right">{r.ema200?.toFixed(2) ?? "—"}</td>
+                      <td className="px-3 py-2 text-right text-[11px]">
+                        {r.ema200 != null ? r.ema200.toFixed(2) : "—"}
+                        {r.ema200High != null ? ` / ${r.ema200High.toFixed(2)}` : ""}
+                      </td>
                       <td className="px-3 py-2">
                         <a
                           href={r.tradingViewUrl}

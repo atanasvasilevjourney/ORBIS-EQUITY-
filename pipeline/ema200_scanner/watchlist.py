@@ -20,17 +20,26 @@ def watchlist_thresholds(cfg: dict[str, Any] | None = None) -> dict[str, float |
     }
 
 
+def _watchlist_dist_atr(row: dict[str, Any]) -> float | None:
+    """Proximity to the double EMA ribbon (close + high 200 EMA); falls back to close dist."""
+    raw = row.get("ribbon_dist_atr")
+    if raw is None:
+        raw = row.get("dist_atr")
+    if raw is None:
+        return None
+    try:
+        return abs(float(raw))
+    except (TypeError, ValueError):
+        return None
+
+
 def classify_setup(row: dict[str, Any], *, cfg: dict[str, Any] | None = None) -> str | None:
     """Return setup label if row belongs on the discretionary watchlist, else None."""
     th = watchlist_thresholds(cfg)
-    dist = row.get("dist_atr")
-    if dist is None:
+    dist_f = _watchlist_dist_atr(row)
+    if dist_f is None:
         return None
-    try:
-        dist_f = float(dist)
-    except (TypeError, ValueError):
-        return None
-    if abs(dist_f) > float(th["shortlist_atr"]):
+    if dist_f > float(th["shortlist_atr"]):
         return None
 
     close = row.get("close")
@@ -66,7 +75,9 @@ def row_for_display(row: dict[str, Any], setup: str) -> dict[str, Any]:
         "setup": setup,
         "close": row.get("close"),
         "ema200": row.get("ema200"),
+        "ema200_high": row.get("ema200_high"),
         "dist_atr": row.get("dist_atr"),
+        "ribbon_dist_atr": row.get("ribbon_dist_atr"),
         "days_above": row.get("days_above"),
         "ema200_slope": row.get("ema200_slope"),
         "rvol": row.get("rvol"),

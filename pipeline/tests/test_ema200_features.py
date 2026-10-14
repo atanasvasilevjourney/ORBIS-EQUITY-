@@ -36,6 +36,17 @@ def test_truncated_history_matches_full_series():
         regime="bull",
     )
     compare_idx = partial.index[-1]
-    cols = ["close", "ema200", "ema200_slope", "atr14", "dist_atr", "rvol", "days_above"]
+    cols = [
+        "close",
+        "ema200",
+        "ema200_high",
+        "ema200_low",
+        "ema200_slope",
+        "atr14",
+        "dist_atr",
+        "ribbon_dist_atr",
+        "rvol",
+        "days_above",
+    ]
     for col in cols:
         assert full.loc[compare_idx, col] == part.loc[compare_idx, col]
