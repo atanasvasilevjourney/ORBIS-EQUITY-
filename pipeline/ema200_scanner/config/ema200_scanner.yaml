@@ -6,7 +6,8 @@ universe:
   exclude_pharma: false
 ema_period: 200
 atr_period: 14
-history_min_bars: 500
+# Hosted prices_daily has ~307 sessions today; 500 masked all EMA200 values. Keep ≥ ema_period.
+history_min_bars: 200
 
 trend:
   min_days_above: 20
@@ -58,7 +59,7 @@ validation:
   reference_symbols: [AAPL, MSFT, SPY, AMZN, NVDA]
 
 nightly:
-  min_history_bars: 550
+  min_history_bars: 220
   max_vendor_backfill_symbols: 700
   missing_data_abort_pct: 25.0
   time_budget_sec: 7200

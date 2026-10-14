@@ -9,6 +9,7 @@ import {
   ribbonDistPct,
   ribbonDistUsd,
 } from "@/lib/ema200Distance";
+import { computeEma200FeaturesLive } from "@/lib/ema200LiveScan";
 import {
   EMA200_DEFAULTS,
   classifyEma200Setup,
@@ -17,6 +18,8 @@ import {
 } from "@/lib/ema200Watchlist";
 
 export const revalidate = 900;
+/** Live scan from prices_daily can take ~30–60s on cold start. */
+export const maxDuration = 60;
 
 type FeatureDbRow = {
   symbol: string;
@@ -162,6 +165,7 @@ export async function GET(req: NextRequest) {
     const sb = createServerClient();
 
     let features: FeatureDbRow[] = [];
+    let dataSource: "ema200_features" | "prices_daily_live" = "ema200_features";
     try {
       features = await fetchAll<FeatureDbRow>(
         sb,
@@ -173,12 +177,23 @@ export async function GET(req: NextRequest) {
     }
 
     if (!features.length) {
+      try {
+        features = await computeEma200FeaturesLive(sb);
+        dataSource = "prices_daily_live";
+      } catch (liveErr) {
+        console.error("EMA200 live scan failed:", liveErr);
+      }
+    }
+
+    if (!features.length) {
       return NextResponse.json({
         mode: "watchlist_only",
         asOfDate: null,
         disclaimer:
-          "Discretionary scan only — not a trade signal. Run migration 021 and pipeline.ema200_scanner.jobs.nightly to populate features.",
+          "No EMA200 feature rows yet. Apply supabase migrations 021 + 026 in the SQL editor, run pipeline.ema200_scanner.jobs.nightly, or ensure prices_daily has ≥500 bars per symbol.",
         rows: [],
+        watch: [],
+        approaching: [],
       });
     }
 
@@ -256,7 +271,10 @@ export async function GET(req: NextRequest) {
       shortlistAtr: EMA200_DEFAULTS.shortlistAtr,
       approachingMaxAtr: 3,
       disclaimer:
-        "S&P 500 + Nasdaq-100 only. WATCH = at the ribbon (≤1.5 ATR). APPROACHING = still extended but closing in (1.5–3 ATR) with uptrend intact. Dist Δ = change vs prior session (negative = closer). Days since touch = sessions since last ≤1.5 ATR ribbon tag.",
+        dataSource === "prices_daily_live"
+          ? "Live scan from prices_daily (ema200_features table missing or empty). Run migration 021 + nightly job for cached features. WATCH ≤1.5 ATR ribbon; APPROACHING 1.5–3 ATR."
+          : "S&P 500 + Nasdaq-100 only. WATCH = at the ribbon (≤1.5 ATR). APPROACHING = still extended but closing in (1.5–3 ATR) with uptrend intact. Dist Δ = change vs prior session (negative = closer). Days since touch = sessions since last ≤1.5 ATR ribbon tag.",
+      dataSource,
       filter: showAllNear ? "near_ema_relaxed" : "retrace_held_only",
       rows: rowsOnlyWatch ? watch : approaching,
       watch,
