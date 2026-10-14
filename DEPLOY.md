@@ -102,9 +102,20 @@ Repo → Settings → Secrets and variables → Actions — add:
 - `SUPABASE_SERVICE_KEY`
 - `LSE_API_KEY`
 - `LSE_DATA_API_URL` (optional)
-- `RESEND_API_KEY`, `ALERT_EMAIL`, `ALERT_EMAIL_FROM` (optional — EOD digest)
+- `RESEND_API_KEY`, `ALERT_EMAIL`, `ALERT_EMAIL_FROM` (optional — EOD digest + **Sunday research email**)
+- `APP_BASE_URL` (optional — link to `/research-weekly` in Sunday mail)
 
-Schedule (already in repo): **Mon–Fri 19:30 UTC** (`.github/workflows/nightly-pipeline.yml`). Manual run: Actions → **Orbis Equity Nightly Pipeline** → **Run workflow**.
+Schedule (already in repo):
+
+- **Mon–Fri 19:30 UTC** — `.github/workflows/nightly-pipeline.yml` (nightly pipeline + EOD watchlist digest)
+- **Sunday 08:00 UTC** — `.github/workflows/sunday-research-email.yml` (weekly research pack + watchlist notes to `ALERT_EMAIL`)
+
+Manual test:
+
+```bash
+python -m pipeline.notify.research_weekly_digest --dry-run
+python -m pipeline.notify.research_weekly_digest   # sends if RESEND_API_KEY + ALERT_EMAIL set
+```
 
 Use **Render + GitHub together** per section 3 (primary + backup). Shell entrypoints:
 
