@@ -19,4 +19,7 @@ python -m pipeline.ingest.financial_reports
 echo "[weekly] F-Score"
 python -m pipeline.compute.f_score
 
+echo "[weekly] research pack (macro + setups)"
+python -m pipeline.research_framework.jobs.weekly
+
 echo "[weekly] done — follow with run_daily.sh on the same day"

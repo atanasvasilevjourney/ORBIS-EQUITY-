@@ -1,0 +1,17 @@
+# Weekly research pack — transparent ORBIS rules (Money Machine-style workflow)
+max_setups: 5
+index_symbol: SPY
+min_trend_radar_quality: 65
+min_composite_factor: 55
+prefer_trend_radar_green: true
+require_analyze_buy_vote: true
+atr_period: 14
+stop_atr_mult: 1.5
+target_atr_mult: 2.0
+entry_mode: breakout_prior_high  # breakout_prior_high | last_close
+max_per_sector: 2
+risk_notes:
+  - "Paper research only — not investment advice or live orders."
+  - "Setup is valid only if price reaches the entry level; do not buy blindly at the open."
+  - "Stops and targets are guidelines; use trailing stops if you cannot watch intraday."
+  - "Expect a mix of small losses and occasional large winners; judge progress monthly."
