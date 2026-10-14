@@ -49,7 +49,7 @@ export default function Ema200WatchlistPage() {
       <ModuleHeader
         module="EMA200"
         title="RETRACE WATCHLIST"
-        description="Distance to the double EMA200 ribbon (ATR, $, %). WATCH ≤1.5 ATR; APPROACHING 1.5–3 ATR while still above a rising 200. Δ ATR 1D negative = pulling toward the ribbon. Days since touch = sessions since last ≤1.5 ATR tag."
+        description="Distance to the double EMA200 ribbon (ATR, $, %). WATCH ≤1.5 ATR; APPROACHING 1.5–3 ATR. Names only appear when the latest EOD bar qualifies (e.g. MA on 30 Sep 2026, not when price is extended like MA at ~6 ATR above the ribbon). Live scan uses prices_daily when ema200_features is empty."
         source="SP500 ∪ NDX-100 · EOD"
         accent="var(--accent-info)"
       />
