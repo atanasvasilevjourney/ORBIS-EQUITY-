@@ -10,6 +10,13 @@ def test_prices_loaded_via_fetch_all_helper():
     assert "range(offset, offset + page - 1)" not in text
 
 
+def test_atr_trail_exit_wired():
+    text = Path("pipeline/compute/portfolio_loop.py").read_text(encoding="utf-8")
+    assert "atr_trail_exit_signal" in text
+    assert "LOOP_ATR_PERIOD" in text
+    assert "LOOP_ATR_MULT" in text
+
+
 def test_empty_target_does_not_rotate_out_held():
     text = Path("pipeline/compute/portfolio_loop.py").read_text(encoding="utf-8")
     assert "if target_syms:" in text

@@ -2,7 +2,7 @@
 
   Universe   S&P 500 ∪ Nasdaq-100, ex-pharma (active universe_members)
   Entry      Close > 55-day upper Donchian (prior bar) AND close > 20-day rolling VWAP
-  Exit       Close < 20-day lower Donchian; full rebalance every REBALANCE_DAYS
+  Exit       ATR(14)×2 chandelier trail (EOD close < stop); full rebalance every REBALANCE_DAYS
   Size       Equal weight: ~equity / TOP_N per name (max 8, max 2 / sector)
   Skip       posture < 50 (no rebalance entries), insufficient history
 
@@ -24,7 +24,6 @@ from supabase import create_client
 
 from pipeline.compute.donchian_vwap import (
     EQUITY,
-    EXIT_CHANNEL,
     MAX_PER_SECTOR,
     MIN_NOTIONAL,
     MIN_PRICE,
@@ -32,6 +31,12 @@ from pipeline.compute.donchian_vwap import (
     TOP_N,
     latest_snapshot,
     prior_bar_snapshot,
+)
+from pipeline.compute.loop_atr_trail import (
+    LOOP_ATR_MULT,
+    LOOP_ATR_PERIOD,
+    atr_trail_exit_signal,
+    chandelier_trail_snapshot,
 )
 from pipeline.universe_filters import is_loop_tradable, is_pharma_stock
 from pipeline.utils.supabase import fetch_all
@@ -162,6 +167,13 @@ def _run_portfolio_loop(sb, run) -> None:
 
     snapshots, prior_snaps = _build_snaps(all_px)
 
+    px_by_sym: dict[str, pd.DataFrame] = {}
+    if all_px:
+        px_df = pd.DataFrame(all_px)
+        for sym, g in px_df.groupby("symbol"):
+            if sym in uni:
+                px_by_sym[sym] = ohlcv_frame(g.to_dict("records"))
+
     skipped: list[dict] = []
 
     def skip(ticker: str, reason: str, detail: str, sector: str = "") -> None:
@@ -179,7 +191,7 @@ def _run_portfolio_loop(sb, run) -> None:
     held = {p["symbol"]: p for p in book_rows}
     surviving: dict[str, dict] = {}
 
-    # --- 1. Mandatory exits (Donchian lower / policy) ---
+    # --- 1. Mandatory exits (ATR trail / policy) ---
     for sym, pos in list(held.items()):
         snap = snapshots.get(sym)
         sector = pos.get("sector") or (uni.get(sym) or {}).get("sector") or ""
@@ -188,8 +200,19 @@ def _run_portfolio_loop(sb, run) -> None:
         exit_reason = None
         if is_pharma_stock(u_row) or sym not in uni:
             exit_reason = "Universe policy · not in LOOP universe"
-        elif snap and snap["exit_signal"]:
-            exit_reason = f"Donchian {EXIT_CHANNEL}d low · close {snap['close']:.2f} < channel"
+        else:
+            entry = float(pos.get("entry") or (snap["close"] if snap else 0))
+            opened = _parse_date(pos.get("opened_at")) or today
+            ohlcv = px_by_sym.get(sym)
+            if ohlcv is not None and entry > 0:
+                hit, atr_reason, _ = atr_trail_exit_signal(
+                    ohlcv,
+                    entry_price=entry,
+                    opened=opened,
+                    asof=today,
+                )
+                if hit:
+                    exit_reason = atr_reason
         if exit_reason:
             add_order(
                 ticker=sym,
@@ -264,7 +287,7 @@ def _run_portfolio_loop(sb, run) -> None:
         snap = snapshots.get(sym)
         if snap:
             _append_position(
-                surviving, sym, pos, snap, uni, run_id, now, today, keep_entry=True,
+                surviving, sym, pos, snap, uni, run_id, now, today, px_by_sym,
             )
         else:
             _append_position_stale(
@@ -290,9 +313,15 @@ def _run_portfolio_loop(sb, run) -> None:
             if shares < 1 or notional < MIN_NOTIONAL:
                 skip(sym, "MIN_NOTIONAL", f"shares {shares}", sector)
                 continue
-            lower = snap.get("lower")
             strength = snap.get("strength") or 0
             reason = f"DC{55}+VWAP{20} str {strength:.3f}"
+            ohlcv_sym = px_by_sym.get(sym)
+            trail = (
+                chandelier_trail_snapshot(ohlcv_sym, entry_price=price, opened=today, asof=today)
+                if ohlcv_sym is not None
+                else None
+            )
+            atr_stop = trail.stop_price if trail else None
             existing = sym in surviving
             if existing and surviving[sym]["shares"] == shares:
                 continue
@@ -317,7 +346,7 @@ def _run_portfolio_loop(sb, run) -> None:
                 note("ORDER", f"ENTER {sym} {shares} · {reason}")
 
             surviving[sym] = _position_row(
-                sym, u, snap, shares, price, lower, strength, run_id, now, today, reason,
+                sym, u, snap, shares, price, atr_stop, strength, run_id, now, today, reason,
             )
 
     surviving_list = list(surviving.values())
@@ -347,10 +376,12 @@ def _run_portfolio_loop(sb, run) -> None:
         "skipped": skipped[:40],
         "lastRebalanceDate": today.isoformat() if do_rebalance else (last_rebalance.isoformat() if last_rebalance else None),
         "config": {
-            "engine": "donchian_vwap",
+            "engine": "donchian_vwap_atr",
             "entryChannel": 55,
-            "exitChannel": 20,
             "vwapWindow": 20,
+            "exitMode": "atr_trail",
+            "atrPeriod": LOOP_ATR_PERIOD,
+            "atrMult": LOOP_ATR_MULT,
             "maxNames": TOP_N,
             "maxPerSector": MAX_PER_SECTOR,
             "rebalanceDays": REBALANCE_DAYS,
@@ -423,7 +454,7 @@ def _position_row(
     snap: dict,
     shares: int,
     price: float,
-    lower: float | None,
+    atr_stop: float | None,
     strength: float,
     run_id: str,
     now: str,
@@ -439,7 +470,7 @@ def _position_row(
         "shares": shares,
         "entry": round(price, 2),
         "last": round(price, 2),
-        "stop": round(lower, 2) if lower is not None else None,
+        "stop": round(atr_stop, 2) if atr_stop is not None else None,
         "n": None,
         "risk_usd": None,
         "sector": u.get("sector") or "",
@@ -492,6 +523,22 @@ def _append_position_stale(
     }
 
 
+def _live_atr_stop(
+    px_by_sym: dict[str, pd.DataFrame],
+    sym: str,
+    entry: float,
+    opened: date,
+    today: date,
+) -> float | None:
+    ohlcv = px_by_sym.get(sym)
+    if ohlcv is None or entry <= 0:
+        return None
+    trail = chandelier_trail_snapshot(
+        ohlcv, entry_price=entry, opened=opened, asof=today,
+    )
+    return trail.stop_price if trail else None
+
+
 def _append_position(
     surviving: dict,
     sym: str,
@@ -501,13 +548,13 @@ def _append_position(
     run_id: str,
     now: str,
     today: date,
-    *,
-    keep_entry: bool,
+    px_by_sym: dict[str, pd.DataFrame],
 ) -> None:
     entry = float(pos.get("entry") or snap["close"])
     last = float(snap["close"])
     opened = _parse_date(pos.get("opened_at")) or today
     u = uni.get(sym) or {}
+    trail_stop = _live_atr_stop(px_by_sym, sym, entry, opened, today) or pos.get("stop")
     surviving[sym] = {
         "symbol": sym,
         "run_id": run_id,
@@ -516,7 +563,7 @@ def _append_position(
         "shares": int(pos.get("shares") or 0),
         "entry": entry,
         "last": round(last, 2),
-        "stop": round(snap["lower"], 2) if snap.get("lower") is not None else pos.get("stop"),
+        "stop": trail_stop,
         "n": None,
         "risk_usd": None,
         "sector": pos.get("sector") or u.get("sector") or "",

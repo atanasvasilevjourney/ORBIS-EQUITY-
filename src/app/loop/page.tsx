@@ -99,7 +99,7 @@ export default function LoopPage() {
           LOOP TERMINAL
         </h1>
         <p className="text-xs text-[var(--text-secondary)]">
-          Donchian 55 + 20d VWAP · equal-weight index book (ex-pharma) · paper only
+          Donchian 55 + 20d VWAP · exit ATR(14)×2 trail · equal-weight · paper only
         </p>
       </div>
 
@@ -141,7 +141,7 @@ export default function LoopPage() {
               <th className="text-right px-3 py-2">DAYS</th>
               <th className="text-right px-3 py-2">ENTRY</th>
               <th className="text-right px-3 py-2">LAST</th>
-              <th className="text-right px-3 py-2">DC20 LOW</th>
+              <th className="text-right px-3 py-2">ATR STOP</th>
               <th className="text-right px-3 py-2">STR</th>
               <th className="text-right px-3 py-2">—</th>
               <th className="text-right px-3 py-2">P&amp;L</th>

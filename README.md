@@ -117,7 +117,7 @@ Mechanical long-only portfolio on the US index universe:
 
 - **Universe:** S&P 500 ∪ Nasdaq-100 via `python -m pipeline.ingest.us_index_universe` (pharma/biotech excluded)
 - **Entry:** Close &gt; **55-day** Donchian upper (prior bar) **and** close &gt; **20-day rolling VWAP**
-- **Exit:** Close &lt; **20-day** Donchian lower; rebalance rotation every **5** sessions
+- **Exit:** **ATR(14)×2** chandelier trail (EOD close &lt; stop); rebalance every **5** sessions
 - **Size:** Equal weight — up to **8** names, max **2** per sector (~$100k / N each)
 - **Skip:** posture &lt; 50 (no rebalance entries)
 
