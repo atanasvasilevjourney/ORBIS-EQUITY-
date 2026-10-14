@@ -24,7 +24,9 @@ describe("GET /api/ema200", () => {
               bar_date: "2026-10-10",
               close: 250,
               ema200: 248,
+              ema200_high: 249,
               dist_atr: 0.35,
+              ribbon_dist_atr: 0.35,
               days_above: 24,
               ema200_slope: 0.001,
               rvol: 1.1,
@@ -56,8 +58,9 @@ describe("GET /api/ema200", () => {
     const res = await GET(new NextRequest("http://localhost/api/ema200"));
     const body = await res.json();
     expect(body.mode).toBe("watchlist_only");
-    expect(body.rows).toHaveLength(1);
-    expect(body.rows[0].symbol).toBe("AMZN");
-    expect(body.rows[0].setup).toBe("RETRACE_HELD");
+    expect(body.watch).toHaveLength(1);
+    expect(body.watch[0].symbol).toBe("AMZN");
+    expect(body.watch[0].setup).toBe("RETRACE_HELD");
+    expect(body.watch[0].distUsd).toBeDefined();
   });
 });

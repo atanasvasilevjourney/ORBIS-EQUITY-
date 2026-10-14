@@ -3,6 +3,13 @@ import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { isMissingRelation } from "@/lib/supabase/errors";
 import {
+  daysSinceRibbonTouch,
+  isApproachingPullback,
+  ribbonDistAtr,
+  ribbonDistPct,
+  ribbonDistUsd,
+} from "@/lib/ema200Distance";
+import {
   EMA200_DEFAULTS,
   classifyEma200Setup,
   tradingViewUrl,
@@ -38,6 +45,112 @@ type FundRow = {
   market_cap: number | null;
   average_volume: number | null;
 };
+
+function groupHistoryBySymbol(rows: FeatureDbRow[]): Map<string, FeatureDbRow[]> {
+  const m = new Map<string, FeatureDbRow[]>();
+  for (const r of rows) {
+    const list = m.get(r.symbol) ?? [];
+    list.push(r);
+    m.set(r.symbol, list);
+  }
+  return m;
+}
+
+function priorBar(history: FeatureDbRow[], asOfDate: string): FeatureDbRow | null {
+  const sorted = [...history].sort((a, b) => a.bar_date.localeCompare(b.bar_date));
+  const idx = sorted.findIndex((b) => b.bar_date === asOfDate);
+  if (idx <= 0) return null;
+  return sorted[idx - 1];
+}
+
+function mapRow(
+  r: FeatureDbRow,
+  opts: Partial<typeof EMA200_DEFAULTS>,
+  ctx: {
+    asOfDate: string;
+    history: FeatureDbRow[];
+    uMap: Map<string, UniverseRow>;
+    fMap: Map<string, FundRow>;
+    indexMap: Map<string, string | null>;
+    retraceOnly: boolean;
+  }
+) {
+  const feat: Ema200FeatureRow = {
+    symbol: r.symbol,
+    bar_date: r.bar_date,
+    close: r.close,
+    ema200: r.ema200,
+    ema200_high: r.ema200_high,
+    dist_atr: r.dist_atr,
+    ribbon_dist_atr: r.ribbon_dist_atr,
+    days_above: r.days_above,
+    ema200_slope: r.ema200_slope,
+    rvol: r.rvol,
+    regime: r.regime,
+  };
+  const setup = classifyEma200Setup(feat, opts);
+  const onWatch = setup != null && (!ctx.retraceOnly || setup === "RETRACE_HELD");
+  const approaching = isApproachingPullback(feat, setup);
+  if (!onWatch && !approaching) return null;
+
+  const prev = priorBar(ctx.history, ctx.asOfDate);
+  const prevFeat: Ema200FeatureRow | null = prev
+    ? {
+        symbol: prev.symbol,
+        close: prev.close,
+        ema200: prev.ema200,
+        ema200_high: prev.ema200_high,
+        dist_atr: prev.dist_atr,
+        ribbon_dist_atr: prev.ribbon_dist_atr,
+        days_above: prev.days_above,
+        ema200_slope: prev.ema200_slope,
+      }
+    : null;
+  const distAtr = ribbonDistAtr(feat);
+  const prevDistAtr = prevFeat ? ribbonDistAtr(prevFeat) : null;
+  const distDeltaAtr =
+    distAtr != null && prevDistAtr != null ? distAtr - prevDistAtr : null;
+
+  const u = ctx.uMap.get(r.symbol);
+  const f = ctx.fMap.get(r.symbol);
+  const tag = ctx.indexMap.get(r.symbol);
+
+  return {
+    symbol: r.symbol,
+    companyName: u?.company_name ?? "",
+    sector: u?.sector ?? "",
+    country: u?.country ?? "US",
+    indexTag: tag ?? null,
+    barDate: r.bar_date,
+    lane: onWatch ? "watch" : "approaching",
+    setup: setup ?? "APPROACHING",
+    close: r.close,
+    ema200: r.ema200,
+    ema200High: r.ema200_high,
+    distAtr,
+    ribbonDistAtr: r.ribbon_dist_atr,
+    closeDistAtr: r.dist_atr,
+    distUsd: ribbonDistUsd(r.close, r.ema200, r.ema200_high),
+    distPct: ribbonDistPct(r.close, r.ema200, r.ema200_high),
+    distDeltaAtr,
+    prevDistAtr,
+    daysSinceRibbonTouch: daysSinceRibbonTouch(
+      ctx.history.map((h) => ({
+        bar_date: h.bar_date,
+        ribbon_dist_atr: h.ribbon_dist_atr,
+        dist_atr: h.dist_atr,
+      })),
+      ctx.asOfDate
+    ),
+    daysAbove: r.days_above,
+    ema200Slope: r.ema200_slope,
+    rvol: r.rvol,
+    regime: r.regime,
+    marketCap: f?.market_cap ?? null,
+    price: f?.price ?? r.close,
+    tradingViewUrl: tradingViewUrl(r.symbol),
+  };
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -112,63 +225,42 @@ export async function GET(req: NextRequest) {
     const uMap = new Map(universe.map((u) => [u.symbol, u]));
     const fMap = new Map(fundamentals.map((f) => [f.symbol, f]));
 
-    const rows = latestRows
-      .map((r) => {
-        const feat: Ema200FeatureRow = {
-          symbol: r.symbol,
-          bar_date: r.bar_date,
-          close: r.close,
-          ema200: r.ema200,
-          ema200_high: r.ema200_high,
-          dist_atr: r.dist_atr,
-          ribbon_dist_atr: r.ribbon_dist_atr,
-          days_above: r.days_above,
-          ema200_slope: r.ema200_slope,
-          rvol: r.rvol,
-          regime: r.regime,
-        };
-        const setup = classifyEma200Setup(feat, opts);
-        if (!setup) return null;
-        if (retraceOnly && setup !== "RETRACE_HELD") return null;
-        const u = uMap.get(r.symbol);
-        const f = fMap.get(r.symbol);
-        const tag = indexMap.get(r.symbol);
-        return {
-          symbol: r.symbol,
-          companyName: u?.company_name ?? "",
-          sector: u?.sector ?? "",
-          country: u?.country ?? "US",
-          indexTag: tag ?? null,
-          barDate: r.bar_date,
-          setup,
-          close: r.close,
-          ema200: r.ema200,
-          ema200High: r.ema200_high,
-          distAtr: r.ribbon_dist_atr ?? r.dist_atr,
-          ribbonDistAtr: r.ribbon_dist_atr,
-          closeDistAtr: r.dist_atr,
-          daysAbove: r.days_above,
-          ema200Slope: r.ema200_slope,
-          rvol: r.rvol,
-          regime: r.regime,
-          marketCap: f?.market_cap ?? null,
-          price: f?.price ?? r.close,
-          tradingViewUrl: tradingViewUrl(r.symbol),
-        };
-      })
-      .filter(Boolean)
-      .sort((a, b) => Math.abs(a!.distAtr ?? 99) - Math.abs(b!.distAtr ?? 99))
+    const historyBySymbol = groupHistoryBySymbol(features);
+    const ctxBase = { asOfDate: latestDate, uMap, fMap, indexMap, retraceOnly };
+
+    const mapped = latestRows
+      .map((r) =>
+        mapRow(r, opts, {
+          ...ctxBase,
+          history: historyBySymbol.get(r.symbol) ?? [r],
+        })
+      )
+      .filter(Boolean) as NonNullable<ReturnType<typeof mapRow>>[];
+
+    const watch = mapped
+      .filter((r) => r.lane === "watch")
+      .sort((a, b) => (a.distAtr ?? 99) - (b.distAtr ?? 99))
       .slice(0, limit);
+    const approaching = mapped
+      .filter((r) => r.lane === "approaching")
+      .sort((a, b) => (a.distAtr ?? 99) - (b.distAtr ?? 99))
+      .slice(0, limit);
+
+    const rowsOnlyWatch = sp.get("approaching") !== "1";
 
     return NextResponse.json({
       mode: "watchlist_only",
       asOfDate: latestDate,
       universe: "sp500_ndx100",
       universeCount: allowedSymbols.size || null,
+      shortlistAtr: EMA200_DEFAULTS.shortlistAtr,
+      approachingMaxAtr: 3,
       disclaimer:
-        "S&P 500 + Nasdaq-100 only. Names appear when price retraces to the rising double 200 EMA ribbon (close + high lines, PB-EMA style) and the daily close holds the lower line. Discretionary — you trade manually in IBKR.",
+        "S&P 500 + Nasdaq-100 only. WATCH = at the ribbon (≤1.5 ATR). APPROACHING = still extended but closing in (1.5–3 ATR) with uptrend intact. Dist Δ = change vs prior session (negative = closer). Days since touch = sessions since last ≤1.5 ATR ribbon tag.",
       filter: showAllNear ? "near_ema_relaxed" : "retrace_held_only",
-      rows,
+      rows: rowsOnlyWatch ? watch : approaching,
+      watch,
+      approaching,
     });
   } catch (err) {
     console.error("EMA200 watchlist API error:", err);
