@@ -132,7 +132,11 @@ export default function Ema200WatchlistPage() {
                       className="border-b border-[var(--panel-border)] hover:bg-[var(--surface-alt)]"
                     >
                       <td className="px-3 py-2">
-                        <Link href={`/ticker/${r.symbol}`} className="text-[var(--accent-info)] hover:underline">
+                        <Link
+                          href={`/ticker/${r.symbol}?swing=1`}
+                          className="text-[var(--accent-info)] hover:underline"
+                          title="Open daily chart with EMA 50 / 200 ribbon"
+                        >
                           {r.symbol}
                         </Link>
                         <div className="text-[10px] text-[var(--text-muted)] truncate max-w-[140px]">
@@ -152,12 +156,18 @@ export default function Ema200WatchlistPage() {
                         {r.ema200 != null ? r.ema200.toFixed(2) : "—"}
                         {r.ema200High != null ? ` / ${r.ema200High.toFixed(2)}` : ""}
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 space-x-2">
+                        <Link
+                          href={`/ticker/${r.symbol}?swing=1`}
+                          className="text-[10px] text-[var(--accent-info)] hover:underline"
+                        >
+                          CHART
+                        </Link>
                         <a
                           href={r.tradingViewUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-[10px] text-[var(--accent-info)]"
+                          className="text-[10px] text-[var(--text-muted)] hover:text-[var(--accent-info)]"
                         >
                           TV
                         </a>
