@@ -6,6 +6,7 @@ import pandas as pd
 
 from pipeline.compute.atr_risk import compute_atr
 from pipeline.ema200_scanner.indicators.ema import apply_trust_window, ema_series
+from pipeline.ema200_scanner.indicators.ribbon import ribbon_dist_atr
 
 
 def _days_above(close: pd.Series, ema: pd.Series) -> pd.Series:
@@ -46,6 +47,10 @@ def compute_features_frame(
     close = df["close"].astype(float)
     ema_raw = ema_series(close, ema_period)
     ema = apply_trust_window(ema_raw, history_min_bars=history_min_bars)
+    ema_high_raw = ema_series(df["high"].astype(float), ema_period)
+    ema_high = apply_trust_window(ema_high_raw, history_min_bars=history_min_bars)
+    ema_low_raw = ema_series(df["low"].astype(float), ema_period)
+    ema_low = apply_trust_window(ema_low_raw, history_min_bars=history_min_bars)
 
     atr = compute_atr(df, period=atr_period)
     vol_sma = df["volume"].astype(float).rolling(20, min_periods=20).mean()
@@ -55,15 +60,19 @@ def compute_features_frame(
     slope = (ema - ema_lag) / ema_lag.replace(0, np.nan)
 
     dist_atr = (close - ema) / atr.replace(0, np.nan)
+    ribbon_dist = ribbon_dist_atr(close, ema, ema_high, atr)
     days_above = _days_above(close, ema)
 
     out = pd.DataFrame(
         {
             "close": close,
             "ema200": ema,
+            "ema200_high": ema_high,
+            "ema200_low": ema_low,
             "ema200_slope": slope,
             "atr14": atr,
             "dist_atr": dist_atr,
+            "ribbon_dist_atr": ribbon_dist,
             "rvol": rvol,
             "days_above": days_above,
             "regime": regime,

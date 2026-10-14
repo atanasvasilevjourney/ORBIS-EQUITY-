@@ -23,12 +23,20 @@ export type Ema200FeatureRow = {
   bar_date?: string;
   close: number | null;
   ema200: number | null;
+  ema200_high?: number | null;
   dist_atr: number | null;
+  ribbon_dist_atr?: number | null;
   days_above?: number | null;
   ema200_slope?: number | null;
   rvol?: number | null;
   regime?: string | null;
 };
+
+function watchlistDistAtr(row: Ema200FeatureRow): number | null {
+  const raw = row.ribbon_dist_atr ?? row.dist_atr;
+  if (raw == null || !Number.isFinite(raw)) return null;
+  return Math.abs(raw);
+}
 
 export function tradingViewUrl(symbol: string): string {
   const tv = symbol.replace(/-/g, "");
@@ -40,8 +48,9 @@ export function classifyEma200Setup(
   opts: Partial<Ema200WatchlistOpts> = {}
 ): Ema200Setup | null {
   const th = { ...EMA200_DEFAULTS, ...opts };
-  if (row.dist_atr == null || !Number.isFinite(row.dist_atr)) return null;
-  if (Math.abs(row.dist_atr) > th.shortlistAtr) return null;
+  const dist = watchlistDistAtr(row);
+  if (dist == null) return null;
+  if (dist > th.shortlistAtr) return null;
   if (row.close == null || row.ema200 == null) return null;
 
   const held = row.close >= row.ema200;

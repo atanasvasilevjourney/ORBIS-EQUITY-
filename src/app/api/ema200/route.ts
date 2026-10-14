@@ -16,7 +16,9 @@ type FeatureDbRow = {
   bar_date: string;
   close: number | null;
   ema200: number | null;
+  ema200_high: number | null;
   dist_atr: number | null;
+  ribbon_dist_atr: number | null;
   days_above: number | null;
   ema200_slope: number | null;
   rvol: number | null;
@@ -51,7 +53,7 @@ export async function GET(req: NextRequest) {
       features = await fetchAll<FeatureDbRow>(
         sb,
         "ema200_features",
-        "symbol, bar_date, close, ema200, dist_atr, days_above, ema200_slope, rvol, regime"
+        "symbol, bar_date, close, ema200, ema200_high, dist_atr, ribbon_dist_atr, days_above, ema200_slope, rvol, regime"
       );
     } catch (err) {
       if (!isMissingRelation(err)) throw err;
@@ -117,7 +119,9 @@ export async function GET(req: NextRequest) {
           bar_date: r.bar_date,
           close: r.close,
           ema200: r.ema200,
+          ema200_high: r.ema200_high,
           dist_atr: r.dist_atr,
+          ribbon_dist_atr: r.ribbon_dist_atr,
           days_above: r.days_above,
           ema200_slope: r.ema200_slope,
           rvol: r.rvol,
@@ -139,7 +143,10 @@ export async function GET(req: NextRequest) {
           setup,
           close: r.close,
           ema200: r.ema200,
-          distAtr: r.dist_atr,
+          ema200High: r.ema200_high,
+          distAtr: r.ribbon_dist_atr ?? r.dist_atr,
+          ribbonDistAtr: r.ribbon_dist_atr,
+          closeDistAtr: r.dist_atr,
           daysAbove: r.days_above,
           ema200Slope: r.ema200_slope,
           rvol: r.rvol,
@@ -159,7 +166,7 @@ export async function GET(req: NextRequest) {
       universe: "sp500_ndx100",
       universeCount: allowedSymbols.size || null,
       disclaimer:
-        "S&P 500 + Nasdaq-100 only. Names appear when price retraces to the rising 200 EMA and the daily close holds the level. Discretionary — you trade manually in IBKR.",
+        "S&P 500 + Nasdaq-100 only. Names appear when price retraces to the rising double 200 EMA ribbon (close + high lines, PB-EMA style) and the daily close holds the lower line. Discretionary — you trade manually in IBKR.",
       filter: showAllNear ? "near_ema_relaxed" : "retrace_held_only",
       rows,
     });

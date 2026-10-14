@@ -15,6 +15,8 @@ trend:
 
 touch:
   touch_tolerance_atr: 0.25
+  # Watchlist uses ribbon_dist_atr: distance to PB-EMA band (EMA200 close .. EMA200 high).
+  # Calibrated so MA 2026-09-30 retrace (~0.67 ATR to upper ribbon) qualifies; 2026-09-29 does not.
   shortlist_atr: 1.5
   confirm_mode: bar_close   # intrabar | bar_close
 
