@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { swingEmaOverlaysFromOhlc } from "@/lib/chartEma";
 import { vwapOverlaysForIntraday } from "@/lib/vwap";
 
 export const dynamic = "force-dynamic";
@@ -120,12 +121,15 @@ export async function GET(
       .filter((c): c is Candle => c != null)
       .reverse();
     const closes = candles.map((c) => c.close);
+    const highs = candles.map((c) => c.high);
+    const swing = swingEmaOverlaysFromOhlc(closes, highs);
     return NextResponse.json({
       ticker,
       interval: "1d",
       source: "prices_daily",
       candles,
       sma20: sma(closes, 20),
+      swing,
       fallbackFrom5m: requested === "5m",
     });
   } catch (err) {

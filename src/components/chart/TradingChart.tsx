@@ -20,9 +20,18 @@ export type ChartLevel = {
   dashed?: boolean;
 };
 
+export type SwingEmaLines = {
+  ema49?: (number | null)[];
+  ema50?: (number | null)[];
+  ema200?: (number | null)[];
+  ema200High?: (number | null)[];
+};
+
 type Props = {
   candles: Candle[];
   sma?: (number | null)[];
+  /** EMA49/50 + double EMA200 ribbon (daily swing context). */
+  swing?: SwingEmaLines;
   /** Session VWAP (5m / intraday; resets each US/Eastern day). */
   vwapSession?: (number | null)[];
   /** Anchored VWAP (5m; week anchor in ET by default from API). */
@@ -53,7 +62,7 @@ function lineOverlayData(candles: Candle[], values: (number | null)[]) {
   return candles.flatMap((c, i) => (values[i] == null ? [] : [{ time: c.time as never, value: values[i] as number }]));
 }
 
-export function TradingChart({ candles, sma, vwapSession, vwapAnchored, levels, height = 420 }: Props) {
+export function TradingChart({ candles, sma, swing, vwapSession, vwapAnchored, levels, height = 420 }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof import("lightweight-charts").createChart> | null>(null);
   const seriesRef = useRef<ReturnType<
@@ -166,6 +175,49 @@ export function TradingChart({ candles, sma, vwapSession, vwapAnchored, levels, 
 
       const warn = cssVar("--accent-warning", "#ffaa00");
       const violet = cssVar("--accent-violet", "#b388ff");
+      if (swing?.ema50?.some((v) => v != null)) {
+        const line = chart.addLineSeries({
+          color: warn,
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          title: "EMA 50",
+        });
+        line.setData(lineOverlayData(candles, swing.ema50));
+      }
+      if (swing?.ema49?.some((v) => v != null)) {
+        const line = chart.addLineSeries({
+          color: violet,
+          lineWidth: 1,
+          lineStyle: LineStyle.Dotted,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          title: "EMA 49",
+        });
+        line.setData(lineOverlayData(candles, swing.ema49));
+      }
+      if (swing?.ema200?.some((v) => v != null)) {
+        const line = chart.addLineSeries({
+          color: info,
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          title: "EMA 200",
+        });
+        line.setData(lineOverlayData(candles, swing.ema200));
+      }
+      if (swing?.ema200High?.some((v) => v != null)) {
+        const line = chart.addLineSeries({
+          color: info,
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          title: "EMA 200 hi",
+        });
+        line.setData(lineOverlayData(candles, swing.ema200High));
+      }
+
       if (vwapSession && vwapSession.some((v) => v != null)) {
         const line = chart.addLineSeries({
           color: warn,
@@ -215,7 +267,7 @@ export function TradingChart({ candles, sma, vwapSession, vwapAnchored, levels, 
       chartRef.current = null;
       seriesRef.current = null;
     };
-  }, [candles, sma, vwapSession, vwapAnchored, height, theme]);
+  }, [candles, sma, swing, vwapSession, vwapAnchored, height, theme]);
 
   useEffect(() => {
     const series = seriesRef.current;

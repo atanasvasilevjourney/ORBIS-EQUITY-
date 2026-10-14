@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { TradingChart, type Candle, type ChartLevel } from "@/components/chart/TradingChart";
+import {
+  TradingChart,
+  type Candle,
+  type ChartLevel,
+  type SwingEmaLines,
+} from "@/components/chart/TradingChart";
 
 type Idea = { id: number; side: string; entry: number; target: number; stop: number; rr: number; kind: string; label: string };
 type Level = { price: number; label: string; kind: string };
@@ -73,9 +78,11 @@ export default function BiasPage() {
   const [loading, setLoading] = useState(true);
   const [sel, setSel] = useState<string | null>(null);
   const [interval, setInterval] = useState<"1d" | "5m">("1d");
+  const [sideFilter, setSideFilter] = useState<"LONG" | "ALL">("LONG");
   const [chart, setChart] = useState<{
     candles: Candle[];
     sma20: (number | null)[];
+    swing?: SwingEmaLines;
     vwapSession?: (number | null)[];
     vwapAnchored?: (number | null)[];
     vwapAnchorLabel?: string;
@@ -101,7 +108,14 @@ export default function BiasPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const name = d?.names?.find((n) => n.ticker === sel) ?? d?.names?.[0] ?? null;
+  const visibleNames = useMemo(() => {
+    const all = d?.names ?? [];
+    if (sideFilter === "ALL") return all;
+    return all.filter((n) => n.bias === "LONG");
+  }, [d?.names, sideFilter]);
+
+  const name =
+    visibleNames.find((n) => n.ticker === sel) ?? visibleNames[0] ?? d?.names?.[0] ?? null;
 
   useEffect(() => {
     if (!name?.ticker) return;
@@ -134,7 +148,8 @@ export default function BiasPage() {
           DAILY BIAS
         </h1>
         <p className="text-xs text-[var(--text-secondary)]">
-          TradingView-style tape, ANALYZE vote, classic pivots / ATR — paper ideas, not GEX or order flow
+          Daily chart: EMA 50 (golden-cross context), optional EMA 49, double EMA 200 ribbon (close + high) for
+          retrace touches — plus bias levels and ideas
         </p>
       </div>
 
@@ -160,6 +175,25 @@ export default function BiasPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] max-h-[640px] overflow-y-auto">
+          <div className="flex gap-1 px-3 py-2 border-b border-[var(--border)] bg-[var(--surface-alt)]">
+            {(["LONG", "ALL"] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => {
+                  setSideFilter(f);
+                  setSel(null);
+                }}
+                className={`px-2 py-0.5 text-[10px] font-terminal rounded border ${
+                  sideFilter === f
+                    ? "border-[var(--accent-info)] text-[var(--accent-info)]"
+                    : "border-[var(--border)] text-[var(--text-muted)]"
+                }`}
+              >
+                {f === "LONG" ? "LONGS" : "ALL"}
+              </button>
+            ))}
+          </div>
           <table className="w-full text-sm font-terminal">
             <thead>
               <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
@@ -172,17 +206,25 @@ export default function BiasPage() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={4} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
-              ) : !d?.names?.length ? (
-                <tr><td colSpan={4} className="px-3 py-8 text-center text-[var(--text-muted)]">No snapshot. Run: python -m pipeline.compute.daily_bias</td></tr>
+              ) : !visibleNames.length ? (
+                <tr><td colSpan={4} className="px-3 py-8 text-center text-[var(--text-muted)]">No names for this filter. Run: python -m pipeline.compute.daily_bias</td></tr>
               ) : (
-                d.names.map((n) => (
+                visibleNames.map((n) => (
                   <tr
                     key={n.ticker}
                     onClick={() => setSel(n.ticker)}
                     className="border-b border-[var(--border)] cursor-pointer hover:bg-[var(--surface-alt)]"
                     style={{ background: sel === n.ticker ? "var(--badge-bg)" : undefined }}
                   >
-                    <td className="px-3 py-2 font-bold">{n.ticker}</td>
+                    <td className="px-3 py-2 font-bold">
+                      <Link
+                        href={`/ticker/${n.ticker}?swing=1`}
+                        className="hover:text-[var(--accent-info)]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {n.ticker}
+                      </Link>
+                    </td>
                     <td className="px-3 py-2 font-bold" style={{ color: biasColor(n.bias) }}>
                       {n.bias} <span className="text-[10px] text-[var(--text-muted)]">{n.confidence}</span>
                     </td>
@@ -232,11 +274,12 @@ export default function BiasPage() {
                     ? overlayOk
                       ? " · Yahoo 5m · session VWAP + week AVWAP · EOD levels"
                       : " · Yahoo 5m · VWAP on tape · EOD levels hidden (price disagree)"
-                    : ""}
+                    : " · EMA 50 / 49 · EMA 200 ribbon"}
                 </div>
                 <TradingChart
                   candles={chart?.candles ?? []}
                   sma={chart?.interval === "1d" ? chart?.sma20 : undefined}
+                  swing={chart?.interval === "1d" ? chart?.swing : undefined}
                   vwapSession={chart?.interval === "5m" ? chart?.vwapSession : undefined}
                   vwapAnchored={chart?.interval === "5m" ? chart?.vwapAnchored : undefined}
                   levels={levels}

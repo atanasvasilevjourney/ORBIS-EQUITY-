@@ -1,11 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { BiasChip } from "@/components/scoreboard/BiasChip";
 import { AgreementDots } from "@/components/scoreboard/AgreementDots";
-import { TradingChart, type Candle, type ChartLevel } from "@/components/chart/TradingChart";
+import {
+  TradingChart,
+  type Candle,
+  type ChartLevel,
+  type SwingEmaLines,
+} from "@/components/chart/TradingChart";
 import { recordRecentTicker } from "@/components/command/CommandPalette";
 
 type TickerData = {
@@ -370,7 +375,9 @@ function FinancialHistorySection({ ticker }: { ticker: string }) {
 
 export default function TickerPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const ticker = params.ticker as string;
+  const swingChart = searchParams.get("swing") === "1";
   const [data, setData] = useState<TickerData | null>(null);
   const [tab, setTab] = useState<"chart" | "swing" | "fundamentals" | "earnings" | "insider">("chart");
   const [loading, setLoading] = useState(true);
@@ -380,12 +387,17 @@ export default function TickerPage() {
   const [chart, setChart] = useState<{
     candles: Candle[];
     sma20: (number | null)[];
+    swing?: SwingEmaLines;
     vwapSession?: (number | null)[];
     vwapAnchored?: (number | null)[];
     vwapAnchorLabel?: string;
     source: string;
     interval: string;
   } | null>(null);
+
+  useEffect(() => {
+    if (swingChart) setTab("chart");
+  }, [swingChart, ticker]);
 
   useEffect(() => {
     fetch(`/api/ticker/${ticker}`)
@@ -582,11 +594,16 @@ export default function TickerPage() {
                 ? overlayOk
                   ? " · Yahoo 5m · session VWAP + week AVWAP · EOD levels"
                   : " · Yahoo 5m · VWAP on tape · EOD levels hidden (price disagree)"
-                : ""}
+                : swingChart || chart?.swing
+                  ? " · EMA 50 / 49 · EMA 200 ribbon"
+                  : ""}
             </div>
             <TradingChart
               candles={chart?.candles ?? []}
               sma={chart?.interval === "1d" ? chart?.sma20 : undefined}
+              swing={
+                chart?.interval === "1d" && (swingChart || chart?.swing) ? chart?.swing : undefined
+              }
               vwapSession={chart?.interval === "5m" ? chart?.vwapSession : undefined}
               vwapAnchored={chart?.interval === "5m" ? chart?.vwapAnchored : undefined}
               levels={chartLevels}
