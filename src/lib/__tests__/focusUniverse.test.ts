@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deskEma200Href, splitDeskChipPreview } from "@/lib/focusUniverse";
+import { deskEma200Href, parseBulkFocusSymbols, splitDeskChipPreview } from "@/lib/focusUniverse";
 
 describe("splitDeskChipPreview", () => {
   it("shows first five and counts the rest", () => {
@@ -15,6 +15,13 @@ describe("splitDeskChipPreview", () => {
       visible: ["NBIS", "AAPL"],
       hiddenCount: 0,
     });
+  });
+});
+
+describe("parseBulkFocusSymbols", () => {
+  it("parses mixed separators and caps at limit", () => {
+    const raw = "aapl\nMSFT, GOOG ; $NBIS";
+    expect(parseBulkFocusSymbols(raw)).toEqual(["AAPL", "MSFT", "GOOG", "NBIS"]);
   });
 });
 

@@ -7,6 +7,9 @@ export PYTHONUNBUFFERED=1
 echo "[weekly] US index universe (S&P 500 + Nasdaq-100, ex biotech/pharma names)"
 python -m pipeline.ingest.us_index_universe
 
+echo "[weekly] Nasdaq Trader listed symbols (NDAQ ALL desk)"
+python -m pipeline.ingest.nasdaq_listed
+
 echo "[weekly] universe sync (LSE catalog tiers)"
 python -m pipeline.ingest.universe
 

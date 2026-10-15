@@ -10,7 +10,7 @@ import { useDeskUniverseUi } from "@/components/universe/deskUniverseUiContext";
 
 export function DeskUniverseStrip() {
   const pathname = usePathname();
-  const onEma200 = pathname.startsWith("/ema200");
+  const showIndexDesks = pathname.startsWith("/ema200") || pathname.startsWith("/screener");
   const { desk, symbols, setDesk, isWatchlist } = useFocusUniverse();
   const { openDrawer, showFirstAddNudge, acceptFirstAddNudge, dismissFirstAddNudgeUi } =
     useDeskUniverseUi();
@@ -26,7 +26,7 @@ export function DeskUniverseStrip() {
         <span className="text-[var(--text-muted)] uppercase tracking-wide shrink-0 w-full sm:w-auto">
           Universe
         </span>
-        {onEma200 ? (
+        {showIndexDesks ? (
           <>
             {INDEX_DESKS.map((id: IndexDeskId) => (
               <FilterChip
@@ -39,9 +39,9 @@ export function DeskUniverseStrip() {
             {desk === "nasdaq_all" && (
               <span
                 className="text-[var(--text-muted)] max-w-md"
-                title="Nasdaq-listed names in our synced universe — not every ticker on the exchange."
+                title="Full Nasdaq listing from weekly Nasdaq Trader sync (us_nasdaq_listed tier)."
               >
-                · synced Nasdaq only
+                · weekly Nasdaq sync
               </span>
             )}
           </>
@@ -100,9 +100,9 @@ export function DeskUniverseStrip() {
             {symbols.length} saved · Edit watchlist
           </button>
         )}
-        {!onEma200 && !isWatchlist && desk !== "sp500_ndx100" && (
-          <span className="text-[var(--text-muted)] sm:ml-auto" title="Open EMA200 to use this index preset">
-            {DESK_SHORT[desk as IndexDeskId]} · EMA200 only
+        {!showIndexDesks && !isWatchlist && desk !== "sp500_ndx100" && (
+          <span className="text-[var(--text-muted)] sm:ml-auto" title="Open EMA200 or Watchlist to use this index preset">
+            {DESK_SHORT[desk as IndexDeskId]} · EMA200 / Watchlist
           </span>
         )}
       </div>

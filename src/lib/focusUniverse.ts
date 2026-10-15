@@ -47,6 +47,19 @@ export function getFocusSymbols(): string[] {
   }
 }
 
+/** Parse pasted bulk text (CSV, newlines, spaces) into normalized tickers. */
+export function parseBulkFocusSymbols(text: string): string[] {
+  const out: string[] = [];
+  const parts = text.split(/[\s,;]+/);
+  for (const part of parts) {
+    const t = normalizeSymbol(part);
+    if (!t || !/^[A-Z][A-Z0-9.\-]{0,9}$/.test(t)) continue;
+    if (!out.includes(t)) out.push(t);
+    if (out.length >= MAX_FOCUS_SYMBOLS) break;
+  }
+  return out;
+}
+
 export function setFocusSymbols(symbols: string[]): void {
   if (typeof window === "undefined") return;
   const uniq: string[] = [];
