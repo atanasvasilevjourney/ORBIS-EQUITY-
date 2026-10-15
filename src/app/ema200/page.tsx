@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { NASDAQ_VENUE_DISCLAIMER } from "@/lib/focusUniverse";
 import { ModuleHeader } from "@/components/ui/ModuleHeader";
 import { ModulePanel } from "@/components/ui/ModulePanel";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Ema200WatchTable, type Ema200TableRow } from "@/components/ema200/Ema200WatchTable";
-import { FocusUniverseBar } from "@/components/universe/FocusUniverseBar";
+import { FocusUniverseModuleBanner } from "@/components/universe/FocusUniverseModuleBanner";
 import { useFocusUniverse } from "@/hooks/useFocusUniverse";
 
 type ApiPayload = {
@@ -18,15 +19,17 @@ type ApiPayload = {
   disclaimer: string;
   watch: Ema200TableRow[];
   approaching: Ema200TableRow[];
+  desk?: Ema200TableRow[];
   rows: Ema200TableRow[];
   dataSource?: string;
 };
 
 export default function Ema200WatchlistPage() {
-  const { isFocusActive, symbolsParam, mode } = useFocusUniverse();
+  const { isFocusActive, symbolsParam, universeParam, deskLabel, isWatchlist } = useFocusUniverse();
   const [data, setData] = useState<ApiPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [deskOtherOpen, setDeskOtherOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -36,6 +39,8 @@ export default function Ema200WatchlistPage() {
       if (isFocusActive && symbolsParam) {
         params.set("symbols", symbolsParam);
         params.set("desk", "1");
+      } else if (universeParam) {
+        params.set("universe", universeParam);
       }
       const qs = params.toString();
       const res = await fetch(`/api/ema200${qs ? `?${qs}` : ""}`);
@@ -45,7 +50,7 @@ export default function Ema200WatchlistPage() {
     } finally {
       setLoading(false);
     }
-  }, [isFocusActive, symbolsParam]);
+  }, [isFocusActive, symbolsParam, universeParam]);
 
   useEffect(() => {
     load();
@@ -53,18 +58,20 @@ export default function Ema200WatchlistPage() {
 
   const watch = data?.watch ?? data?.rows ?? [];
   const approaching = data?.approaching ?? [];
+  const deskOther = data?.desk ?? [];
+  const deskScanActive = isFocusActive && Boolean(symbolsParam);
 
   return (
     <div className="px-4 py-6 space-y-4">
-      <FocusUniverseBar moduleLabel="EMA200" />
+      <FocusUniverseModuleBanner allowIndexDesk />
 
       <ModuleHeader
         module="EMA200"
-        title={isFocusActive ? "MY NASDAQ LIST · EMA200" : "RETRACE WATCHLIST"}
+        title={isFocusActive ? "MY WATCHLIST · EMA200" : "RETRACE WATCHLIST"}
         description={
           isFocusActive
-            ? "Scanning your Explore desk list only. Ribbon distance via live Yahoo when needed. WATCH ≤1.5 ATR; names farther out still show under desk scan."
-            : "Scans S&P 500 + Nasdaq-100 index members — not every stock listed on the NASDAQ exchange. IBKR/TradingView showing “NASDAQ” is the venue, not our universe. NBIS (and other supplements) are scanned via Yahoo when missing from hosted prices. WATCH ≤1.5 ATR to the double EMA200 ribbon."
+            ? "Scanning your watchlist only. Ribbon distance via live Yahoo when needed. WATCH ≤1.5 ATR; names farther out still show under desk scan."
+            : `Scans ${deskLabel} (index desk). Not every stock on the NASDAQ exchange — venue ≠ universe. WATCH ≤1.5 ATR to the double EMA200 ribbon.`
         }
         source="SP500 ∪ NDX-100 + supplements · EOD"
         accent="var(--accent-info)"
@@ -77,14 +84,12 @@ export default function Ema200WatchlistPage() {
       )}
 
       <p className="text-[10px] font-terminal text-[var(--text-muted)]">
-        Universe: {mode === "focus" ? `desk (${symbolsParam.split(",").filter(Boolean).length})` : `${data?.universeCount ?? "—"} index`} · as
+        Universe: {isWatchlist ? `watchlist (${symbolsParam.split(",").filter(Boolean).length})` : deskLabel} · as
         of {data?.asOfDate ?? "—"} · watch {watch.length} · approaching {approaching.length}
         {data?.dataSource === "prices_daily_live" ? " · live scan" : ""}
       </p>
       <p className="text-[10px] font-terminal text-[var(--text-muted)] border border-[var(--panel-border)] rounded px-3 py-2">
-        <strong className="text-[var(--text-secondary)]">NASDAQ ≠ auto-included.</strong> Thousands of tickers trade on NASDAQ;
-        this desk only covers ~600 large-cap index names plus configured supplements (e.g. NBIS). Re-run bootstrap if a new
-        NDX-100 name is missing from <code className="text-[var(--accent-info)]">universe_members</code>.
+        {NASDAQ_VENUE_DISCLAIMER}
       </p>
 
       <ModulePanel title="AT 200 EMA · ON WATCH" badge="≤1.5 ATR" accent="var(--accent-info)" source={`${watch.length} names`}>
@@ -119,6 +124,24 @@ export default function Ema200WatchlistPage() {
           <Ema200WatchTable rows={approaching} emptyDetail="" />
         )}
       </ModulePanel>
+
+      {deskScanActive && deskOther.length > 0 && (
+        <ModulePanel
+          title="OTHER NAMES ON YOUR LIST"
+          badge={`${deskOther.length}`}
+          accent="var(--accent-desk)"
+          source="Sorted by ribbon ATR"
+        >
+          <button
+            type="button"
+            onClick={() => setDeskOtherOpen((o) => !o)}
+            className="w-full text-left px-3 py-2 text-[10px] font-terminal text-[var(--text-muted)] border-b border-[var(--panel-border)] hover:bg-[var(--surface-alt)]"
+          >
+            {deskOtherOpen ? "▼" : "▶"} Other names on your list ({deskOther.length}) — not in watch / approaching
+          </button>
+          {deskOtherOpen && <Ema200WatchTable rows={deskOther} emptyDetail="" />}
+        </ModulePanel>
+      )}
     </div>
   );
 }

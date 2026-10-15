@@ -4,6 +4,8 @@ import { ThemeProvider } from "@/lib/theme/ThemeProvider";
 import { DataHonestyBar } from "@/components/cards/DataHonestyBar";
 import { Nav } from "@/components/nav/Nav";
 import { CommandPalette } from "@/components/command/CommandPalette";
+import { DeskUniverseShell } from "@/components/universe/DeskUniverseShell";
+import { DeskUniverseStrip } from "@/components/universe/DeskUniverseStrip";
 
 export const metadata: Metadata = {
   title: "Orbis Equity Terminal",
@@ -26,10 +28,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-screen antialiased">
         <ThemeProvider>
-          <Nav />
-          <DataHonestyBar />
-          <main className="mx-auto max-w-[1600px]">{children}</main>
-          <CommandPalette />
+          <DeskUniverseShell>
+            <Nav />
+            <DataHonestyBar />
+            <DeskUniverseStrip />
+            <main className="mx-auto max-w-[1600px]">{children}</main>
+            <CommandPalette />
+          </DeskUniverseShell>
         </ThemeProvider>
       </body>
     </html>

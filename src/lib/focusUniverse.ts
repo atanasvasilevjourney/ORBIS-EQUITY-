@@ -1,10 +1,23 @@
 /** Client-side "my desk" symbol list — browse Nasdaq, then drive module APIs via `symbols=` query. */
 
+import {
+  getUniverseDesk,
+  indexDeskQueryParam,
+  isWatchlistDesk,
+  setUniverseDesk,
+  type UniverseDeskId,
+} from "@/lib/universeDesk";
+
 export type UniverseMode = "index" | "focus";
 
 const FOCUS_KEY = "orbis-focus-universe";
 const MODE_KEY = "orbis-universe-mode";
+const NUDGE_DISMISSED_KEY = "orbis-focus-first-add-nudge-dismissed";
 const MAX_FOCUS_SYMBOLS = 50;
+
+/** Shared copy for desk vs index universe (EMA200 disclaimer, slide-over help). */
+export const NASDAQ_VENUE_DISCLAIMER =
+  "NASDAQ venue ≠ index universe: thousands of tickers trade on NASDAQ; the index desk covers ~600 large-cap names (S&P 500 + NDX-100) plus configured supplements.";
 
 export const FOCUS_UNIVERSE_CHANGED = "orbis:focus-universe-changed";
 
@@ -32,6 +45,19 @@ export function getFocusSymbols(): string[] {
   } catch {
     return [];
   }
+}
+
+/** Parse pasted bulk text (CSV, newlines, spaces) into normalized tickers. */
+export function parseBulkFocusSymbols(text: string): string[] {
+  const out: string[] = [];
+  const parts = text.split(/[\s,;]+/);
+  for (const part of parts) {
+    const t = normalizeSymbol(part);
+    if (!t || !/^[A-Z][A-Z0-9.\-]{0,9}$/.test(t)) continue;
+    if (!out.includes(t)) out.push(t);
+    if (out.length >= MAX_FOCUS_SYMBOLS) break;
+  }
+  return out;
 }
 
 export function setFocusSymbols(symbols: string[]): void {
@@ -62,25 +88,36 @@ export function removeFocusSymbol(symbol: string): string[] {
   return next;
 }
 
+export function getUniverseDeskId(): UniverseDeskId {
+  return getUniverseDesk();
+}
+
+export function setUniverseDeskId(desk: UniverseDeskId): void {
+  setUniverseDesk(desk);
+  dispatchChange();
+}
+
+export { type UniverseDeskId, DESK_LABELS, INDEX_DESKS } from "@/lib/universeDesk";
+
 export function getUniverseMode(): UniverseMode {
-  if (typeof window === "undefined") return "index";
-  try {
-    const m = localStorage.getItem(MODE_KEY);
-    return m === "focus" ? "focus" : "index";
-  } catch {
-    return "index";
-  }
+  return isWatchlistDesk(getUniverseDesk()) ? "focus" : "index";
 }
 
 export function setUniverseMode(mode: UniverseMode): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(MODE_KEY, mode === "focus" ? "focus" : "index");
+  if (mode === "focus") setUniverseDesk("watchlist");
+  else setUniverseDesk("sp500_ndx100");
   dispatchChange();
+}
+
+/** API query: `universe` for index desks, empty when on watchlist. */
+export function universeDeskApiParam(): string {
+  if (isWatchlistDesk(getUniverseDesk())) return "";
+  return indexDeskQueryParam();
 }
 
 /** Comma-separated list for API query strings (empty when index mode or no symbols). */
 export function focusSymbolsQueryParam(): string {
-  if (getUniverseMode() !== "focus") return "";
+  if (!isWatchlistDesk(getUniverseDesk())) return "";
   const syms = getFocusSymbols();
   if (!syms.length) return "";
   return syms.join(",");
@@ -94,3 +131,35 @@ export function appendFocusQuery(url: string): string {
 }
 
 export const FOCUS_SYMBOL_LIMIT = MAX_FOCUS_SYMBOLS;
+
+export function isFirstAddNudgeDismissed(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return localStorage.getItem(NUDGE_DISMISSED_KEY) === "1";
+  } catch {
+    return true;
+  }
+}
+
+export function dismissFirstAddNudge(): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(NUDGE_DISMISSED_KEY, "1");
+}
+
+/** First ~5 symbols for the global strip; remainder count for “+N more”. */
+export function splitDeskChipPreview(symbols: string[], maxVisible = 5): {
+  visible: string[];
+  hiddenCount: number;
+} {
+  const visible = symbols.slice(0, maxVisible);
+  return { visible, hiddenCount: Math.max(0, symbols.length - visible.length) };
+}
+
+export function deskEma200Href(symbols: string[]): string {
+  if (!symbols.length) return "/ema200";
+  const qs = new URLSearchParams({
+    symbols: symbols.join(","),
+    desk: "1",
+  });
+  return `/ema200?${qs.toString()}`;
+}

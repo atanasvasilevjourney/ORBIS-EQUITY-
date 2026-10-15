@@ -4,6 +4,7 @@ import { fetchAll } from "@/lib/supabase/paginate";
 import { isMissingColumn } from "@/lib/supabase/errors";
 import { orbisScore } from "@/lib/orbisScore";
 import { parseSymbolsQueryParam } from "@/lib/symbolsQuery";
+import { resolveUniverseDesk } from "@/lib/resolveIndexDesk";
 
 export const revalidate = 900;
 
@@ -23,12 +24,19 @@ export async function GET(req: NextRequest) {
     const minDay = parseFloat(sp.get("min_day") ?? "0");
     const limit = Math.min(parseInt(sp.get("limit") ?? "200", 10), 1000);
     const deskSymbols = parseSymbolsQueryParam(sp.get("symbols"));
+    const universeParam = sp.get("universe");
 
     if (Number.isNaN(minRank) || Number.isNaN(minDay)) {
       return NextResponse.json({ error: "Invalid min_rank or min_day" }, { status: 400 });
     }
 
     const sb = createServerClient();
+
+    let indexDeskSymbols: string[] = [];
+    if (!deskSymbols.length && universeParam) {
+      const resolved = await resolveUniverseDesk(sb, universeParam, []);
+      indexDeskSymbols = resolved.symbols;
+    }
 
     type UniverseRow = {
       symbol: string;
@@ -79,6 +87,10 @@ export async function GET(req: NextRequest) {
     ]);
 
     let filteredUniverse = universe;
+    if (indexDeskSymbols.length) {
+      const allowedDesk = new Set(indexDeskSymbols);
+      filteredUniverse = universe.filter((u) => allowedDesk.has(u.symbol));
+    }
     if (deskSymbols.length) {
       const known = new Map(filteredUniverse.map((u) => [u.symbol, u]));
       filteredUniverse = deskSymbols.map((sym) => {
@@ -105,7 +117,6 @@ export async function GET(req: NextRequest) {
     if (sector) {
       filteredUniverse = filteredUniverse.filter((u) => u.sector === sector);
     }
-
     const allowedSymbols = new Set(filteredUniverse.map((u) => u.symbol));
     const deskMode = deskSymbols.length > 0;
 
@@ -183,6 +194,7 @@ export async function GET(req: NextRequest) {
           divYield: f?.dividend_yield ?? null,
           orbisScore: orbisScore(r.quality_rank, f?.composite_factor_score ?? null),
           compositeScore: f?.composite_factor_score ?? null,
+          hasTrendRadar: true,
         };
       })
       .filter(Boolean);
@@ -191,7 +203,7 @@ export async function GET(req: NextRequest) {
       const radarBySym = new Map(allRadar.map((r) => [r.symbol, r]));
       const merged = deskSymbols.map((sym) => {
         const existing = rows.find((row) => row && row.symbol === sym);
-        if (existing) return existing;
+        if (existing) return { ...existing, hasTrendRadar: true };
         const u = filteredUniverse.find((x) => x.symbol === sym);
         const f = fundamentals.find((x) => x.symbol === sym);
         const r = radarBySym.get(sym);
@@ -224,6 +236,7 @@ export async function GET(req: NextRequest) {
             divYield: f?.dividend_yield ?? null,
             orbisScore: orbisScore(r.quality_rank, f?.composite_factor_score ?? null),
             compositeScore: f?.composite_factor_score ?? null,
+            hasTrendRadar: true,
           };
         }
         return {
@@ -254,6 +267,7 @@ export async function GET(req: NextRequest) {
           divYield: f?.dividend_yield ?? null,
           orbisScore: null,
           compositeScore: f?.composite_factor_score ?? null,
+          hasTrendRadar: false,
         };
       });
       rows = merged;

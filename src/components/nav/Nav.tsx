@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ThemeToggle } from "@/components/cards/ThemeToggle";
-
 const NAV_LINKS = [
   { href: "/explore", label: "EXPLORE" },
   { href: "/screener", label: "WATCHLIST" },

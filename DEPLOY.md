@@ -107,7 +107,7 @@ Repo → Settings → Secrets and variables → Actions — add:
 
 Schedule (already in repo):
 
-- **Mon–Fri 19:30 UTC** — `.github/workflows/nightly-pipeline.yml` (nightly pipeline + EOD watchlist digest)
+- **Mon–Fri 19:30 UTC** — `.github/workflows/nightly-pipeline.yml` (nightly pipeline + EOD watchlist digest). **Monday** `universe-sync` also runs `us_index_universe` + `nasdaq_listed` (NDAQ ALL) before LSE `universe`.
 - **Sunday 08:00 UTC** — `.github/workflows/sunday-research-email.yml` (weekly research pack + watchlist notes to `ALERT_EMAIL`)
 
 Manual test:
