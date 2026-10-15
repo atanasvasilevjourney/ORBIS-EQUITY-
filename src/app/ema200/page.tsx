@@ -17,6 +17,7 @@ type ApiPayload = {
   watch: Ema200TableRow[];
   approaching: Ema200TableRow[];
   rows: Ema200TableRow[];
+  dataSource?: string;
 };
 
 export default function Ema200WatchlistPage() {
@@ -49,8 +50,8 @@ export default function Ema200WatchlistPage() {
       <ModuleHeader
         module="EMA200"
         title="RETRACE WATCHLIST"
-        description="Distance to the double EMA200 ribbon (ATR, $, %). WATCH ≤1.5 ATR; APPROACHING 1.5–3 ATR. Names only appear when the latest EOD bar qualifies (e.g. MA on 30 Sep 2026, not when price is extended like MA at ~6 ATR above the ribbon). Live scan uses prices_daily when ema200_features is empty."
-        source="SP500 ∪ NDX-100 · EOD"
+        description="Scans S&P 500 + Nasdaq-100 index members — not every stock listed on the NASDAQ exchange. IBKR/TradingView showing “NASDAQ” is the venue, not our universe. NBIS (and other supplements) are scanned via Yahoo when missing from hosted prices. WATCH ≤1.5 ATR to the double EMA200 ribbon."
+        source="SP500 ∪ NDX-100 + supplements · EOD"
         accent="var(--accent-info)"
       />
 
@@ -61,8 +62,14 @@ export default function Ema200WatchlistPage() {
       )}
 
       <p className="text-[10px] font-terminal text-[var(--text-muted)]">
-        Universe: {data?.universeCount ?? "—"} symbols · as of {data?.asOfDate ?? "—"} · watch {watch.length} ·
+        Universe: {data?.universeCount ?? "—"} index names · as of {data?.asOfDate ?? "—"} · watch {watch.length} ·
         approaching {approaching.length}
+        {data?.dataSource === "prices_daily_live" ? " · live scan" : ""}
+      </p>
+      <p className="text-[10px] font-terminal text-[var(--text-muted)] border border-[var(--panel-border)] rounded px-3 py-2">
+        <strong className="text-[var(--text-secondary)]">NASDAQ ≠ auto-included.</strong> Thousands of tickers trade on NASDAQ;
+        this desk only covers ~600 large-cap index names plus configured supplements (e.g. NBIS). Re-run bootstrap if a new
+        NDX-100 name is missing from <code className="text-[var(--accent-info)]">universe_members</code>.
       </p>
 
       <ModulePanel title="AT 200 EMA · ON WATCH" badge="≤1.5 ATR" accent="var(--accent-info)" source={`${watch.length} names`}>
