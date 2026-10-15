@@ -24,7 +24,7 @@ describe("GET /api/ticker/[ticker]", () => {
     expect(body.error).toBe("Invalid ticker format");
   });
 
-  it("returns 404 when ticker not in universe", async () => {
+  it("returns desk stub when ticker not in universe_members", async () => {
     mockCreateServerClient.mockReturnValue(
       createMockSupabase({
         trend_radar: () => ({ data: null, error: { code: "PGRST116" } }),
@@ -36,10 +36,14 @@ describe("GET /api/ticker/[ticker]", () => {
     );
 
     const { GET } = await import("../ticker/[ticker]/route");
-    const req = new NextRequest("http://localhost/api/ticker/FAKE");
-    const res = await GET(req, { params: { ticker: "FAKE" } });
+    const req = new NextRequest("http://localhost/api/ticker/NBIS");
+    const res = await GET(req, { params: { ticker: "NBIS" } });
+    const body = await res.json();
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    expect(body.offIndexDesk).toBe(true);
+    expect(body.universe.symbol).toBe("NBIS");
+    expect(body.universe.tier).toBe("desk");
   });
 
   it("returns ticker detail payload", async () => {

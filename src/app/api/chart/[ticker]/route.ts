@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { swingEmaOverlaysFromOhlc } from "@/lib/chartEma";
 import { vwapOverlaysForIntraday } from "@/lib/vwap";
+import { fetchYahooDaily } from "@/lib/yahooDaily";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -107,7 +108,7 @@ export async function GET(
         fallbackFrom5m: requested === "5m",
       });
     }
-    const candles: Candle[] = (data ?? [])
+    let candles: Candle[] = (data ?? [])
       .map((r) =>
         clampBar(
           Number(r.open ?? r.close),
@@ -120,13 +121,27 @@ export async function GET(
       )
       .filter((c): c is Candle => c != null)
       .reverse();
+    let source = "prices_daily";
+    if (candles.length < 20) {
+      const yahoo = await fetchYahooDaily(ticker, "5y");
+      const fromYahoo = yahoo
+        .map((b) =>
+          clampBar(b.open, b.high, b.low, b.close, b.volume, b.date)
+        )
+        .filter((c): c is Candle => c != null);
+      if (fromYahoo.length > candles.length) {
+        candles = fromYahoo;
+        source = "yahoo_eod";
+      }
+    }
     const closes = candles.map((c) => c.close);
     const highs = candles.map((c) => c.high);
     const swing = swingEmaOverlaysFromOhlc(closes, highs);
     return NextResponse.json({
       ticker,
       interval: "1d",
-      source: "prices_daily",
+      source,
+      delayed: source === "yahoo_eod",
       candles,
       sma20: sma(closes, 20),
       swing,

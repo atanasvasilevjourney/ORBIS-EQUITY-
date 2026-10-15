@@ -17,6 +17,7 @@ type TickerData = {
   radar: any;
   fundamentals: any;
   universe: any;
+  offIndexDesk?: boolean;
   earnings: any[];
   insiderTrades: any[];
 };
@@ -569,7 +570,11 @@ export default function TickerPage() {
             <div className="text-sm font-terminal" style={{
               color: bias?.bias === "LONG" ? "var(--accent-bull)" : bias?.bias === "SHORT" ? "var(--accent-bear)" : "var(--text-muted)",
             }}>
-              {bias ? `Bias: ${bias.bias} · Confidence: ${bias.confidence}` : "No daily-bias snapshot — run python -m pipeline.compute.daily_bias"}
+              {bias
+                ? `Bias: ${bias.bias} · Confidence: ${bias.confidence}`
+                : data?.offIndexDesk
+                  ? "Daily bias: index universe only (nightly EOD batch). Chart uses live Yahoo EOD when not in prices_daily — delayed, not lookahead."
+                  : "No daily-bias row for this symbol yet — run python -m pipeline.compute.daily_bias for index names"}
             </div>
             <div className="flex gap-1">
               {(["1d", "5m"] as const).map((tf) => (
@@ -589,7 +594,8 @@ export default function TickerPage() {
           </div>
           <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] overflow-hidden">
             <div className="px-3 py-1 text-[10px] font-terminal text-[var(--text-muted)] tracking-widest border-b border-[var(--border)]">
-              {ticker} · Daily Bias · {chart?.interval ?? chartTf} · {chart?.source ?? "…"}
+              {ticker} · {chart?.interval ?? chartTf} · {chart?.source ?? "…"}
+              {chart?.source === "yahoo_eod" ? " · Yahoo EOD (desk / off-index)" : ""}
               {chart?.interval === "5m"
                 ? overlayOk
                   ? " · Yahoo 5m · session VWAP + week AVWAP · EOD levels"
