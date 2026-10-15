@@ -19,6 +19,7 @@ const STATIC_ITEMS: PaletteItem[] = [
   { id: "screener", label: "Watchlist", hint: "SCR", href: "/screener", group: "Navigate" },
   { id: "ema200", label: "EMA200", hint: "EMA", href: "/ema200", group: "Navigate" },
   { id: "fundamentals", label: "Fundamentals", hint: "FA", href: "/fundamentals", group: "Navigate" },
+  { id: "fund-screener", label: "Fundamental Screener", hint: "FSCR", href: "/fundamentals/screener", group: "Navigate" },
   { id: "health", label: "Health Sector", hint: "HC", href: "/health", group: "Navigate" },
   { id: "earnings", label: "Earnings & News", hint: "ERN", href: "/earnings-news", group: "Navigate" },
 ];

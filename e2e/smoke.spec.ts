@@ -2,8 +2,10 @@ import { test, expect } from "@playwright/test";
 
 /** Core routes exercised in smoke (subset of primary nav). */
 const PAGES = ["/", "/screener", "/ema200", "/fundamentals", "/health", "/earnings-news"];
+/** Linked from fundamentals module, not top nav. */
+const EXTRA_SMOKE_PAGES = ["/fundamentals/screener"];
 
-for (const path of PAGES) {
+for (const path of [...PAGES, ...EXTRA_SMOKE_PAGES]) {
   test(`page ${path} loads without error`, async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", (err) => errors.push(err.message));
