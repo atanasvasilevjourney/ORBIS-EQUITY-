@@ -4,10 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ThemeToggle } from "@/components/cards/ThemeToggle";
-import { useFocusUniverse } from "@/hooks/useFocusUniverse";
-
 const NAV_LINKS = [
-  { href: "/explore", label: "EXPLORE" },
   { href: "/screener", label: "WATCHLIST" },
   { href: "/ema200", label: "EMA200" },
   { href: "/loop", label: "LOOP" },
@@ -28,8 +25,6 @@ const NAV_LINKS = [
 export function Nav() {
   const pathname = usePathname();
   const router = useRouter();
-  const { symbols, isWatchlist } = useFocusUniverse();
-  const showExploreNudge = !isWatchlist && symbols.length > 0;
   const [search, setSearch] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -60,20 +55,13 @@ export function Nav() {
                 <Link
                   key={l.href}
                   href={l.href}
-                  className={`relative px-3 py-1.5 text-xs font-terminal rounded transition-colors ${
+                  className={`px-3 py-1.5 text-xs font-terminal rounded transition-colors ${
                     isActive
                       ? "bg-[var(--badge-bg)] text-[var(--accent-info)]"
                       : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-alt)]"
                   }`}
                 >
                   {l.label}
-                  {l.href === "/explore" && showExploreNudge && (
-                    <span
-                      className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
-                      style={{ background: "var(--accent-desk)" }}
-                      title="You have desk symbols — switch to My list in the universe strip"
-                    />
-                  )}
                 </Link>
               );
             })}
