@@ -4,6 +4,7 @@ import { fetchAll } from "@/lib/supabase/paginate";
 import { enrichLoopBookWithPrices, tradingStaleDays } from "@/lib/loopBookMtm";
 import { latestPriceAsOf } from "@/lib/liteDeskGate";
 import { sectorExposureFromBook } from "@/lib/loopSectorHarness";
+import { loopPortfolioEquity } from "@/lib/loopEquity";
 import { evaluateFreshness } from "@/lib/freshness";
 import { gateOrders, staleHeadline } from "@/lib/signalGate";
 
@@ -198,11 +199,36 @@ export async function GET() {
       });
     }
 
+    const equitySnap = loopPortfolioEquity(
+      allOrders.map((o) => ({
+        ticker: o.ticker,
+        action: o.action,
+        shares: o.shares,
+        limit_price: o.limit_price,
+        reason: o.reason,
+        created_at: o.created_at,
+      })),
+      bookOut.map((r) => ({
+        shares: r.shares,
+        entry: r.entry,
+        last: r.last,
+      }))
+    );
+
+    const mtmEquity = equitySnap.mtmEquityUsd;
+    const deployedPct =
+      equitySnap.deployedPct > 0 ? equitySnap.deployedPct : latest.deployed_pct;
+
     return NextResponse.json({
       summary: {
-        equity: latest.equity,
-        deployedPct: latest.deployed_pct,
-        openRiskPct: latest.open_risk_pct,
+        equity: mtmEquity,
+        startEquity: equitySnap.startEquityUsd,
+        totalPnlUsd: equitySnap.totalPnlUsd,
+        realizedPnlUsd: equitySnap.realizedPnlUsd,
+        unrealizedPnlUsd: equitySnap.unrealizedPnlUsd,
+        cashUsd: equitySnap.cashUsd,
+        deployedPct,
+        openRiskPct: deployedPct ?? latest.open_risk_pct,
         names: latest.names,
         lastLoopRunAt: latest.computed_at,
         asOfDate: latest.asof_date,
@@ -240,7 +266,7 @@ export async function GET() {
                   shares: r.shares,
                   last: r.last,
                 })),
-                latest.equity,
+                mtmEquity,
                 maxNames,
                 maxPerSector
               );

@@ -44,6 +44,10 @@ type LogEntry = { at: string; level: string; message: string };
 type LoopData = {
   summary: {
     equity: number;
+    startEquity?: number;
+    totalPnlUsd?: number;
+    realizedPnlUsd?: number;
+    unrealizedPnlUsd?: number;
     deployedPct: number | null;
     openRiskPct: number | null;
     names: number | null;
@@ -84,7 +88,16 @@ export default function LoopPage() {
   const s = d?.summary;
   const cfg = d?.harness?.config;
   const cards = [
-    { label: "EQUITY", value: s ? usd(s.equity, 0) : "—", color: "" },
+    {
+      label: "EQUITY",
+      value: s ? usd(s.equity, 0) : "—",
+      color:
+        s?.totalPnlUsd != null && s.totalPnlUsd > 0
+          ? "var(--accent-bull)"
+          : s?.totalPnlUsd != null && s.totalPnlUsd < 0
+            ? "var(--accent-bear)"
+            : "",
+    },
     { label: "DEPLOYED", value: s ? pct(s.deployedPct) : "—", color: "var(--accent-info)" },
     { label: "OPEN RISK", value: s ? pct(s.openRiskPct) : "—", color: (s?.openRiskPct ?? 0) > 0.064 ? "var(--accent-warning)" : "var(--accent-bull)" },
     { label: "NAMES", value: s ? `${s.names ?? 0} / ${cfg?.maxNames ?? 8}` : "—", color: "" },
@@ -116,6 +129,15 @@ export default function LoopPage() {
           {(d?.loopRunStaleDays ?? 0) > 0 && <> ({d?.loopRunStaleDays} calendar days ago)</>}.
           LAST / P&amp;L below are marked from <strong>{d?.priceAsOfDate ?? "prices_daily"}</strong> EOD bars when the nightly job has not refreshed the book.
         </div>
+      )}
+
+      {s?.totalPnlUsd != null && s.totalPnlUsd !== 0 && (
+        <p className="text-xs font-terminal text-[var(--text-secondary)] mb-3">
+          Total P&amp;L {usd(s.totalPnlUsd)} · realized {usd(s.realizedPnlUsd ?? 0)} · open {usd(s.unrealizedPnlUsd ?? 0)}
+          {s.startEquity != null && (
+            <span className="text-[var(--text-muted)]"> · from {usd(s.startEquity, 0)} start</span>
+          )}
+        </p>
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
