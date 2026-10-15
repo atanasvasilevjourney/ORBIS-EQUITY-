@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { FilterChip } from "@/components/ui/FilterChip";
 import { useFocusUniverse } from "@/hooks/useFocusUniverse";
 import { splitDeskChipPreview } from "@/lib/focusUniverse";
@@ -9,6 +10,8 @@ import { DeskSymbolChip } from "@/components/universe/DeskSymbolChip";
 import { useDeskUniverseUi } from "@/components/universe/deskUniverseUiContext";
 
 export function DeskUniverseStrip() {
+  const pathname = usePathname();
+  const onEma200 = pathname.startsWith("/ema200");
   const { desk, symbols, setDesk, isWatchlist } = useFocusUniverse();
   const { openDrawer, showFirstAddNudge, acceptFirstAddNudge, dismissFirstAddNudgeUi } =
     useDeskUniverseUi();
@@ -22,30 +25,40 @@ export function DeskUniverseStrip() {
         data-universe-desk={desk}
       >
         <span className="text-[var(--text-muted)] uppercase tracking-wide shrink-0 w-full sm:w-auto">
-          Index desks
+          Universe
         </span>
-        {INDEX_DESKS.map((id: IndexDeskId) => (
+        {onEma200 ? (
+          <>
+            {INDEX_DESKS.map((id: IndexDeskId) => (
+              <FilterChip
+                key={id}
+                active={desk === id}
+                onClick={() => setDesk(id)}
+                label={DESK_SHORT[id]}
+              />
+            ))}
+            {desk === "nasdaq_all" && (
+              <span
+                className="text-[var(--text-muted)] max-w-md"
+                title="Nasdaq-listed names in our synced universe — not every ticker on the exchange."
+              >
+                · synced Nasdaq only
+              </span>
+            )}
+          </>
+        ) : (
           <FilterChip
-            key={id}
-            active={desk === id}
-            onClick={() => setDesk(id)}
-            label={DESK_SHORT[id]}
+            active={!isWatchlist}
+            onClick={() => setDesk("sp500_ndx100")}
+            label="Index desk (S&P+NDX)"
           />
-        ))}
+        )}
         <span className="hidden sm:inline w-px h-4 bg-[var(--panel-border)] mx-1" />
         <FilterChip
           active={isWatchlist}
           onClick={() => setDesk("watchlist")}
           label={`My watchlist (${symbols.length})`}
         />
-        {desk === "nasdaq_all" && (
-          <span
-            className="text-[var(--text-muted)] max-w-md"
-            title="Nasdaq-listed names in our synced universe — not every ticker on the exchange."
-          >
-            · synced Nasdaq names only
-          </span>
-        )}
         {isWatchlist && (
           <>
             {symbols.length === 0 ? (
@@ -84,8 +97,13 @@ export function DeskUniverseStrip() {
             href="/explore"
             className="ml-auto text-[var(--text-muted)] hover:text-[var(--accent-desk)] shrink-0"
           >
-            {symbols.length} on watchlist · Explore
+            {symbols.length} saved · Explore
           </Link>
+        )}
+        {!onEma200 && !isWatchlist && desk !== "sp500_ndx100" && (
+          <span className="text-[var(--text-muted)] sm:ml-auto" title="Open EMA200 to use this index preset">
+            {DESK_SHORT[desk as IndexDeskId]} · EMA200 only
+          </span>
         )}
       </div>
       {showFirstAddNudge && (

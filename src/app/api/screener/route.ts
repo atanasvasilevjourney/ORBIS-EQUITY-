@@ -4,7 +4,6 @@ import { fetchAll } from "@/lib/supabase/paginate";
 import { isMissingColumn } from "@/lib/supabase/errors";
 import { orbisScore } from "@/lib/orbisScore";
 import { parseSymbolsQueryParam } from "@/lib/symbolsQuery";
-import { resolveUniverseDesk } from "@/lib/resolveIndexDesk";
 
 export const revalidate = 900;
 
@@ -23,20 +22,13 @@ export async function GET(req: NextRequest) {
     const minRank = parseInt(sp.get("min_rank") ?? "0", 10);
     const minDay = parseFloat(sp.get("min_day") ?? "0");
     const limit = Math.min(parseInt(sp.get("limit") ?? "200", 10), 1000);
-    const watchlistSymbols = parseSymbolsQueryParam(sp.get("symbols"));
+    const deskSymbols = parseSymbolsQueryParam(sp.get("symbols"));
 
     if (Number.isNaN(minRank) || Number.isNaN(minDay)) {
       return NextResponse.json({ error: "Invalid min_rank or min_day" }, { status: 400 });
     }
 
     const sb = createServerClient();
-    const resolved = await resolveUniverseDesk(sb, sp.get("universe"), watchlistSymbols);
-    const deskSymbols =
-      resolved.desk === "watchlist" && resolved.symbols.length > 0 ? resolved.symbols : [];
-    const indexDeskFilter =
-      resolved.desk !== "watchlist" && resolved.symbols.length > 0
-        ? new Set(resolved.symbols)
-        : null;
 
     type UniverseRow = {
       symbol: string;
@@ -113,10 +105,6 @@ export async function GET(req: NextRequest) {
     if (sector) {
       filteredUniverse = filteredUniverse.filter((u) => u.sector === sector);
     }
-    if (indexDeskFilter) {
-      filteredUniverse = filteredUniverse.filter((u) => indexDeskFilter.has(u.symbol));
-    }
-
     const allowedSymbols = new Set(filteredUniverse.map((u) => u.symbol));
     const deskMode = deskSymbols.length > 0;
 

@@ -55,7 +55,7 @@ const DAY_FILTERS = [
 ];
 
 export default function ScreenerPage() {
-  const { isFocusActive, symbolsParam, universeParam } = useFocusUniverse();
+  const { isFocusActive, symbolsParam } = useFocusUniverse();
   const [rows, setRows] = useState<ScreenerRow[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [filters, setFilters] = useState<FilterState>({
@@ -74,7 +74,6 @@ export default function ScreenerPage() {
     if (filters.region !== "all") params.set("region", filters.region);
     if (filters.minDay > 0) params.set("min_day", String(filters.minDay));
     if (isFocusActive && symbolsParam) params.set("symbols", symbolsParam);
-    else if (universeParam) params.set("universe", universeParam);
 
     try {
       const [screenerRes, summaryRes] = await Promise.all([
@@ -92,7 +91,7 @@ export default function ScreenerPage() {
     } finally {
       setLoading(false);
     }
-  }, [filters, isFocusActive, symbolsParam, universeParam]);
+  }, [filters, isFocusActive, symbolsParam]);
 
   useEffect(() => {
     fetchData();
