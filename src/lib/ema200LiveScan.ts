@@ -4,9 +4,11 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { emaPineSeries } from "@/lib/chartEma";
-import { EMA200_SYMBOL_SUPPLEMENTS } from "@/lib/ema200Config";
+import { EMA200_SYMBOL_SUPPLEMENTS, EMA200_WEEKLY_SYMBOL_CAP } from "@/lib/ema200Config";
+import type { Ema200Timeframe } from "@/lib/ema200Timeframe";
+import { aggregateDailyToWeekly } from "@/lib/ohlcWeekly";
 import { fetchAll } from "@/lib/supabase/paginate";
-import { fetchYahooDaily } from "@/lib/yahooDaily";
+import { fetchYahooDaily, fetchYahooWeekly } from "@/lib/yahooDaily";
 
 const EMA_PERIOD = 200;
 const ATR_PERIOD = 14;
@@ -126,7 +128,14 @@ function featuresForSymbol(symbol: string, bars: Ohlc[]): LiveFeatureRow[] {
 
 const PAGE = 1000;
 
-async function fetchPricesParallel(sb: SupabaseClient, cutoffStr: string): Promise<PriceRow[]> {
+function cutoffDays(tf: Ema200Timeframe): number {
+  return tf === "weekly" ? 2100 : 620;
+}
+
+async function fetchPricesParallel(
+  sb: SupabaseClient,
+  cutoffStr: string
+): Promise<PriceRow[]> {
   const base = () =>
     sb
       .from("prices_daily")
@@ -165,12 +174,42 @@ async function fetchPricesParallel(sb: SupabaseClient, cutoffStr: string): Promi
   return all;
 }
 
+function dailyToOhlc(rows: { date: unknown; open?: unknown; high?: unknown; low?: unknown; close?: unknown; volume?: unknown }[]): Ohlc[] {
+  return rows.map((p) => ({
+    date: String(p.date),
+    open: Number(p.open ?? p.close),
+    high: Number(p.high ?? p.close),
+    low: Number(p.low ?? p.close),
+    close: Number(p.close),
+    volume: Number(p.volume ?? 0),
+  }));
+}
+
+function toTimeframeBars(daily: Ohlc[], tf: Ema200Timeframe): Ohlc[] {
+  if (tf === "daily") return daily;
+  return aggregateDailyToWeekly(daily);
+}
+
+async function weeklyBarsFromYahoo(sym: string): Promise<Ohlc[] | null> {
+  const weekly = await fetchYahooWeekly(sym, "10y");
+  if (weekly.length >= HISTORY_MIN) return dailyToOhlc(weekly);
+  const daily = await fetchYahooDaily(sym, "10y");
+  const agg = aggregateDailyToWeekly(dailyToOhlc(daily));
+  return agg.length >= HISTORY_MIN ? agg : null;
+}
+
 async function barsForSymbol(
   sb: SupabaseClient,
   sym: string,
   cutoffStr: string,
-  cachedBySym: Map<string, Ohlc[]>
+  cachedBySym: Map<string, Ohlc[]>,
+  tf: Ema200Timeframe
 ): Promise<Ohlc[] | null> {
+  if (tf === "weekly") {
+    const yahoo = await weeklyBarsFromYahoo(sym);
+    return yahoo;
+  }
+
   const existing = cachedBySym.get(sym);
   if (existing && existing.length >= HISTORY_MIN) return existing;
 
@@ -181,61 +220,85 @@ async function barsForSymbol(
     .gte("date", cutoffStr)
     .order("date", { ascending: true });
   if (!error && data && data.length >= HISTORY_MIN) {
-    const ohlc: Ohlc[] = data.map((p) => ({
-      date: String(p.date),
-      open: Number(p.open ?? p.close),
-      high: Number(p.high ?? p.close),
-      low: Number(p.low ?? p.close),
-      close: Number(p.close),
-      volume: Number(p.volume ?? 0),
-    }));
+    const ohlc = dailyToOhlc(data);
     return ohlc;
   }
 
   const yahoo = await fetchYahooDaily(sym, "5y");
   if (yahoo.length < HISTORY_MIN) return null;
-  return yahoo.map((b) => ({
-    date: b.date,
-    open: b.open,
-    high: b.high,
-    low: b.low,
-    close: b.close,
-    volume: b.volume,
-  }));
+  return dailyToOhlc(yahoo);
 }
 
-/** On-demand EMA200 features for a user desk list (Yahoo backfill when DB is thin). */
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (true) {
+      const idx = next++;
+      if (idx >= items.length) break;
+      results[idx] = await fn(items[idx]);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length || 1) }, () => worker())
+  );
+  return results;
+}
+
+export type WeeklyScanMeta = { capped: boolean; scanned: number; requested: number };
+
+/** On-demand EMA200 features (daily or weekly PB-EMA ribbon). */
 export async function computeEma200FeaturesForSymbols(
   sb: SupabaseClient,
-  symbols: string[]
+  symbols: string[],
+  tf: Ema200Timeframe = "daily"
 ): Promise<LiveFeatureRow[]> {
   const list = symbols.map((s) => s.toUpperCase()).filter(Boolean);
   if (!list.length) return [];
 
   const cutoff = new Date();
-  cutoff.setUTCDate(cutoff.getUTCDate() - 620);
+  cutoff.setUTCDate(cutoff.getUTCDate() - cutoffDays(tf));
   const cutoffStr = cutoff.toISOString().slice(0, 10);
 
   const bySym = new Map<string, Ohlc[]>();
-  const out: LiveFeatureRow[] = [];
-  for (const sym of list) {
-    const bars = await barsForSymbol(sb, sym, cutoffStr, bySym);
-    if (!bars) continue;
-    out.push(...featuresForSymbol(sym, bars));
-  }
-  return out;
+  const concurrency = tf === "weekly" ? 6 : 1;
+  const chunks = await mapPool(list, concurrency, async (sym) => {
+    const bars = await barsForSymbol(sb, sym, cutoffStr, bySym, tf);
+    if (!bars) return [] as LiveFeatureRow[];
+    return featuresForSymbol(sym, bars);
+  });
+  return chunks.flat();
 }
 
-export async function computeEma200FeaturesLive(sb: SupabaseClient): Promise<LiveFeatureRow[]> {
+export async function computeEma200FeaturesLive(
+  sb: SupabaseClient,
+  tf: Ema200Timeframe = "daily"
+): Promise<{ rows: LiveFeatureRow[]; weeklyMeta?: WeeklyScanMeta }> {
   const members = await fetchAll<{ symbol: string }>(sb, "universe_members", "symbol", (q) =>
     q.eq("is_active", true)
   );
   const symbols = new Set(members.map((m) => m.symbol));
   for (const s of EMA200_SYMBOL_SUPPLEMENTS) symbols.add(s);
-  if (!symbols.size) return [];
+  if (!symbols.size) return { rows: [] };
+
+  if (tf === "weekly") {
+    const all = Array.from(symbols);
+    const requested = all.length;
+    const capped = requested > EMA200_WEEKLY_SYMBOL_CAP;
+    const slice = capped ? all.slice(0, EMA200_WEEKLY_SYMBOL_CAP) : all;
+    const rows = await computeEma200FeaturesForSymbols(sb, slice, "weekly");
+    return {
+      rows,
+      weeklyMeta: capped ? { capped: true, scanned: slice.length, requested } : undefined,
+    };
+  }
 
   const cutoff = new Date();
-  cutoff.setUTCDate(cutoff.getUTCDate() - 620);
+  cutoff.setUTCDate(cutoff.getUTCDate() - cutoffDays(tf));
   const cutoffStr = cutoff.toISOString().slice(0, 10);
 
   const prices = await fetchPricesParallel(sb, cutoffStr);
@@ -257,7 +320,7 @@ export async function computeEma200FeaturesLive(sb: SupabaseClient): Promise<Liv
 
   const out: LiveFeatureRow[] = [];
   for (const [sym, bars] of Array.from(bySym.entries())) {
-    out.push(...featuresForSymbol(sym, bars));
+    out.push(...featuresForSymbol(sym, toTimeframeBars(bars, tf)));
   }
 
   for (const sym of EMA200_SYMBOL_SUPPLEMENTS) {
@@ -265,16 +328,9 @@ export async function computeEma200FeaturesLive(sb: SupabaseClient): Promise<Liv
     if (existing && existing.length >= HISTORY_MIN) continue;
     const yahoo = await fetchYahooDaily(sym, "5y");
     if (yahoo.length < HISTORY_MIN) continue;
-    const ohlc: Ohlc[] = yahoo.map((b) => ({
-      date: b.date,
-      open: b.open,
-      high: b.high,
-      low: b.low,
-      close: b.close,
-      volume: b.volume,
-    }));
+    const ohlc = dailyToOhlc(yahoo);
     out.push(...featuresForSymbol(sym, ohlc));
   }
 
-  return out;
+  return { rows: out };
 }
