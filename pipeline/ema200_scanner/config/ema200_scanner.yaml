@@ -2,6 +2,9 @@ mode: watchlist_only       # signal | watchlist_only — discretionary scan only
 
 universe:
   equities: sp500_ndx100   # sp500_ndx100 | all_us
+  # Names you trade outside S&P/NDX-100 — scanned + backfilled like index members
+  supplements:
+    - NBIS
   include_crypto: false
   exclude_pharma: false
 ema_period: 200

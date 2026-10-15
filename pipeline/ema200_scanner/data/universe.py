@@ -34,6 +34,8 @@ def sync_ema200_universe(sb: Client) -> list[dict]:
     rows: list[dict] = []
     allowed: set[str] = set()
 
+    supplements = [str(s).upper() for s in (uni_cfg.get("supplements") or []) if s]
+
     if mode == "sp500_ndx100":
         stocks, stats = sp500_nasdaq100_stocks(exclude_pharma=exclude_pharma)
         logger.info(
@@ -83,6 +85,22 @@ def sync_ema200_universe(sb: Client) -> list[dict]:
             )
     else:
         raise ValueError(f"Unknown universe.equities mode: {mode}")
+
+    for sym in supplements:
+        if sym in allowed:
+            continue
+        allowed.add(sym)
+        rows.append(
+            {
+                "symbol": sym,
+                "asset_class": "equity",
+                "exchange": None,
+                "index_tag": "supplement",
+                "is_etf": False,
+                "active": True,
+                "updated_at": now,
+            }
+        )
 
     if include_crypto:
         crypto_n = int(cfg.get("crypto", {}).get("top_n", 50))
