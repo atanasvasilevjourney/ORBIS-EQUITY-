@@ -8,7 +8,7 @@ import { useFocusUniverse } from "@/hooks/useFocusUniverse";
 import { deskEma200Href } from "@/lib/focusUniverse";
 
 export default function ExplorePage() {
-  const { mode, symbols } = useFocusUniverse();
+  const { desk, deskLabel, symbols, isWatchlist } = useFocusUniverse();
 
   const moduleLinks = symbols.length
     ? [
@@ -30,11 +30,11 @@ export default function ExplorePage() {
       />
 
       <p className="text-[10px] font-terminal text-[var(--text-muted)]">
-        Active mode:{" "}
-        <strong style={{ color: mode === "focus" ? "var(--accent-desk)" : "var(--accent-info)" }}>
-          {mode === "focus" ? `My list (${symbols.length})` : "Index desk"}
+        Active desk:{" "}
+        <strong style={{ color: isWatchlist ? "var(--accent-desk)" : "var(--accent-info)" }}>
+          {isWatchlist ? `My watchlist (${symbols.length})` : deskLabel}
         </strong>
-        . Toggle in the strip above or on any module page.
+        . Pick an index desk or My watchlist in the strip above.
       </p>
 
       <ModulePanel title="Desk list editor" badge="live" accent="var(--accent-desk)">
@@ -43,8 +43,8 @@ export default function ExplorePage() {
         </div>
       </ModulePanel>
 
-      {mode === "focus" && moduleLinks.length > 0 && (
-        <ModulePanel title="Open modules" badge="focus" accent="var(--accent-desk)">
+      {isWatchlist && moduleLinks.length > 0 && (
+        <ModulePanel title="Open modules" badge="watchlist" accent="var(--accent-desk)">
           <div className="p-3 flex flex-wrap gap-2">
             {moduleLinks.map((l) => (
               <Link

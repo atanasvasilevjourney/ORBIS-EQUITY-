@@ -12,6 +12,7 @@ import {
 import { ema200SupplementSet } from "@/lib/ema200Config";
 import { computeEma200FeaturesForSymbols, computeEma200FeaturesLive } from "@/lib/ema200LiveScan";
 import { parseSymbolsQueryParam } from "@/lib/symbolsQuery";
+import { resolveUniverseDesk } from "@/lib/resolveIndexDesk";
 import {
   EMA200_DEFAULTS,
   classifyEma200Setup,
@@ -162,12 +163,18 @@ export async function GET(req: NextRequest) {
   try {
     const sp = req.nextUrl.searchParams;
     const limit = Math.min(parseInt(sp.get("limit") ?? "500", 10), 500);
-    const deskSymbols = parseSymbolsQueryParam(sp.get("symbols"));
+    const sb = createServerClient();
+    const watchlistInput = parseSymbolsQueryParam(sp.get("symbols"));
+    const resolved = await resolveUniverseDesk(sb, sp.get("universe"), watchlistInput);
+    const deskSymbols =
+      resolved.desk === "watchlist" && resolved.symbols.length > 0 ? resolved.symbols : [];
+    const indexDeskFilter =
+      resolved.desk !== "watchlist" && resolved.symbols.length > 0
+        ? new Set(resolved.symbols)
+        : null;
     const deskScan = sp.get("desk") === "1" || deskSymbols.length > 0;
     const showAllNear = sp.get("near") === "1" || deskScan;
     const retraceOnly = deskScan ? false : sp.get("near") !== "1";
-
-    const sb = createServerClient();
 
     let features: FeatureDbRow[] = [];
     let dataSource: "ema200_features" | "prices_daily_live" = "ema200_features";
@@ -250,6 +257,7 @@ export async function GET(req: NextRequest) {
     const latestRows = features.filter((r) => {
       if (r.bar_date !== latestDate) return false;
       if (deskSymbols.length) return deskSymbols.includes(r.symbol);
+      if (indexDeskFilter) return indexDeskFilter.has(r.symbol);
       return allowedSymbols.size === 0 || allowedSymbols.has(r.symbol) || supplements.has(r.symbol);
     });
 
@@ -304,7 +312,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       mode: deskScan ? "desk_scan" : "watchlist_only",
       asOfDate: latestDate,
-      universe: deskSymbols.length ? "desk_nasdaq" : "sp500_ndx100",
+      universe: deskSymbols.length ? "desk_nasdaq" : resolved.universeKey,
       universeCount: deskSymbols.length || allowedSymbols.size || null,
       deskSymbols: deskSymbols.length ? deskSymbols : undefined,
       shortlistAtr: EMA200_DEFAULTS.shortlistAtr,

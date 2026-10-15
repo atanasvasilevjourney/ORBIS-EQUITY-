@@ -7,8 +7,9 @@ import {
   isFirstAddNudgeDismissed,
   FOCUS_UNIVERSE_CHANGED,
   getFocusSymbols,
-  getUniverseMode,
+  getUniverseDeskId,
 } from "@/lib/focusUniverse";
+import { isWatchlistDesk } from "@/lib/universeDesk";
 import { useFocusUniverse } from "@/hooks/useFocusUniverse";
 import { DeskUniverseDrawer } from "@/components/universe/DeskUniverseDrawer";
 import { DeskUniverseUiContext } from "@/components/universe/deskUniverseUiContext";
@@ -18,7 +19,7 @@ export { useDeskUniverseUi } from "@/components/universe/deskUniverseUiContext";
 export function DeskUniverseProvider({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [showNudge, setShowNudge] = useState(false);
-  const { setMode } = useFocusUniverse();
+  const { setDesk } = useFocusUniverse();
   const prevSymbolCount = useRef<number | null>(null);
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -43,7 +44,12 @@ export function DeskUniverseProvider({ children }: { children: ReactNode }) {
       const count = getFocusSymbols().length;
       const prev = prevSymbolCount.current ?? 0;
       prevSymbolCount.current = count;
-      if (prev === 0 && count === 1 && getUniverseMode() === "index" && !isFirstAddNudgeDismissed()) {
+      if (
+        prev === 0 &&
+        count === 1 &&
+        !isWatchlistDesk(getUniverseDeskId()) &&
+        !isFirstAddNudgeDismissed()
+      ) {
         setShowNudge(true);
       }
     };
@@ -52,10 +58,10 @@ export function DeskUniverseProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const acceptFirstAddNudge = useCallback(() => {
-    setMode("focus");
+    setDesk("watchlist");
     dismissFirstAddNudge();
     setShowNudge(false);
-  }, [setMode]);
+  }, [setDesk]);
 
   const dismissFirstAddNudgeUi = useCallback(() => {
     dismissFirstAddNudge();

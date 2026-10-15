@@ -25,7 +25,7 @@ type ApiPayload = {
 };
 
 export default function Ema200WatchlistPage() {
-  const { isFocusActive, symbolsParam, mode } = useFocusUniverse();
+  const { isFocusActive, symbolsParam, universeParam, deskLabel, isWatchlist } = useFocusUniverse();
   const [data, setData] = useState<ApiPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -39,6 +39,8 @@ export default function Ema200WatchlistPage() {
       if (isFocusActive && symbolsParam) {
         params.set("symbols", symbolsParam);
         params.set("desk", "1");
+      } else if (universeParam) {
+        params.set("universe", universeParam);
       }
       const qs = params.toString();
       const res = await fetch(`/api/ema200${qs ? `?${qs}` : ""}`);
@@ -48,7 +50,7 @@ export default function Ema200WatchlistPage() {
     } finally {
       setLoading(false);
     }
-  }, [isFocusActive, symbolsParam]);
+  }, [isFocusActive, symbolsParam, universeParam]);
 
   useEffect(() => {
     load();
@@ -65,11 +67,11 @@ export default function Ema200WatchlistPage() {
 
       <ModuleHeader
         module="EMA200"
-        title={isFocusActive ? "MY NASDAQ LIST · EMA200" : "RETRACE WATCHLIST"}
+        title={isFocusActive ? "MY WATCHLIST · EMA200" : "RETRACE WATCHLIST"}
         description={
           isFocusActive
-            ? "Scanning your Explore desk list only. Ribbon distance via live Yahoo when needed. WATCH ≤1.5 ATR; names farther out still show under desk scan."
-            : "Scans S&P 500 + Nasdaq-100 index members — not every stock listed on the NASDAQ exchange. IBKR/TradingView showing “NASDAQ” is the venue, not our universe. NBIS (and other supplements) are scanned via Yahoo when missing from hosted prices. WATCH ≤1.5 ATR to the double EMA200 ribbon."
+            ? "Scanning your watchlist only. Ribbon distance via live Yahoo when needed. WATCH ≤1.5 ATR; names farther out still show under desk scan."
+            : `Scans ${deskLabel} (index desk). Not every stock on the NASDAQ exchange — venue ≠ universe. WATCH ≤1.5 ATR to the double EMA200 ribbon.`
         }
         source="SP500 ∪ NDX-100 + supplements · EOD"
         accent="var(--accent-info)"
@@ -82,7 +84,7 @@ export default function Ema200WatchlistPage() {
       )}
 
       <p className="text-[10px] font-terminal text-[var(--text-muted)]">
-        Universe: {mode === "focus" ? `desk (${symbolsParam.split(",").filter(Boolean).length})` : `${data?.universeCount ?? "—"} index`} · as
+        Universe: {isWatchlist ? `watchlist (${symbolsParam.split(",").filter(Boolean).length})` : deskLabel} · as
         of {data?.asOfDate ?? "—"} · watch {watch.length} · approaching {approaching.length}
         {data?.dataSource === "prices_daily_live" ? " · live scan" : ""}
       </p>

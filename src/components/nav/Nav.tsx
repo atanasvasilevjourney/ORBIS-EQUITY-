@@ -28,8 +28,8 @@ const NAV_LINKS = [
 export function Nav() {
   const pathname = usePathname();
   const router = useRouter();
-  const { mode, symbols } = useFocusUniverse();
-  const showExploreNudge = mode === "index" && symbols.length > 0;
+  const { symbols, isWatchlist } = useFocusUniverse();
+  const showExploreNudge = !isWatchlist && symbols.length > 0;
   const [search, setSearch] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
 

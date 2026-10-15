@@ -1,5 +1,13 @@
 /** Client-side "my desk" symbol list — browse Nasdaq, then drive module APIs via `symbols=` query. */
 
+import {
+  getUniverseDesk,
+  indexDeskQueryParam,
+  isWatchlistDesk,
+  setUniverseDesk,
+  type UniverseDeskId,
+} from "@/lib/universeDesk";
+
 export type UniverseMode = "index" | "focus";
 
 const FOCUS_KEY = "orbis-focus-universe";
@@ -67,25 +75,36 @@ export function removeFocusSymbol(symbol: string): string[] {
   return next;
 }
 
+export function getUniverseDeskId(): UniverseDeskId {
+  return getUniverseDesk();
+}
+
+export function setUniverseDeskId(desk: UniverseDeskId): void {
+  setUniverseDesk(desk);
+  dispatchChange();
+}
+
+export { type UniverseDeskId, DESK_LABELS, INDEX_DESKS } from "@/lib/universeDesk";
+
 export function getUniverseMode(): UniverseMode {
-  if (typeof window === "undefined") return "index";
-  try {
-    const m = localStorage.getItem(MODE_KEY);
-    return m === "focus" ? "focus" : "index";
-  } catch {
-    return "index";
-  }
+  return isWatchlistDesk(getUniverseDesk()) ? "focus" : "index";
 }
 
 export function setUniverseMode(mode: UniverseMode): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(MODE_KEY, mode === "focus" ? "focus" : "index");
+  if (mode === "focus") setUniverseDesk("watchlist");
+  else setUniverseDesk("sp500_ndx100");
   dispatchChange();
+}
+
+/** API query: `universe` for index desks, empty when on watchlist. */
+export function universeDeskApiParam(): string {
+  if (isWatchlistDesk(getUniverseDesk())) return "";
+  return indexDeskQueryParam();
 }
 
 /** Comma-separated list for API query strings (empty when index mode or no symbols). */
 export function focusSymbolsQueryParam(): string {
-  if (getUniverseMode() !== "focus") return "";
+  if (!isWatchlistDesk(getUniverseDesk())) return "";
   const syms = getFocusSymbols();
   if (!syms.length) return "";
   return syms.join(",");
