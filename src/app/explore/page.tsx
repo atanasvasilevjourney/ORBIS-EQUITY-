@@ -8,7 +8,7 @@ import { useFocusUniverse } from "@/hooks/useFocusUniverse";
 import { deskEma200Href } from "@/lib/focusUniverse";
 
 export default function ExplorePage() {
-  const { desk, deskLabel, symbols, isWatchlist } = useFocusUniverse();
+  const { deskLabel, symbols, isWatchlist } = useFocusUniverse();
 
   const moduleLinks = symbols.length
     ? [
