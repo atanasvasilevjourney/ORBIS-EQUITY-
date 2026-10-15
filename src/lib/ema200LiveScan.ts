@@ -165,6 +165,67 @@ async function fetchPricesParallel(sb: SupabaseClient, cutoffStr: string): Promi
   return all;
 }
 
+async function barsForSymbol(
+  sb: SupabaseClient,
+  sym: string,
+  cutoffStr: string,
+  cachedBySym: Map<string, Ohlc[]>
+): Promise<Ohlc[] | null> {
+  const existing = cachedBySym.get(sym);
+  if (existing && existing.length >= HISTORY_MIN) return existing;
+
+  const { data, error } = await sb
+    .from("prices_daily")
+    .select("date, open, high, low, close, volume")
+    .eq("symbol", sym)
+    .gte("date", cutoffStr)
+    .order("date", { ascending: true });
+  if (!error && data && data.length >= HISTORY_MIN) {
+    const ohlc: Ohlc[] = data.map((p) => ({
+      date: String(p.date),
+      open: Number(p.open ?? p.close),
+      high: Number(p.high ?? p.close),
+      low: Number(p.low ?? p.close),
+      close: Number(p.close),
+      volume: Number(p.volume ?? 0),
+    }));
+    return ohlc;
+  }
+
+  const yahoo = await fetchYahooDaily(sym, "5y");
+  if (yahoo.length < HISTORY_MIN) return null;
+  return yahoo.map((b) => ({
+    date: b.date,
+    open: b.open,
+    high: b.high,
+    low: b.low,
+    close: b.close,
+    volume: b.volume,
+  }));
+}
+
+/** On-demand EMA200 features for a user desk list (Yahoo backfill when DB is thin). */
+export async function computeEma200FeaturesForSymbols(
+  sb: SupabaseClient,
+  symbols: string[]
+): Promise<LiveFeatureRow[]> {
+  const list = symbols.map((s) => s.toUpperCase()).filter(Boolean);
+  if (!list.length) return [];
+
+  const cutoff = new Date();
+  cutoff.setUTCDate(cutoff.getUTCDate() - 620);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+
+  const bySym = new Map<string, Ohlc[]>();
+  const out: LiveFeatureRow[] = [];
+  for (const sym of list) {
+    const bars = await barsForSymbol(sb, sym, cutoffStr, bySym);
+    if (!bars) continue;
+    out.push(...featuresForSymbol(sym, bars));
+  }
+  return out;
+}
+
 export async function computeEma200FeaturesLive(sb: SupabaseClient): Promise<LiveFeatureRow[]> {
   const members = await fetchAll<{ symbol: string }>(sb, "universe_members", "symbol", (q) =>
     q.eq("is_active", true)

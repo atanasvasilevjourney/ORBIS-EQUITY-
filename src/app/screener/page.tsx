@@ -7,6 +7,8 @@ import { ModulePanel } from "@/components/ui/ModulePanel";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { FilterChip } from "@/components/ui/FilterChip";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { FocusUniverseBar } from "@/components/universe/FocusUniverseBar";
+import { useFocusUniverse } from "@/hooks/useFocusUniverse";
 
 type Summary = {
   asOfDate: string | null;
@@ -53,6 +55,7 @@ const DAY_FILTERS = [
 ];
 
 export default function ScreenerPage() {
+  const { isFocusActive, symbolsParam } = useFocusUniverse();
   const [rows, setRows] = useState<ScreenerRow[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [filters, setFilters] = useState<FilterState>({
@@ -70,6 +73,7 @@ export default function ScreenerPage() {
     if (filters.direction !== "all") params.set("direction", filters.direction);
     if (filters.region !== "all") params.set("region", filters.region);
     if (filters.minDay > 0) params.set("min_day", String(filters.minDay));
+    if (isFocusActive && symbolsParam) params.set("symbols", symbolsParam);
 
     try {
       const [screenerRes, summaryRes] = await Promise.all([
@@ -87,7 +91,7 @@ export default function ScreenerPage() {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, isFocusActive, symbolsParam]);
 
   useEffect(() => {
     fetchData();
@@ -102,6 +106,8 @@ export default function ScreenerPage() {
 
   return (
     <div className="px-4 py-6 space-y-4">
+      <FocusUniverseBar moduleLabel="Watchlist" />
+
       <ModuleHeader
         module="MODULE 1"
         title="WATCHLIST"

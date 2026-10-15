@@ -10,7 +10,8 @@ import {
   ribbonDistUsd,
 } from "@/lib/ema200Distance";
 import { ema200SupplementSet } from "@/lib/ema200Config";
-import { computeEma200FeaturesLive } from "@/lib/ema200LiveScan";
+import { computeEma200FeaturesForSymbols, computeEma200FeaturesLive } from "@/lib/ema200LiveScan";
+import { parseSymbolsQueryParam } from "@/lib/symbolsQuery";
 import {
   EMA200_DEFAULTS,
   classifyEma200Setup,
@@ -77,6 +78,7 @@ function mapRow(
     fMap: Map<string, FundRow>;
     indexMap: Map<string, string | null>;
     retraceOnly: boolean;
+    deskScan: boolean;
   }
 ) {
   const feat: Ema200FeatureRow = {
@@ -95,7 +97,7 @@ function mapRow(
   const setup = classifyEma200Setup(feat, opts);
   const onWatch = setup != null && (!ctx.retraceOnly || setup === "RETRACE_HELD");
   const approaching = isApproachingPullback(feat, setup);
-  if (!onWatch && !approaching) return null;
+  if (!onWatch && !approaching && !ctx.deskScan) return null;
 
   const prev = priorBar(ctx.history, ctx.asOfDate);
   const prevFeat: Ema200FeatureRow | null = prev
@@ -126,8 +128,8 @@ function mapRow(
     country: u?.country ?? "US",
     indexTag: tag ?? null,
     barDate: r.bar_date,
-    lane: onWatch ? "watch" : "approaching",
-    setup: setup ?? "APPROACHING",
+    lane: onWatch ? "watch" : approaching ? "approaching" : "desk",
+    setup: setup ?? (ctx.deskScan ? "SCAN" : "APPROACHING"),
     close: r.close,
     ema200: r.ema200,
     ema200High: r.ema200_high,
@@ -160,8 +162,10 @@ export async function GET(req: NextRequest) {
   try {
     const sp = req.nextUrl.searchParams;
     const limit = Math.min(parseInt(sp.get("limit") ?? "500", 10), 500);
-    const showAllNear = sp.get("near") === "1";
-    const retraceOnly = sp.get("near") !== "1";
+    const deskSymbols = parseSymbolsQueryParam(sp.get("symbols"));
+    const deskScan = sp.get("desk") === "1" || deskSymbols.length > 0;
+    const showAllNear = sp.get("near") === "1" || deskScan;
+    const retraceOnly = deskScan ? false : sp.get("near") !== "1";
 
     const sb = createServerClient();
 
@@ -179,10 +183,26 @@ export async function GET(req: NextRequest) {
 
     if (!features.length) {
       try {
-        features = await computeEma200FeaturesLive(sb);
+        features = deskSymbols.length
+          ? await computeEma200FeaturesForSymbols(sb, deskSymbols)
+          : await computeEma200FeaturesLive(sb);
         dataSource = "prices_daily_live";
       } catch (liveErr) {
         console.error("EMA200 live scan failed:", liveErr);
+      }
+    }
+
+    if (deskSymbols.length) {
+      const have = new Set(features.map((f) => f.symbol));
+      const missing = deskSymbols.filter((s) => !have.has(s));
+      if (missing.length) {
+        try {
+          const extra = await computeEma200FeaturesForSymbols(sb, missing);
+          features = [...features, ...extra];
+          if (extra.length) dataSource = "prices_daily_live";
+        } catch (liveErr) {
+          console.error("EMA200 desk symbol scan failed:", liveErr);
+        }
       }
     }
 
@@ -220,11 +240,18 @@ export async function GET(req: NextRequest) {
     const indexMap = new Map(scannerUniverse.map((u) => [u.symbol, u.index_tag]));
     for (const s of Array.from(supplements)) indexMap.set(s, "supplement");
 
-    const latestRows = features.filter(
-      (r) =>
-        r.bar_date === latestDate &&
-        (allowedSymbols.size === 0 || allowedSymbols.has(r.symbol) || supplements.has(r.symbol))
-    );
+    if (deskSymbols.length) {
+      for (const s of deskSymbols) {
+        allowedSymbols.add(s);
+        indexMap.set(s, "desk");
+      }
+    }
+
+    const latestRows = features.filter((r) => {
+      if (r.bar_date !== latestDate) return false;
+      if (deskSymbols.length) return deskSymbols.includes(r.symbol);
+      return allowedSymbols.size === 0 || allowedSymbols.has(r.symbol) || supplements.has(r.symbol);
+    });
 
     const opts = showAllNear
       ? { ...EMA200_DEFAULTS, requireUptrend: false, requireCloseAboveEma: false }
@@ -247,7 +274,7 @@ export async function GET(req: NextRequest) {
     const fMap = new Map(fundamentals.map((f) => [f.symbol, f]));
 
     const historyBySymbol = groupHistoryBySymbol(features);
-    const ctxBase = { asOfDate: latestDate, uMap, fMap, indexMap, retraceOnly };
+    const ctxBase = { asOfDate: latestDate, uMap, fMap, indexMap, retraceOnly, deskScan };
 
     const mapped = latestRows
       .map((r) =>
@@ -266,14 +293,20 @@ export async function GET(req: NextRequest) {
       .filter((r) => r.lane === "approaching")
       .sort((a, b) => (a.distAtr ?? 99) - (b.distAtr ?? 99))
       .slice(0, limit);
+    const deskRows = deskScan
+      ? mapped
+          .filter((r) => r.lane === "desk")
+          .sort((a, b) => (a.distAtr ?? 99) - (b.distAtr ?? 99))
+      : [];
 
     const rowsOnlyWatch = sp.get("approaching") !== "1";
 
     return NextResponse.json({
-      mode: "watchlist_only",
+      mode: deskScan ? "desk_scan" : "watchlist_only",
       asOfDate: latestDate,
-      universe: "sp500_ndx100",
-      universeCount: allowedSymbols.size || null,
+      universe: deskSymbols.length ? "desk_nasdaq" : "sp500_ndx100",
+      universeCount: deskSymbols.length || allowedSymbols.size || null,
+      deskSymbols: deskSymbols.length ? deskSymbols : undefined,
       shortlistAtr: EMA200_DEFAULTS.shortlistAtr,
       approachingMaxAtr: 3,
       disclaimer:
@@ -282,9 +315,10 @@ export async function GET(req: NextRequest) {
           : "S&P 500 + Nasdaq-100 only. WATCH = at the ribbon (≤1.5 ATR). APPROACHING = still extended but closing in (1.5–3 ATR) with uptrend intact. Dist Δ = change vs prior session (negative = closer). Days since touch = sessions since last ≤1.5 ATR ribbon tag.",
       dataSource,
       filter: showAllNear ? "near_ema_relaxed" : "retrace_held_only",
-      rows: rowsOnlyWatch ? watch : approaching,
+      rows: deskScan ? [...watch, ...approaching, ...deskRows].slice(0, limit) : rowsOnlyWatch ? watch : approaching,
       watch,
       approaching,
+      desk: deskRows,
     });
   } catch (err) {
     console.error("EMA200 watchlist API error:", err);

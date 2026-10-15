@@ -5,6 +5,8 @@ import { ModuleHeader } from "@/components/ui/ModuleHeader";
 import { ModulePanel } from "@/components/ui/ModulePanel";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Ema200WatchTable, type Ema200TableRow } from "@/components/ema200/Ema200WatchTable";
+import { FocusUniverseBar } from "@/components/universe/FocusUniverseBar";
+import { useFocusUniverse } from "@/hooks/useFocusUniverse";
 
 type ApiPayload = {
   mode: string;
@@ -21,6 +23,7 @@ type ApiPayload = {
 };
 
 export default function Ema200WatchlistPage() {
+  const { isFocusActive, symbolsParam, mode } = useFocusUniverse();
   const [data, setData] = useState<ApiPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -29,14 +32,20 @@ export default function Ema200WatchlistPage() {
     setLoading(true);
     setError(false);
     try {
-      const res = await fetch("/api/ema200");
+      const params = new URLSearchParams();
+      if (isFocusActive && symbolsParam) {
+        params.set("symbols", symbolsParam);
+        params.set("desk", "1");
+      }
+      const qs = params.toString();
+      const res = await fetch(`/api/ema200${qs ? `?${qs}` : ""}`);
       setData(await res.json());
     } catch {
       setError(true);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isFocusActive, symbolsParam]);
 
   useEffect(() => {
     load();
@@ -47,10 +56,16 @@ export default function Ema200WatchlistPage() {
 
   return (
     <div className="px-4 py-6 space-y-4">
+      <FocusUniverseBar moduleLabel="EMA200" />
+
       <ModuleHeader
         module="EMA200"
-        title="RETRACE WATCHLIST"
-        description="Scans S&P 500 + Nasdaq-100 index members — not every stock listed on the NASDAQ exchange. IBKR/TradingView showing “NASDAQ” is the venue, not our universe. NBIS (and other supplements) are scanned via Yahoo when missing from hosted prices. WATCH ≤1.5 ATR to the double EMA200 ribbon."
+        title={isFocusActive ? "MY NASDAQ LIST · EMA200" : "RETRACE WATCHLIST"}
+        description={
+          isFocusActive
+            ? "Scanning your Explore desk list only. Ribbon distance via live Yahoo when needed. WATCH ≤1.5 ATR; names farther out still show under desk scan."
+            : "Scans S&P 500 + Nasdaq-100 index members — not every stock listed on the NASDAQ exchange. IBKR/TradingView showing “NASDAQ” is the venue, not our universe. NBIS (and other supplements) are scanned via Yahoo when missing from hosted prices. WATCH ≤1.5 ATR to the double EMA200 ribbon."
+        }
         source="SP500 ∪ NDX-100 + supplements · EOD"
         accent="var(--accent-info)"
       />
@@ -62,8 +77,8 @@ export default function Ema200WatchlistPage() {
       )}
 
       <p className="text-[10px] font-terminal text-[var(--text-muted)]">
-        Universe: {data?.universeCount ?? "—"} index names · as of {data?.asOfDate ?? "—"} · watch {watch.length} ·
-        approaching {approaching.length}
+        Universe: {mode === "focus" ? `desk (${symbolsParam.split(",").filter(Boolean).length})` : `${data?.universeCount ?? "—"} index`} · as
+        of {data?.asOfDate ?? "—"} · watch {watch.length} · approaching {approaching.length}
         {data?.dataSource === "prices_daily_live" ? " · live scan" : ""}
       </p>
       <p className="text-[10px] font-terminal text-[var(--text-muted)] border border-[var(--panel-border)] rounded px-3 py-2">
