@@ -7,7 +7,7 @@ import { ModulePanel } from "@/components/ui/ModulePanel";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { FilterChip } from "@/components/ui/FilterChip";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { FocusUniverseBar } from "@/components/universe/FocusUniverseBar";
+import { FocusUniverseModuleBanner } from "@/components/universe/FocusUniverseModuleBanner";
 import { useFocusUniverse } from "@/hooks/useFocusUniverse";
 
 type Summary = {
@@ -106,7 +106,7 @@ export default function ScreenerPage() {
 
   return (
     <div className="px-4 py-6 space-y-4">
-      <FocusUniverseBar moduleLabel="Watchlist" />
+      <FocusUniverseModuleBanner />
 
       <ModuleHeader
         module="MODULE 1"

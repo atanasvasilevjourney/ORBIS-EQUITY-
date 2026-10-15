@@ -4,7 +4,12 @@ export type UniverseMode = "index" | "focus";
 
 const FOCUS_KEY = "orbis-focus-universe";
 const MODE_KEY = "orbis-universe-mode";
+const NUDGE_DISMISSED_KEY = "orbis-focus-first-add-nudge-dismissed";
 const MAX_FOCUS_SYMBOLS = 50;
+
+/** Shared copy for desk vs index universe (EMA200 disclaimer, slide-over help). */
+export const NASDAQ_VENUE_DISCLAIMER =
+  "NASDAQ venue ≠ index universe: thousands of tickers trade on NASDAQ; the index desk covers ~600 large-cap names (S&P 500 + NDX-100) plus configured supplements.";
 
 export const FOCUS_UNIVERSE_CHANGED = "orbis:focus-universe-changed";
 
@@ -94,3 +99,35 @@ export function appendFocusQuery(url: string): string {
 }
 
 export const FOCUS_SYMBOL_LIMIT = MAX_FOCUS_SYMBOLS;
+
+export function isFirstAddNudgeDismissed(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return localStorage.getItem(NUDGE_DISMISSED_KEY) === "1";
+  } catch {
+    return true;
+  }
+}
+
+export function dismissFirstAddNudge(): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(NUDGE_DISMISSED_KEY, "1");
+}
+
+/** First ~5 symbols for the global strip; remainder count for “+N more”. */
+export function splitDeskChipPreview(symbols: string[], maxVisible = 5): {
+  visible: string[];
+  hiddenCount: number;
+} {
+  const visible = symbols.slice(0, maxVisible);
+  return { visible, hiddenCount: Math.max(0, symbols.length - visible.length) };
+}
+
+export function deskEma200Href(symbols: string[]): string {
+  if (!symbols.length) return "/ema200";
+  const qs = new URLSearchParams({
+    symbols: symbols.join(","),
+    desk: "1",
+  });
+  return `/ema200?${qs.toString()}`;
+}

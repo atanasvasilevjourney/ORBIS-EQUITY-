@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { NASDAQ_VENUE_DISCLAIMER } from "@/lib/focusUniverse";
 import { ModuleHeader } from "@/components/ui/ModuleHeader";
 import { ModulePanel } from "@/components/ui/ModulePanel";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Ema200WatchTable, type Ema200TableRow } from "@/components/ema200/Ema200WatchTable";
-import { FocusUniverseBar } from "@/components/universe/FocusUniverseBar";
+import { FocusUniverseModuleBanner } from "@/components/universe/FocusUniverseModuleBanner";
 import { useFocusUniverse } from "@/hooks/useFocusUniverse";
 
 type ApiPayload = {
@@ -18,6 +19,7 @@ type ApiPayload = {
   disclaimer: string;
   watch: Ema200TableRow[];
   approaching: Ema200TableRow[];
+  desk?: Ema200TableRow[];
   rows: Ema200TableRow[];
   dataSource?: string;
 };
@@ -27,6 +29,7 @@ export default function Ema200WatchlistPage() {
   const [data, setData] = useState<ApiPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [deskOtherOpen, setDeskOtherOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,10 +56,12 @@ export default function Ema200WatchlistPage() {
 
   const watch = data?.watch ?? data?.rows ?? [];
   const approaching = data?.approaching ?? [];
+  const deskOther = data?.desk ?? [];
+  const deskScanActive = isFocusActive && Boolean(symbolsParam);
 
   return (
     <div className="px-4 py-6 space-y-4">
-      <FocusUniverseBar moduleLabel="EMA200" />
+      <FocusUniverseModuleBanner />
 
       <ModuleHeader
         module="EMA200"
@@ -82,9 +87,7 @@ export default function Ema200WatchlistPage() {
         {data?.dataSource === "prices_daily_live" ? " · live scan" : ""}
       </p>
       <p className="text-[10px] font-terminal text-[var(--text-muted)] border border-[var(--panel-border)] rounded px-3 py-2">
-        <strong className="text-[var(--text-secondary)]">NASDAQ ≠ auto-included.</strong> Thousands of tickers trade on NASDAQ;
-        this desk only covers ~600 large-cap index names plus configured supplements (e.g. NBIS). Re-run bootstrap if a new
-        NDX-100 name is missing from <code className="text-[var(--accent-info)]">universe_members</code>.
+        {NASDAQ_VENUE_DISCLAIMER}
       </p>
 
       <ModulePanel title="AT 200 EMA · ON WATCH" badge="≤1.5 ATR" accent="var(--accent-info)" source={`${watch.length} names`}>
@@ -119,6 +122,24 @@ export default function Ema200WatchlistPage() {
           <Ema200WatchTable rows={approaching} emptyDetail="" />
         )}
       </ModulePanel>
+
+      {deskScanActive && deskOther.length > 0 && (
+        <ModulePanel
+          title="OTHER NAMES ON YOUR LIST"
+          badge={`${deskOther.length}`}
+          accent="var(--accent-desk)"
+          source="Sorted by ribbon ATR"
+        >
+          <button
+            type="button"
+            onClick={() => setDeskOtherOpen((o) => !o)}
+            className="w-full text-left px-3 py-2 text-[10px] font-terminal text-[var(--text-muted)] border-b border-[var(--panel-border)] hover:bg-[var(--surface-alt)]"
+          >
+            {deskOtherOpen ? "▼" : "▶"} Other names on your list ({deskOther.length}) — not in watch / approaching
+          </button>
+          {deskOtherOpen && <Ema200WatchTable rows={deskOther} emptyDetail="" />}
+        </ModulePanel>
+      )}
     </div>
   );
 }

@@ -28,6 +28,7 @@ export type ScreenerRow = {
   marketCap: number | null;
   peRatio: number | null;
   orbisScore?: number | null;
+  hasTrendRadar?: boolean;
 };
 
 function formatPrice(price: number | null): string {
@@ -48,6 +49,7 @@ function isRecentFlip(changedAt: string | null): boolean {
 }
 
 export function ScoreboardRow({ row }: { row: ScreenerRow }) {
+  const noRadar = row.hasTrendRadar === false;
   const dayPct = row.dayPct ?? row.zMom;
   const relVol = row.relVolume ?? row.fEwmac;
   const offHigh = row.pctFromHigh ?? row.z52 * 100;
@@ -56,7 +58,11 @@ export function ScoreboardRow({ row }: { row: ScreenerRow }) {
   const dayColor = dayPct > 0 ? "var(--accent-bull)" : dayPct < 0 ? "var(--accent-bear)" : "";
 
   return (
-    <tr className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)] transition-colors">
+    <tr
+      className={`border-b border-[var(--border)] hover:bg-[var(--surface-alt)] transition-colors ${
+        noRadar ? "opacity-60" : ""
+      }`}
+    >
       <td className="px-3 py-2.5">
         <Link href={`/ticker/${row.symbol}`} className="hover:text-[var(--accent-info)] transition-colors">
           <span className="font-semibold">{row.symbol}</span>
@@ -64,7 +70,18 @@ export function ScoreboardRow({ row }: { row: ScreenerRow }) {
         <span className="text-[var(--text-muted)] ml-2 text-xs hidden lg:inline">{row.companyName}</span>
       </td>
       <td className="px-3 py-2.5">
-        <BiasChip state={row.state} rank={row.rank} entryTiming={row.entryTiming} />
+        {noRadar ? (
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--badge-bg)] text-[var(--text-muted)] font-terminal w-fit">
+              No radar yet
+            </span>
+            <Link href={`/ticker/${row.symbol}`} className="text-[10px] text-[var(--accent-info)] hover:underline">
+              Chart →
+            </Link>
+          </div>
+        ) : (
+          <BiasChip state={row.state} rank={row.rank} entryTiming={row.entryTiming} />
+        )}
       </td>
       <td className="px-3 py-2.5 text-right font-terminal text-xs font-bold" style={{ color: orbisScoreColor(row.orbisScore) }}>
         {row.orbisScore ?? "—"}

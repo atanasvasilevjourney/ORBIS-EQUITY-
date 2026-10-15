@@ -183,6 +183,7 @@ export async function GET(req: NextRequest) {
           divYield: f?.dividend_yield ?? null,
           orbisScore: orbisScore(r.quality_rank, f?.composite_factor_score ?? null),
           compositeScore: f?.composite_factor_score ?? null,
+          hasTrendRadar: true,
         };
       })
       .filter(Boolean);
@@ -191,7 +192,7 @@ export async function GET(req: NextRequest) {
       const radarBySym = new Map(allRadar.map((r) => [r.symbol, r]));
       const merged = deskSymbols.map((sym) => {
         const existing = rows.find((row) => row && row.symbol === sym);
-        if (existing) return existing;
+        if (existing) return { ...existing, hasTrendRadar: true };
         const u = filteredUniverse.find((x) => x.symbol === sym);
         const f = fundamentals.find((x) => x.symbol === sym);
         const r = radarBySym.get(sym);
@@ -224,6 +225,7 @@ export async function GET(req: NextRequest) {
             divYield: f?.dividend_yield ?? null,
             orbisScore: orbisScore(r.quality_rank, f?.composite_factor_score ?? null),
             compositeScore: f?.composite_factor_score ?? null,
+            hasTrendRadar: true,
           };
         }
         return {
@@ -254,6 +256,7 @@ export async function GET(req: NextRequest) {
           divYield: f?.dividend_yield ?? null,
           orbisScore: null,
           compositeScore: f?.composite_factor_score ?? null,
+          hasTrendRadar: false,
         };
       });
       rows = merged;
