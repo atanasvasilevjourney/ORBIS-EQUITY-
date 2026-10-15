@@ -161,6 +161,14 @@ export default function FundamentalsPage() {
         accent="var(--module-2)"
       />
 
+      <div className="mb-4">
+        <Link
+          href="/fundamentals/screener"
+          className="text-xs font-terminal text-[var(--accent-info)] hover:underline"
+        >
+          Open fundamental screener (ranges & conviction presets) →
+        </Link>
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         {[
