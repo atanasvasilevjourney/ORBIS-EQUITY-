@@ -13,6 +13,8 @@
   --accent-neutral: #6b7280;
   --accent-info: #00aaff;
   --accent-warning: #ffcc00;
+  --accent-desk: #ffcc00;
+  --accent-warn: #ffcc00;
   --border: #1e2733;
   --card-bg: #0d1117;
   --badge-bg: #1a2332;
@@ -40,6 +42,8 @@
   --accent-neutral: #78716c;
   --accent-info: #2563eb;
   --accent-warning: #ca8a04;
+  --accent-desk: #ca8a04;
+  --accent-warn: #ca8a04;
   --border: #e7e5e4;
   --card-bg: #ffffff;
   --badge-bg: #f5f5f4;

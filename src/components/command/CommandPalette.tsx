@@ -2,22 +2,28 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { addFocusSymbol, deskEma200Href, getFocusSymbols } from "@/lib/focusUniverse";
 
 type PaletteItem = {
   id: string;
   label: string;
   hint: string;
-  href: string;
+  href?: string;
+  run?: () => void;
   group: string;
 };
 
 const STATIC_ITEMS: PaletteItem[] = [
   { id: "home", label: "Home Cockpit", hint: "HOME", href: "/", group: "Navigate" },
+  { id: "explore", label: "Explore Nasdaq desk", hint: "EXP", href: "/explore", group: "Navigate" },
   { id: "screener", label: "Watchlist", hint: "SCR", href: "/screener", group: "Navigate" },
+  { id: "ema200", label: "EMA200", hint: "EMA", href: "/ema200", group: "Navigate" },
   { id: "fundamentals", label: "Fundamentals", hint: "FA", href: "/fundamentals", group: "Navigate" },
   { id: "health", label: "Health Sector", hint: "HC", href: "/health", group: "Navigate" },
   { id: "earnings", label: "Earnings & News", hint: "ERN", href: "/earnings-news", group: "Navigate" },
 ];
+
+type SearchHit = { symbol: string; name: string };
 
 function recentTickers(): string[] {
   try {
@@ -52,6 +58,7 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const [recents, setRecents] = useState<string[]>([]);
+  const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -76,9 +83,26 @@ export function CommandPalette() {
       setQuery("");
       setCursor(0);
       setRecents(recentTickers());
+      setSearchHits([]);
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    const looksSearchable = trimmed.length >= 1 && /[a-zA-Z]/.test(trimmed);
+    if (!looksSearchable) {
+      setSearchHits([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      fetch(`/api/symbols/search?q=${encodeURIComponent(trimmed)}&limit=8`)
+        .then((r) => r.json())
+        .then((body) => setSearchHits(body.hits ?? []))
+        .catch(() => setSearchHits([]));
+    }, 280);
+    return () => clearTimeout(t);
+  }, [query]);
 
   const items = useMemo(() => {
     const q = query.trim().toUpperCase();
@@ -92,18 +116,52 @@ export function CommandPalette() {
 
     if (!q) return [...STATIC_ITEMS, ...tickerItems];
 
-    // Prefer module matches (e.g. "SCR" → Swing Screener) over raw ticker jumps
     const moduleHits = STATIC_ITEMS.filter(
       (i) =>
         i.label.toUpperCase().includes(q) ||
         i.hint.includes(q) ||
-        i.href.toUpperCase().includes(q)
+        (i.href ?? "").toUpperCase().includes(q)
     );
     const recentHits = tickerItems.filter((i) => i.label.includes(q));
     const looksLikeTicker = /^[A-Z0-9.\-]{1,12}$/.test(q);
-    const exactModuleHint = STATIC_ITEMS.some((i) => i.hint === q);
+
+    const symbolActions: PaletteItem[] = [];
+    const symbolsToOffer = new Set<string>();
+    if (looksLikeTicker) symbolsToOffer.add(q);
+    for (const h of searchHits) symbolsToOffer.add(h.symbol);
+
+    for (const sym of Array.from(symbolsToOffer)) {
+      const onList = getFocusSymbols().includes(sym);
+      symbolActions.push({
+        id: `chart-${sym}`,
+        label: `Open chart · ${sym}`,
+        hint: "CHART",
+        href: `/ticker/${sym}`,
+        group: "Symbol",
+      });
+      if (!onList) {
+        symbolActions.push({
+          id: `add-${sym}`,
+          label: `Add ${sym} to my list`,
+          hint: "DESK",
+          run: () => addFocusSymbol(sym),
+          group: "Symbol",
+        });
+      }
+      const deskHref = deskEma200Href(
+        onList ? getFocusSymbols() : [...getFocusSymbols(), sym].slice(0, 50)
+      );
+      symbolActions.push({
+        id: `ema-${sym}`,
+        label: `EMA200 desk scan · ${sym}`,
+        hint: "EMA",
+        href: deskHref,
+        group: "Symbol",
+      });
+    }
+
     const direct: PaletteItem[] =
-      looksLikeTicker && !exactModuleHint
+      looksLikeTicker && symbolActions.length === 0
         ? [
             {
               id: `go-${q}`,
@@ -113,43 +171,39 @@ export function CommandPalette() {
               group: "Ticker",
             },
           ]
-        : looksLikeTicker && exactModuleHint
-          ? [
-              {
-                id: `go-${q}`,
-                label: `Open ${q}`,
-                hint: "GO",
-                href: `/ticker/${q}`,
-                group: "Ticker",
-              },
-            ]
-          : [];
+        : [];
 
-    // Module hits first, then ticker open (if any), then recent
-    const merged = [...moduleHits, ...direct, ...recentHits];
+    const merged = [...moduleHits, ...symbolActions, ...direct, ...recentHits];
     const seen = new Set<string>();
     return merged.filter((i) => {
       if (seen.has(i.id)) return false;
       seen.add(i.id);
       return true;
     });
-  }, [query, recents]);
+  }, [query, recents, searchHits]);
 
   const go = useCallback(
     (item: PaletteItem) => {
-      if (item.group === "Ticker" || item.group === "Recent") {
-        const t = item.href.split("/").pop();
-        if (t) recordRecentTicker(t);
+      if (item.run) {
+        item.run();
+        setOpen(false);
+        return;
       }
-      setOpen(false);
-      router.push(item.href);
+      if (item.href) {
+        if (item.group === "Ticker" || item.group === "Recent" || item.group === "Symbol") {
+          const t = item.href.split("/").pop()?.split("?")[0];
+          if (t) recordRecentTicker(t);
+        }
+        setOpen(false);
+        router.push(item.href);
+      }
     },
     [router]
   );
 
   useEffect(() => {
     setCursor(0);
-  }, [query]);
+  }, [query, searchHits]);
 
   if (!open) return null;
 
