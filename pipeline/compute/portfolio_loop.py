@@ -39,6 +39,7 @@ from pipeline.compute.loop_atr_trail import (
     chandelier_trail_snapshot,
 )
 from pipeline.universe_filters import is_loop_tradable, is_pharma_stock
+from pipeline.compute.loop_equity import loop_portfolio_equity
 from pipeline.utils.supabase import fetch_all
 
 load_dotenv()
@@ -105,6 +106,11 @@ def _run_portfolio_loop(sb, run) -> None:
     )
     uni = {r["symbol"]: r for r in universe if is_loop_tradable(r)}
     book_rows = fetch_all(sb, "paper_book", "*")
+    prior_order_rows = fetch_all(
+        sb,
+        "paper_orders",
+        "id, run_id, ticker, action, type, shares, limit_price, reason, sector, risk_usd, created_at",
+    )
     brief_rows = fetch_all(sb, "daily_brief", "asof_date, inputs")
     prior_runs = fetch_all(
         sb,
@@ -295,9 +301,14 @@ def _run_portfolio_loop(sb, run) -> None:
             )
             note("WARN", f"{sym} · no price bars in tape — carrying book row unchanged")
 
+    def _orders_for_equity() -> list[dict]:
+        stamped = [{**o, "created_at": o.get("created_at") or now} for o in orders]
+        return list(prior_order_rows) + stamped
+
     # --- 3. Enter / resize target names ---
     if do_rebalance and posture >= POSTURE_ENTRY_MIN and target_syms:
-        slot_equity = EQUITY / len(target_syms)
+        pre_snap = loop_portfolio_equity(_orders_for_equity(), list(surviving.values()))
+        slot_equity = pre_snap["mtm_equity_usd"] / len(target_syms)
         for sym in target_syms:
             snap = snapshots.get(sym)
             u = uni.get(sym)
@@ -350,8 +361,10 @@ def _run_portfolio_loop(sb, run) -> None:
             )
 
     surviving_list = list(surviving.values())
-    deployed = sum((p["last"] or 0) * p["shares"] for p in surviving_list)
-    deployed_pct = deployed / EQUITY if EQUITY else 0
+    equity_snap = loop_portfolio_equity(_orders_for_equity(), surviving_list)
+    mtm_equity = float(equity_snap["mtm_equity_usd"])
+    deployed = float(equity_snap["deployed_notional_usd"])
+    deployed_pct = float(equity_snap["deployed_pct"])
 
     sector_count = defaultdict(int)
     for p in surviving_list:
@@ -365,7 +378,7 @@ def _run_portfolio_loop(sb, run) -> None:
         )
         sector_exposure.append({
             "sector": sector,
-            "exposurePct": round(mv / EQUITY, 4) if EQUITY else 0,
+            "exposurePct": round(mv / mtm_equity, 4) if mtm_equity else 0,
             "capPct": round(MAX_PER_SECTOR / TOP_N, 4),
             "utilizationPct": round(cnt / MAX_PER_SECTOR, 4) if MAX_PER_SECTOR else 0,
             "names": cnt,
@@ -396,7 +409,7 @@ def _run_portfolio_loop(sb, run) -> None:
     sb.table("paper_loop_runs").upsert({
         "run_id": run_id,
         "asof_date": today.isoformat(),
-        "equity": EQUITY,
+        "equity": mtm_equity,
         "deployed_pct": round(deployed_pct, 4),
         "open_risk_pct": round(deployed_pct, 4),
         "names": len(surviving_list),
