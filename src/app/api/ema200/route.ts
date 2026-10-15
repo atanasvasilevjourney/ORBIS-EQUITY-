@@ -9,6 +9,7 @@ import {
   ribbonDistPct,
   ribbonDistUsd,
 } from "@/lib/ema200Distance";
+import { ema200SupplementSet } from "@/lib/ema200Config";
 import { computeEma200FeaturesLive } from "@/lib/ema200LiveScan";
 import {
   EMA200_DEFAULTS,
@@ -213,11 +214,16 @@ export async function GET(req: NextRequest) {
     } catch (err) {
       if (!isMissingRelation(err)) throw err;
     }
+    const supplements = ema200SupplementSet();
     const allowedSymbols = new Set(scannerUniverse.map((u) => u.symbol));
+    for (const s of Array.from(supplements)) allowedSymbols.add(s);
     const indexMap = new Map(scannerUniverse.map((u) => [u.symbol, u.index_tag]));
+    for (const s of Array.from(supplements)) indexMap.set(s, "supplement");
 
     const latestRows = features.filter(
-      (r) => r.bar_date === latestDate && (allowedSymbols.size === 0 || allowedSymbols.has(r.symbol))
+      (r) =>
+        r.bar_date === latestDate &&
+        (allowedSymbols.size === 0 || allowedSymbols.has(r.symbol) || supplements.has(r.symbol))
     );
 
     const opts = showAllNear

@@ -4,7 +4,9 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { emaPineSeries } from "@/lib/chartEma";
+import { EMA200_SYMBOL_SUPPLEMENTS } from "@/lib/ema200Config";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { fetchYahooDaily } from "@/lib/yahooDaily";
 
 const EMA_PERIOD = 200;
 const ATR_PERIOD = 14;
@@ -168,6 +170,7 @@ export async function computeEma200FeaturesLive(sb: SupabaseClient): Promise<Liv
     q.eq("is_active", true)
   );
   const symbols = new Set(members.map((m) => m.symbol));
+  for (const s of EMA200_SYMBOL_SUPPLEMENTS) symbols.add(s);
   if (!symbols.size) return [];
 
   const cutoff = new Date();
@@ -195,5 +198,22 @@ export async function computeEma200FeaturesLive(sb: SupabaseClient): Promise<Liv
   for (const [sym, bars] of Array.from(bySym.entries())) {
     out.push(...featuresForSymbol(sym, bars));
   }
+
+  for (const sym of EMA200_SYMBOL_SUPPLEMENTS) {
+    const existing = bySym.get(sym);
+    if (existing && existing.length >= HISTORY_MIN) continue;
+    const yahoo = await fetchYahooDaily(sym, "5y");
+    if (yahoo.length < HISTORY_MIN) continue;
+    const ohlc: Ohlc[] = yahoo.map((b) => ({
+      date: b.date,
+      open: b.open,
+      high: b.high,
+      low: b.low,
+      close: b.close,
+      volume: b.volume,
+    }));
+    out.push(...featuresForSymbol(sym, ohlc));
+  }
+
   return out;
 }

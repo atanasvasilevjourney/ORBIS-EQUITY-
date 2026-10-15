@@ -28,7 +28,9 @@ def test_sync_sp500_ndx100(mock_fetch_all, mock_spndx):
     update.execute.return_value = None
 
     rows = sync_ema200_universe(sb)
-    assert len(rows) == 2
+    assert len(rows) == 3
     assert rows[0]["index_tag"] == "sp500"
     assert rows[1]["index_tag"] == "ndx100"
+    supp = [r for r in rows if r["index_tag"] == "supplement"]
+    assert any(r["symbol"] == "NBIS" for r in supp)
     sb.table.assert_any_call("ema200_universe")

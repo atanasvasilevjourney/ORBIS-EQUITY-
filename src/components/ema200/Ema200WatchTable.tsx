@@ -25,6 +25,7 @@ export type Ema200TableRow = {
 function indexLabel(tag: string | null): string {
   if (tag === "sp500") return "S&P 500";
   if (tag === "ndx100") return "NDX-100";
+  if (tag === "supplement") return "SUPP";
   return tag ?? "—";
 }
 
