@@ -150,7 +150,9 @@ export function filterSymbolsForIndexDesk(
       .filter(
         (m) =>
           (m.country ?? "US").toUpperCase() === "US" &&
-          (isNasdaqExchange(m.exchange) || m.tier === "us_nasdaq100")
+          (isNasdaqExchange(m.exchange) ||
+            m.tier === "us_nasdaq100" ||
+            m.tier === "us_nasdaq_listed")
       )
       .map((m) => m.symbol);
   }

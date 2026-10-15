@@ -52,7 +52,7 @@ test("ticker chart renders candlestick canvas", async ({ page }) => {
   await page.goto("/ticker/A");
   await expect(page.getByText(/Loading A\.\.\./)).toBeHidden({ timeout: 15_000 });
   await expect(page.getByRole("button", { name: "CHART" })).toBeVisible();
-  await expect(page.getByText(/Daily Bias · 1d · prices_daily/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/A · 1d · prices_daily/)).toBeVisible({ timeout: 30_000 });
 
   const chartPane = page.locator(".tv-lightweight-charts").first();
   await expect(chartPane).toBeVisible({ timeout: 15_000 });

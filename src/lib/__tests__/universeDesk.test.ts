@@ -49,4 +49,12 @@ describe("filterSymbolsForIndexDesk", () => {
     expect(syms).toContain("TINY");
     expect(syms).not.toContain("JPM");
   });
+
+  it("includes us_nasdaq_listed tier for nasdaq_all", () => {
+    const listed = [
+      ...members,
+      { symbol: "NBIS", tier: "us_nasdaq_listed", exchange: "NASDAQ", country: "US" },
+    ];
+    expect(filterSymbolsForIndexDesk("nasdaq_all", listed)).toContain("NBIS");
+  });
 });

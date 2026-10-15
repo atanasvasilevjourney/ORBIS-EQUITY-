@@ -6,6 +6,7 @@ import { useFocusUniverse } from "@/hooks/useFocusUniverse";
 import {
   FOCUS_SYMBOL_LIMIT,
   NASDAQ_VENUE_DISCLAIMER,
+  parseBulkFocusSymbols,
 } from "@/lib/focusUniverse";
 import { DeskSymbolChip } from "@/components/universe/DeskSymbolChip";
 
@@ -25,6 +26,8 @@ export function DeskUniverseEditor({ compact }: Props) {
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState(false);
+  const [bulkText, setBulkText] = useState("");
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
 
   const runSearch = useCallback(async (q: string) => {
     const trimmed = q.trim();
@@ -58,6 +61,69 @@ export function DeskUniverseEditor({ compact }: Props) {
         Desk scan uses live Yahoo / on-demand EMA200 — not the nightly batch for every Nasdaq name.
       </p>
       <p className="text-[10px] font-terminal text-[var(--text-muted)]">{NASDAQ_VENUE_DISCLAIMER}</p>
+
+      <div className="rounded border border-[var(--panel-border)] p-3 space-y-2">
+        <p className="text-[10px] font-terminal text-[var(--text-muted)] uppercase tracking-wide">
+          Bulk add (A)
+        </p>
+        <p className="text-[10px] font-terminal text-[var(--text-muted)] leading-relaxed">
+          Paste tickers (comma or newline separated). Up to {FOCUS_SYMBOL_LIMIT} on your list. Download the
+          full Nasdaq symbol list to pick names, then paste here.
+        </p>
+        <a
+          href="/api/universe/export?universe=nasdaq_all&format=csv"
+          className="inline-block text-[10px] font-terminal text-[var(--accent-info)] underline"
+          download
+        >
+          Download NDAQ ALL symbols (CSV)
+        </a>
+        <textarea
+          value={bulkText}
+          onChange={(e) => setBulkText(e.target.value)}
+          placeholder="AAPL, MSFT, NBIS…"
+          rows={3}
+          className="w-full px-3 py-2 text-xs font-terminal bg-[var(--surface-alt)] border border-[var(--panel-border)] rounded text-[var(--text-primary)]"
+        />
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const parsed = parseBulkFocusSymbols(bulkText);
+              if (!parsed.length) {
+                setBulkMessage("No valid tickers found.");
+                return;
+              }
+              const merged = [...parsed, ...symbols.filter((s) => !parsed.includes(s))].slice(
+                0,
+                FOCUS_SYMBOL_LIMIT
+              );
+              setSymbols(merged);
+              setBulkMessage(`Added ${parsed.length} ticker(s); list now ${merged.length}.`);
+              setBulkText("");
+            }}
+            className="text-[10px] uppercase px-2 py-1 border border-[var(--panel-border)] rounded"
+          >
+            Merge into my list
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const parsed = parseBulkFocusSymbols(bulkText);
+              if (!parsed.length) {
+                setBulkMessage("No valid tickers found.");
+                return;
+              }
+              setSymbols(parsed);
+              setBulkMessage(`Replaced list with ${parsed.length} ticker(s).`);
+              setBulkText("");
+            }}
+            className="text-[10px] uppercase px-2 py-1 border border-[var(--panel-border)] rounded"
+          >
+            Replace list
+          </button>
+        </div>
+        {bulkMessage && <p className="text-[10px] font-terminal text-[var(--text-secondary)]">{bulkMessage}</p>}
+      </div>
 
       <div>
         <label className="text-[10px] font-terminal text-[var(--text-muted)] uppercase tracking-wide">
