@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
-from io import StringIO
+import uuid
+from datetime import date, datetime, timezone
 
 import requests
 from dotenv import load_dotenv
@@ -71,6 +71,9 @@ def main() -> None:
     if not url or not key:
         raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
 
+    run_id = str(uuid.uuid4())
+    started = datetime.now(timezone.utc)
+
     stocks = fetch_nasdaq_listed_symbols()
     if not stocks:
         raise RuntimeError("Nasdaq listed sync returned zero symbols")
@@ -114,11 +117,29 @@ def main() -> None:
             "symbol", stale[i : i + batch_size]
         ).execute()
 
-    logger.info(
-        "Nasdaq listed sync done: %d active (%d deactivated)",
-        len(rows),
-        len(stale),
-    )
+    headline = f"nasdaq_listed active={len(rows)} deactivated={len(stale)}"
+    logger.info("Nasdaq listed sync done: %s", headline)
+
+    finished = datetime.now(timezone.utc)
+    try:
+        sb.table("ingest_runs").upsert(
+            {
+                "run_id": run_id,
+                "module": "ingest.nasdaq_listed",
+                "started_at": started.isoformat(),
+                "finished_at": finished.isoformat(),
+                "asof_date": date.today().isoformat(),
+                "symbols_ok": len(rows),
+                "symbols_fail": len(stale),
+                "rows_upserted": len(rows),
+                "source": "nasdaq_trader",
+                "headline": headline,
+                "config": {"url": NASDAQ_LISTED_URL},
+            },
+            on_conflict="run_id",
+        ).execute()
+    except Exception:
+        logger.warning("ingest_runs write skipped (migration 020?)", exc_info=True)
 
 
 if __name__ == "__main__":

@@ -91,7 +91,19 @@ jobs:
       - name: Install dependencies
         run: pip install -r pipeline/requirements.txt
 
-      - name: Run universe sync
+      - name: US index universe (S&P 500 + Nasdaq-100)
+        run: python -m pipeline.ingest.us_index_universe
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+      - name: Nasdaq Trader listed symbols (NDAQ ALL desk)
+        run: python -m pipeline.ingest.nasdaq_listed
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+      - name: Run universe sync (LSE catalog tiers)
         run: python -m pipeline.ingest.universe
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
