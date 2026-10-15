@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { fetchYahooDaily } from "@/lib/yahooDaily";
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +39,7 @@ export async function GET(
     });
   }
 
-  const bars = (data ?? []).map((r) => ({
+  let bars = (data ?? []).map((r) => ({
     time: r.date,
     open: r.open ?? r.close,
     high: r.high ?? r.close,
@@ -47,10 +48,26 @@ export async function GET(
     volume: r.volume,
   }));
 
+  let source = "prices_daily";
+  if (bars.length < 20) {
+    const yahoo = await fetchYahooDaily(ticker, "2y");
+    if (yahoo.length > bars.length) {
+      bars = yahoo.map((b) => ({
+        time: b.date,
+        open: b.open,
+        high: b.high,
+        low: b.low,
+        close: b.close,
+        volume: b.volume,
+      }));
+      source = "yahoo_eod";
+    }
+  }
+
   return NextResponse.json({
     symbol: ticker,
     bars,
-    source: "EOD",
+    source,
     delayed: true,
   });
 }
