@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FilterChip } from "@/components/ui/FilterChip";
 import { useFocusUniverse } from "@/hooks/useFocusUniverse";
@@ -93,12 +92,13 @@ export function DeskUniverseStrip() {
           </>
         )}
         {!isWatchlist && symbols.length > 0 && (
-          <Link
-            href="/explore"
-            className="ml-auto text-[var(--text-muted)] hover:text-[var(--accent-desk)] shrink-0"
+          <button
+            type="button"
+            onClick={openDrawer}
+            className="ml-auto text-[var(--text-muted)] hover:text-[var(--accent-desk)] shrink-0 underline"
           >
-            {symbols.length} saved · Explore
-          </Link>
+            {symbols.length} saved · Edit watchlist
+          </button>
         )}
         {!onEma200 && !isWatchlist && desk !== "sp500_ndx100" && (
           <span className="text-[var(--text-muted)] sm:ml-auto" title="Open EMA200 to use this index preset">
