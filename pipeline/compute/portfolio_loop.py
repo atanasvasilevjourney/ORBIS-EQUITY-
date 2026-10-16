@@ -38,6 +38,7 @@ from pipeline.compute.loop_atr_trail import (
     atr_trail_exit_signal,
     chandelier_trail_snapshot,
 )
+from pipeline.compute.loop_harness import loop_harness_config
 from pipeline.universe_filters import is_loop_tradable, is_pharma_stock
 from pipeline.utils.supabase import fetch_all
 
@@ -375,18 +376,7 @@ def _run_portfolio_loop(sb, run) -> None:
         "sectorExposure": sector_exposure,
         "skipped": skipped[:40],
         "lastRebalanceDate": today.isoformat() if do_rebalance else (last_rebalance.isoformat() if last_rebalance else None),
-        "config": {
-            "engine": "donchian_vwap_atr",
-            "entryChannel": 55,
-            "vwapWindow": 20,
-            "exitMode": "atr_trail",
-            "atrPeriod": LOOP_ATR_PERIOD,
-            "atrMult": LOOP_ATR_MULT,
-            "maxNames": TOP_N,
-            "maxPerSector": MAX_PER_SECTOR,
-            "rebalanceDays": REBALANCE_DAYS,
-            "equalWeight": True,
-        },
+        "config": loop_harness_config(),
     }
 
     n_enter = sum(1 for o in orders if o["type"] == "ENTER")

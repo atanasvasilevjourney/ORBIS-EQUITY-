@@ -19,6 +19,7 @@ import yfinance as yf
 from dotenv import load_dotenv
 from supabase import create_client
 
+from pipeline.compute.loop_harness import loop_harness_config
 from pipeline.compute.donchian_vwap import (
     EQUITY,
     MAX_PER_SECTOR,
@@ -127,17 +128,7 @@ def flatten() -> None:
         "headline": f"Reset to ${EQUITY:,.0f} · {len(book)} closed · waiting for {session.isoformat()} open",
         "harness": {
             "lastRebalanceDate": session.isoformat(),
-            "config": {
-                "engine": "donchian_vwap",
-                "entryChannel": 55,
-                "exitChannel": 20,
-                "vwapWindow": 20,
-                "maxNames": TOP_N,
-                "maxPerSector": MAX_PER_SECTOR,
-                "rebalanceDays": 5,
-                "equalWeight": True,
-                "fill": "session_open",
-            },
+            "config": loop_harness_config(fill="session_open"),
             "sectorExposure": [],
             "skipped": [],
         },
@@ -315,17 +306,7 @@ def fill() -> bool:
         "headline": f"Reset ${EQUITY:,.0f} · {len(rows)} enter at {session.isoformat()} open · deployed {deployed_pct*100:.1f}%",
         "harness": {
             "lastRebalanceDate": session.isoformat(),
-            "config": {
-                "engine": "donchian_vwap",
-                "entryChannel": 55,
-                "exitChannel": 20,
-                "vwapWindow": 20,
-                "maxNames": TOP_N,
-                "maxPerSector": MAX_PER_SECTOR,
-                "rebalanceDays": 5,
-                "equalWeight": True,
-                "fill": "session_open",
-            },
+            "config": loop_harness_config(fill="session_open"),
             "sectorExposure": [],
             "skipped": [],
         },

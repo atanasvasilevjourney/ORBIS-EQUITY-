@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 from supabase import create_client
 
 from pipeline.compute.donchian_vwap import EQUITY, latest_snapshot
+from pipeline.compute.loop_harness import loop_harness_config
 from pipeline.utils.price_series import ohlcv_frame
 from pipeline.utils.supabase import fetch_all
 
@@ -171,16 +172,7 @@ def restore(
             "sectorExposure": [],
             "skipped": [],
             "restoredFrom": delete_exit_run,
-            "config": {
-                "engine": "donchian_vwap",
-                "entryChannel": 55,
-                "exitChannel": 20,
-                "vwapWindow": 20,
-                "maxNames": 8,
-                "maxPerSector": 2,
-                "rebalanceDays": 5,
-                "equalWeight": True,
-            },
+            "config": loop_harness_config(),
         },
         "log": [{
             "at": now,
