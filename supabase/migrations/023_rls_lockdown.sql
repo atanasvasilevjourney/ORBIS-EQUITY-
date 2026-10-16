@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration 021: lock down public tables (Supabase rls_disabled_in_public)
+-- Migration 023: lock down public tables (Supabase rls_disabled_in_public)
 --
 -- The hosted project still has public tables with RLS off. Anyone who has
 -- the project URL + anon key (NEXT_PUBLIC_SUPABASE_ANON_KEY) can INSERT /

@@ -64,10 +64,15 @@ supabase/migrations/017_subsector_parent.sql
 supabase/migrations/018_rotate_carver.sql
 supabase/migrations/019_cash_book.sql
 supabase/migrations/020_ingest_runs.sql
-supabase/migrations/021_rls_lockdown.sql
+supabase/migrations/021_fundamental_analysis.sql
+supabase/migrations/021_ema200_scanner.sql
+supabase/migrations/022_ema200_index_tag.sql
+supabase/migrations/023_rls_lockdown.sql   # required on hosted DB (see DEPLOY.md)
 supabase/migrations/024_pipeline_runs.sql
 supabase/migrations/025_fundamental_analysis_columns.sql
 ```
+
+If Supabase reports **RLS disabled on public tables**, run `supabase/scripts/fix_rls_disabled_in_public.sql` in the SQL editor (not optional for production).
 
 ### Web
 
