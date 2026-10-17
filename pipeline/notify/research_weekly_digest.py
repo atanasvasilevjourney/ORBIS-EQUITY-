@@ -155,7 +155,7 @@ def format_digest_text(
         )
     lines.extend(["", "=== Weekly setups (entry / stop / target) ==="])
     if not setups:
-        lines.append("  No setups this week — check /research-weekly after pipeline run.")
+        lines.append("  No setups this week — re-run the weekly research job after pipeline.")
     for i, s in enumerate(setups, 1):
         lines.append(
             f"  {i}. {s['symbol']} entry {s.get('entry_px')} stop {s.get('stop_px')} "
@@ -167,8 +167,6 @@ def format_digest_text(
             lines.append(f"     {s['rationale']}")
     for note in run.get("risk_notes") or []:
         lines.extend(["", f"• {note}"])
-    if app_base:
-        lines.extend(["", f"Full pack: {app_base.rstrip('/')}/research-weekly"])
     lines.extend(
         [
             "",
@@ -204,11 +202,6 @@ def format_digest_html(
     )
     narrative = "".join(f"<li>{line}</li>" for line in (macro.get("narrative") or []))
     risk = "".join(f"<li>{n}</li>" for n in (run.get("risk_notes") or []))
-    link = (
-        f"<p><a href='{app_base.rstrip('/')}/research-weekly'>Open research weekly in ORBIS</a></p>"
-        if app_base
-        else ""
-    )
     return (
         f"<div style='font-family:system-ui,sans-serif;max-width:640px'>"
         f"<h2>ORBIS Sunday research — {as_of.isoformat()}</h2>"
@@ -221,7 +214,6 @@ def format_digest_html(
         f"{wl_rows or '<tr><td colspan=5>No GREEN names</td></tr>'}</table>"
         f"<h3>Weekly setups</h3><ol>{setup_blocks or '<li>No setups generated</li>'}</ol>"
         f"<h3>Risk &amp; process</h3><ul>{risk}</ul>"
-        f"{link}"
         f"<p style='color:#666;font-size:12px'>Paper research only · not investment advice</p>"
         f"</div>"
     )

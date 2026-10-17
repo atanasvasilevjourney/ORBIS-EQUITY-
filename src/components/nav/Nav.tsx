@@ -11,7 +11,6 @@ const NAV_LINKS = [
   { href: "/orb", label: "ORB" },
   { href: "/skew", label: "SKEW" },
   { href: "/analysis", label: "ANALYZE" },
-  { href: "/research-weekly", label: "WEEKLY" },
   { href: "/bias", label: "BIAS" },
   { href: "/cash", label: "CASH" },
   { href: "/rotate", label: "ROTATE" },
