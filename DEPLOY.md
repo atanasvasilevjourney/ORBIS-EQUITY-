@@ -103,7 +103,7 @@ Repo → Settings → Secrets and variables → Actions — add:
 - `LSE_API_KEY`
 - `LSE_DATA_API_URL` (optional)
 - `RESEND_API_KEY`, `ALERT_EMAIL`, `ALERT_EMAIL_FROM` (optional — EOD digest + **Sunday research email**)
-- `APP_BASE_URL` (optional — link to `/research-weekly` in Sunday mail)
+- `APP_BASE_URL` (optional — reserved for future email deep links)
 
 Schedule (already in repo):
 

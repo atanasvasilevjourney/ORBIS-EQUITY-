@@ -38,7 +38,6 @@ def test_format_digest_text_includes_setups_and_watchlist():
     )
     assert "AAPL" in text
     assert "MSFT" in text
-    assert "research-weekly" in text
     html = format_digest_html(
         as_of=date(2026, 10, 12),
         run=run,
