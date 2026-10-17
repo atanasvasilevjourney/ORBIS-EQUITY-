@@ -486,7 +486,7 @@ export default function Home() {
           },
           {
             href: "/loop", title: "LOOP TERMINAL", badge: "MODULE 4",
-            subtitle: "Breakout portfolio harness", accent: "var(--module-1)", source: "PAPER BOOK",
+            subtitle: "Donchian 55 + ATR trail exit", accent: "var(--module-1)", source: "PAPER BOOK",
             metrics: [
               { label: "POSTURE", value: d?.posture ?? "—", color: postureColor },
               {
