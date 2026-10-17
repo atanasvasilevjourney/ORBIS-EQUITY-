@@ -41,6 +41,22 @@ type SectorExp = { sector: string; exposurePct: number; capPct: number; utilizat
 type Skipped = { ticker: string; sector: string; rank: number | null; reason: string; detail: string };
 type LogEntry = { at: string; level: string; message: string };
 
+type JournalRow = {
+  id: string;
+  ticker: string;
+  side: string;
+  shares: number;
+  entry: number;
+  exit: number;
+  pnlUsd: number;
+  returnPct: number | null;
+  sector: string | null;
+  entryReason: string | null;
+  exitReason: string | null;
+  enteredAt: string | null;
+  exitedAt: string | null;
+};
+
 type LoopData = {
   summary: {
     equity: number;
@@ -62,6 +78,8 @@ type LoopData = {
   priceAsOfDate?: string | null;
   priceStaleDays?: number | null;
   loopRunStaleDays?: number | null;
+  journal?: JournalRow[];
+  journalSummary?: { closedTrades: number; realizedPnlUsd: number; winRatePct: number | null };
 };
 
 const usd = (v: number | null | undefined, d = 2) =>
@@ -255,6 +273,67 @@ export default function LoopPage() {
             </table>
           </div>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-end justify-between gap-2 mb-2">
+        <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest">TRADING JOURNAL</h2>
+        {d?.journalSummary && d.journalSummary.closedTrades > 0 && (
+          <p className="text-[10px] font-terminal text-[var(--text-muted)]">
+            {d.journalSummary.closedTrades} closed · realized {usd(d.journalSummary.realizedPnlUsd, 0)}
+            {d.journalSummary.winRatePct != null && (
+              <> · win {d.journalSummary.winRatePct.toFixed(0)}%</>
+            )}
+          </p>
+        )}
+      </div>
+      <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
+        <table className="w-full text-sm font-terminal">
+          <thead>
+            <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
+              <th className="text-left px-3 py-2">EXIT</th>
+              <th className="text-left px-3 py-2">TICKER</th>
+              <th className="text-right px-3 py-2">SHARES</th>
+              <th className="text-right px-3 py-2">ENTRY</th>
+              <th className="text-right px-3 py-2">EXIT PX</th>
+              <th className="text-right px-3 py-2">P&amp;L</th>
+              <th className="text-right px-3 py-2">RET</th>
+              <th className="text-left px-3 py-2">EXIT REASON</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
+            ) : !d?.journal?.length ? (
+              <tr>
+                <td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)] text-xs leading-relaxed">
+                  No closed LOOP trades yet. Exits are recorded here when the nightly harness sells (ATR trail or rebalance).
+                </td>
+              </tr>
+            ) : (
+              d.journal.map((j) => {
+                const pnlColor = (j.pnlUsd ?? 0) >= 0 ? "var(--accent-bull)" : "var(--accent-bear)";
+                return (
+                  <tr key={j.id} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">
+                    <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{j.exitedAt ?? "—"}</td>
+                    <td className="px-3 py-2 font-bold">
+                      <Link href={`/ticker/${j.ticker}`} className="hover:text-[var(--accent-info)]">{j.ticker}</Link>
+                    </td>
+                    <td className="px-3 py-2 text-right">{j.shares}</td>
+                    <td className="px-3 py-2 text-right">{px(j.entry)}</td>
+                    <td className="px-3 py-2 text-right">{px(j.exit)}</td>
+                    <td className="px-3 py-2 text-right font-bold" style={{ color: pnlColor }}>{usd(j.pnlUsd, 0)}</td>
+                    <td className="px-3 py-2 text-right" style={{ color: pnlColor }}>
+                      {j.returnPct == null ? "—" : `${j.returnPct >= 0 ? "+" : ""}${j.returnPct.toFixed(1)}%`}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-[var(--text-secondary)] truncate max-w-[280px]" title={j.exitReason ?? undefined}>
+                      {j.exitReason ?? "—"}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
 
       <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">LAST LOOP ORDERS</h2>

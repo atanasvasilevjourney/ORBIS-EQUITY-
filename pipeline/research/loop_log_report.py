@@ -169,6 +169,7 @@ def closed_trades(orders: list[dict]) -> pd.DataFrame:
         exit_px = parse_exit_price(o)
         if exit_px is None:
             continue
+        exit_order_id = o.get("id")
         remaining = shares
         while remaining > 0 and lots[ticker]:
             lot = lots[ticker][0]
@@ -186,6 +187,8 @@ def closed_trades(orders: list[dict]) -> pd.DataFrame:
                     "exit_reason": o.get("reason"),
                     "entered_at": lot["entered_at"],
                     "exited_at": o["created_at"],
+                    "exit_order_id": exit_order_id,
+                    "sector": o.get("sector"),
                 }
             )
             lot["shares"] -= take

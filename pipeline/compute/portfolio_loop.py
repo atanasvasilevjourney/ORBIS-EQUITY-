@@ -39,6 +39,7 @@ from pipeline.compute.loop_atr_trail import (
     chandelier_trail_snapshot,
 )
 from pipeline.universe_filters import is_loop_tradable, is_pharma_stock
+from pipeline.compute.sync_loop_journal import sync_loop_trading_journal
 from pipeline.utils.supabase import fetch_all
 
 load_dotenv()
@@ -428,6 +429,11 @@ def _run_portfolio_loop(sb, run) -> None:
 
     if orders:
         sb.table("paper_orders").upsert(orders, on_conflict="id").execute()
+
+    try:
+        sync_loop_trading_journal(sb)
+    except Exception:
+        logger.exception("Failed to sync LOOP trades to trading_journal")
 
     for p in surviving_list:
         opened = p.get("opened_at") or "?"

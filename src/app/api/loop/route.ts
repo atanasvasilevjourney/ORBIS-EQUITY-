@@ -5,6 +5,7 @@ import { enrichLoopBookWithPrices, tradingStaleDays } from "@/lib/loopBookMtm";
 import { latestPriceAsOf } from "@/lib/liteDeskGate";
 import { sectorExposureFromBook } from "@/lib/loopSectorHarness";
 import { evaluateFreshness } from "@/lib/freshness";
+import { closedTradesFromOrders } from "@/lib/loopClosedTrades";
 import { gateOrders, staleHeadline } from "@/lib/signalGate";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +61,21 @@ export async function GET() {
       risk_usd: number | null;
       created_at: string | null;
     };
+    type JournalDbRow = {
+      id: string;
+      symbol: string;
+      side: string;
+      shares: number;
+      entry_price: number;
+      exit_price: number;
+      pnl_usd: number;
+      return_pct: number | null;
+      sector: string | null;
+      entry_reason: string | null;
+      exit_reason: string | null;
+      entered_at: string | null;
+      exited_at: string;
+    };
 
     const runs = await fetchAll<RunRow>(
       sb,
@@ -77,6 +93,8 @@ export async function GET() {
         log: [],
         headline: null,
         stale: true,
+        journal: [],
+        journalSummary: { closedTrades: 0, realizedPnlUsd: 0, winRatePct: null },
       });
     }
 
@@ -93,6 +111,69 @@ export async function GET() {
     ]);
 
     const orders = allOrders.filter((o) => o.run_id === latest.run_id);
+
+    const journalDb = await fetchAll<JournalDbRow>(
+      sb,
+      "trading_journal",
+      `id, symbol, side, shares, entry_price, exit_price, pnl_usd, return_pct,
+       sector, entry_reason, exit_reason, entered_at, exited_at`,
+      (q) => q.eq("desk", "loop").order("exited_at", { ascending: false })
+    );
+
+    const orderInputs = allOrders.map((o) => ({
+      id: o.id,
+      ticker: o.ticker,
+      action: o.action,
+      shares: o.shares,
+      limitPrice: o.limit_price,
+      reason: o.reason,
+      sector: o.sector,
+      createdAt: o.created_at,
+    }));
+
+    const journalFromOrders = closedTradesFromOrders(orderInputs).map((t) => ({
+      id: t.id,
+      ticker: t.ticker,
+      side: "LONG",
+      shares: t.shares,
+      entry: t.entry,
+      exit: t.exit,
+      pnlUsd: t.pnlUsd,
+      returnPct: t.returnPct,
+      sector: t.sector,
+      entryReason: t.entryReason,
+      exitReason: t.exitReason,
+      enteredAt: t.enteredAt?.slice(0, 10) ?? null,
+      exitedAt: t.exitedAt?.slice(0, 10) ?? null,
+    }));
+
+    const journal =
+      journalDb.length > 0
+        ? journalDb.map((j) => ({
+            id: j.id,
+            ticker: j.symbol,
+            side: j.side,
+            shares: j.shares,
+            entry: j.entry_price,
+            exit: j.exit_price,
+            pnlUsd: j.pnl_usd,
+            returnPct: j.return_pct,
+            sector: j.sector,
+            entryReason: j.entry_reason,
+            exitReason: j.exit_reason,
+            enteredAt: j.entered_at?.slice(0, 10) ?? null,
+            exitedAt: j.exited_at?.slice(0, 10) ?? null,
+          }))
+        : journalFromOrders;
+
+    const journalSummary = {
+      closedTrades: journal.length,
+      realizedPnlUsd: journal.reduce((s, t) => s + (t.pnlUsd ?? 0), 0),
+      winRatePct:
+        journal.length > 0
+          ? (journal.filter((t) => (t.pnlUsd ?? 0) > 0).length / journal.length) * 100
+          : null,
+    };
 
     const entryDateByTicker = new Map<string, string>();
     const enterOrders = allOrders
@@ -258,6 +339,8 @@ export async function GET() {
       priceAsOfDate,
       priceStaleDays,
       loopRunStaleDays: latest.asof_date ? tradingStaleDays(latest.asof_date.slice(0, 10)) : null,
+      journal,
+      journalSummary,
     });
   } catch (err) {
     console.error("Loop API error:", err);
