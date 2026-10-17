@@ -6,3 +6,6 @@ export const EMA200_SYMBOL_SUPPLEMENTS: string[] = [
 export function ema200SupplementSet(): Set<string> {
   return new Set(EMA200_SYMBOL_SUPPLEMENTS.map((s) => s.toUpperCase()));
 }
+
+/** Weekly live Yahoo scans are capped per request (index desks are large). */
+export const EMA200_WEEKLY_SYMBOL_CAP = 120;

@@ -9,7 +9,7 @@ import {
   ribbonDistPct,
   ribbonDistUsd,
 } from "@/lib/ema200Distance";
-import { ema200SupplementSet } from "@/lib/ema200Config";
+import { EMA200_WEEKLY_SYMBOL_CAP, ema200SupplementSet } from "@/lib/ema200Config";
 import { computeEma200FeaturesForSymbols, computeEma200FeaturesLive } from "@/lib/ema200LiveScan";
 import { parseSymbolsQueryParam } from "@/lib/symbolsQuery";
 import { resolveUniverseDesk } from "@/lib/resolveIndexDesk";
@@ -19,6 +19,7 @@ import {
   tradingViewUrl,
   type Ema200FeatureRow,
 } from "@/lib/ema200Watchlist";
+import { ema200TimeframeLabel, parseEma200Timeframe } from "@/lib/ema200Timeframe";
 
 export const revalidate = 900;
 /** Live scan from prices_daily can take ~30–60s on cold start. */
@@ -175,40 +176,67 @@ export async function GET(req: NextRequest) {
     const deskScan = sp.get("desk") === "1" || deskSymbols.length > 0;
     const showAllNear = sp.get("near") === "1" || deskScan;
     const retraceOnly = deskScan ? false : sp.get("near") !== "1";
+    const timeframe = parseEma200Timeframe(sp.get("tf"));
+    const isWeekly = timeframe === "weekly";
 
     let features: FeatureDbRow[] = [];
     let dataSource: "ema200_features" | "prices_daily_live" = "ema200_features";
-    try {
-      features = await fetchAll<FeatureDbRow>(
-        sb,
-        "ema200_features",
-        "symbol, bar_date, close, ema200, ema200_high, dist_atr, ribbon_dist_atr, days_above, ema200_slope, rvol, regime"
-      );
-    } catch (err) {
-      if (!isMissingRelation(err)) throw err;
-    }
+    let weeklyScanNote: string | undefined;
 
-    if (!features.length) {
+    if (isWeekly) {
       try {
-        features = deskSymbols.length
-          ? await computeEma200FeaturesForSymbols(sb, deskSymbols)
-          : await computeEma200FeaturesLive(sb);
+        const indexSymbols =
+          resolved.desk !== "watchlist" && resolved.symbols.length > 0 ? resolved.symbols : [];
+        let weeklyTargets = deskSymbols.length ? deskSymbols : indexSymbols;
+        if (!deskSymbols.length && indexSymbols.length > EMA200_WEEKLY_SYMBOL_CAP) {
+          weeklyScanNote = `Weekly index scan capped at ${EMA200_WEEKLY_SYMBOL_CAP} of ${indexSymbols.length} names per request (Yahoo). Use My Watchlist to scan up to 50 symbols on 1W.`;
+          weeklyTargets = indexSymbols.slice(0, EMA200_WEEKLY_SYMBOL_CAP);
+        }
+        if (weeklyTargets.length) {
+          features = await computeEma200FeaturesForSymbols(sb, weeklyTargets, "weekly");
+        } else {
+          const live = await computeEma200FeaturesLive(sb, "weekly");
+          features = live.rows;
+          if (live.weeklyMeta?.capped) {
+            weeklyScanNote = `Weekly scan capped at ${live.weeklyMeta.scanned} of ${live.weeklyMeta.requested} index names.`;
+          }
+        }
         dataSource = "prices_daily_live";
       } catch (liveErr) {
-        console.error("EMA200 live scan failed:", liveErr);
+        console.error("EMA200 weekly scan failed:", liveErr);
       }
-    }
+    } else {
+      try {
+        features = await fetchAll<FeatureDbRow>(
+          sb,
+          "ema200_features",
+          "symbol, bar_date, close, ema200, ema200_high, dist_atr, ribbon_dist_atr, days_above, ema200_slope, rvol, regime"
+        );
+      } catch (err) {
+        if (!isMissingRelation(err)) throw err;
+      }
 
-    if (deskSymbols.length) {
-      const have = new Set(features.map((f) => f.symbol));
-      const missing = deskSymbols.filter((s) => !have.has(s));
-      if (missing.length) {
+      if (!features.length) {
         try {
-          const extra = await computeEma200FeaturesForSymbols(sb, missing);
-          features = [...features, ...extra];
-          if (extra.length) dataSource = "prices_daily_live";
+          const live = await computeEma200FeaturesLive(sb, "daily");
+          features = live.rows;
+          dataSource = "prices_daily_live";
         } catch (liveErr) {
-          console.error("EMA200 desk symbol scan failed:", liveErr);
+          console.error("EMA200 live scan failed:", liveErr);
+        }
+      }
+
+      if (deskSymbols.length) {
+        const have = new Set(features.map((f) => f.symbol));
+        const missing = deskSymbols.filter((s) => !have.has(s));
+        if (missing.length) {
+          try {
+            const extra = await computeEma200FeaturesForSymbols(sb, missing, "daily");
+            features = [...features, ...extra];
+            if (extra.length) dataSource = "prices_daily_live";
+          } catch (liveErr) {
+            console.error("EMA200 desk symbol scan failed:", liveErr);
+          }
         }
       }
     }
@@ -318,9 +346,12 @@ export async function GET(req: NextRequest) {
       shortlistAtr: EMA200_DEFAULTS.shortlistAtr,
       approachingMaxAtr: 3,
       disclaimer:
-        dataSource === "prices_daily_live"
-          ? "Live scan from prices_daily (ema200_features table missing or empty). Run migration 021 + nightly job for cached features. WATCH ≤1.5 ATR ribbon; APPROACHING 1.5–3 ATR."
-          : "S&P 500 + Nasdaq-100 only. WATCH = at the ribbon (≤1.5 ATR). APPROACHING = still extended but closing in (1.5–3 ATR) with uptrend intact. Dist Δ = change vs prior session (negative = closer). Days since touch = sessions since last ≤1.5 ATR ribbon tag.",
+        isWeekly
+          ? `${ema200TimeframeLabel(timeframe)} PB-EMA 200 (close + high ribbon). Distance in weekly ATR(14). Needs ~200 weeks of history (Yahoo 10y). WATCH ≤1.5 ATR; APPROACHING 1.5–3 ATR.${weeklyScanNote ? ` ${weeklyScanNote}` : ""}`
+          : dataSource === "prices_daily_live"
+            ? "Live scan from prices_daily (ema200_features table missing or empty). Run migration 021 + nightly job for cached features. WATCH ≤1.5 ATR ribbon; APPROACHING 1.5–3 ATR."
+            : "S&P 500 + Nasdaq-100 only. WATCH = at the ribbon (≤1.5 ATR). APPROACHING = still extended but closing in (1.5–3 ATR) with uptrend intact. Dist Δ = change vs prior session (negative = closer). Days since touch = sessions since last ≤1.5 ATR ribbon tag.",
+      timeframe,
       dataSource,
       filter: showAllNear ? "near_ema_relaxed" : "retrace_held_only",
       rows: deskScan ? [...watch, ...approaching, ...deskRows].slice(0, limit) : rowsOnlyWatch ? watch : approaching,

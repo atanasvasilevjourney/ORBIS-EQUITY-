@@ -7,9 +7,12 @@ export type YahooDailyBar = {
   volume: number;
 };
 
-/** Adjusted daily OHLCV from Yahoo chart API (Pine-compatible EMA input). */
-export async function fetchYahooDaily(symbol: string, range = "2y"): Promise<YahooDailyBar[]> {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}&includePrePost=false`;
+async function fetchYahooChart(
+  symbol: string,
+  interval: "1d" | "1wk",
+  range: string
+): Promise<YahooDailyBar[]> {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}&includePrePost=false`;
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 OrbisEquity-Terminal" },
@@ -43,4 +46,14 @@ export async function fetchYahooDaily(symbol: string, range = "2y"): Promise<Yah
   } catch {
     return [];
   }
+}
+
+/** Adjusted daily OHLCV from Yahoo chart API (Pine-compatible EMA input). */
+export async function fetchYahooDaily(symbol: string, range = "2y"): Promise<YahooDailyBar[]> {
+  return fetchYahooChart(symbol, "1d", range);
+}
+
+/** Weekly OHLCV (~10y) for PB-EMA 200 on 1W charts. */
+export async function fetchYahooWeekly(symbol: string, range = "10y"): Promise<YahooDailyBar[]> {
+  return fetchYahooChart(symbol, "1wk", range);
 }
