@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ModuleHeader } from "@/components/ui/ModuleHeader";
+import { FundamentalsModuleTabs } from "@/components/fundamentals/FundamentalsModuleTabs";
 import { FilterChip } from "@/components/ui/FilterChip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BiasChip } from "@/components/scoreboard/BiasChip";
@@ -174,13 +175,9 @@ export default function FundamentalsScreenerPage() {
         accent="var(--module-2)"
       />
 
+      <FundamentalsModuleTabs />
+
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        <Link
-          href="/fundamentals"
-          className="text-xs font-terminal text-[var(--accent-info)] hover:underline"
-        >
-          ← Rankings table
-        </Link>
         <span className="text-[10px] font-terminal text-[var(--text-muted)]">
           {activeFilterCount} active filter{activeFilterCount === 1 ? "" : "s"}
           {appliedPreset && appliedPreset !== "custom" ? ` · preset: ${appliedPreset}` : ""}
