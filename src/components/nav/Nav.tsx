@@ -16,6 +16,7 @@ const NAV_LINKS = [
   { href: "/rotate", label: "ROTATE" },
   { href: "/quantropy", label: "QUANT" },
   { href: "/fundamentals", label: "FUNDAMENTALS" },
+  { href: "/fundamentals/screener", label: "FA SCR" },
   { href: "/health", label: "HEALTH" },
   { href: "/earnings-news", label: "EARNINGS" },
   { href: "/status", label: "STATUS" },

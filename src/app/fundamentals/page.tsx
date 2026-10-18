@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { ModuleHeader } from "@/components/ui/ModuleHeader";
 import { BiasChip } from "@/components/scoreboard/BiasChip";
+import { FundamentalsModuleTabs } from "@/components/fundamentals/FundamentalsModuleTabs";
 
 type FundRow = {
   symbol: string;
@@ -161,14 +162,7 @@ export default function FundamentalsPage() {
         accent="var(--module-2)"
       />
 
-      <div className="mb-4">
-        <Link
-          href="/fundamentals/screener"
-          className="text-xs font-terminal text-[var(--accent-info)] hover:underline"
-        >
-          Open fundamental screener (ranges & conviction presets) →
-        </Link>
-      </div>
+      <FundamentalsModuleTabs />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         {[
