@@ -60,6 +60,8 @@ type DashData = {
   biasShorts: number;
   cashTema: number;
   cashCarver: number;
+  triangleSetups: number;
+  triangleBreakouts: number;
   rotateRegime: string | null;
   rotateLeading: number;
 };
@@ -115,6 +117,8 @@ export default function Home() {
           biasShorts: desks.biasShorts ?? 0,
           cashTema: desks.cashTema ?? 0,
           cashCarver: desks.cashCarver ?? 0,
+          triangleSetups: desks.triangleSetups ?? 0,
+          triangleBreakouts: desks.triangleBreakouts ?? 0,
           rotateRegime: dash.rotation?.regime ?? null,
           rotateLeading: dash.rotation?.leading ?? 0,
         });
@@ -552,6 +556,15 @@ export default function Home() {
               { label: "LONG", value: String(d?.biasLongs ?? 0), color: "var(--accent-bull)" },
               { label: "SHORT", value: String(d?.biasShorts ?? 0), color: "var(--accent-bear)" },
               { label: "CHART", value: "TV", color: "var(--accent-info)" },
+            ],
+          },
+          {
+            href: "/triangle", title: "TRIANGLE BREAKOUT", badge: "MODULE 14",
+            subtitle: "Ascending / descending · segment overlays", accent: "var(--module-3)", source: "PATTERNS",
+            metrics: [
+              { label: "SETUPS", value: loading ? "…" : String(d?.triangleSetups ?? 0), color: "var(--accent-info)" },
+              { label: "BREAK", value: loading ? "…" : String(d?.triangleBreakouts ?? 0), color: "var(--accent-bull)" },
+              { label: "DESK", value: "TRI", color: "var(--accent-warning)" },
             ],
           },
           {

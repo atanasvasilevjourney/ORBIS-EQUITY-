@@ -34,6 +34,38 @@ export default async function StatusPage() {
         </div>
       </div>
 
+      <h2 className="text-xs text-[var(--text-muted)] tracking-widest mb-2">TRIANGLE DESK (migration 029)</h2>
+      <div
+        className="mb-4 px-4 py-3 rounded border"
+        style={{
+          borderColor: s.triangleDesk.migrationApplied ? "var(--border)" : "var(--accent-warning)",
+          background: "var(--badge-bg)",
+        }}
+      >
+        {s.triangleDesk.migrationApplied ? (
+          <>
+            <div className="text-xs text-[var(--text-muted)]">triangle_scan_runs</div>
+            <div className="mt-1 text-[var(--text-primary)]">
+              {s.triangleDesk.names != null
+                ? `${s.triangleDesk.names} setups · as of ${s.triangleDesk.asOfDate ?? "—"}`
+                : "Tables present — no nightly run yet"}
+            </div>
+            {s.triangleDesk.headline && (
+              <div className="text-xs text-[var(--text-secondary)] mt-1">{s.triangleDesk.headline}</div>
+            )}
+            <Link href="/triangle" className="text-xs text-[var(--accent-info)] hover:underline mt-2 inline-block">
+              Open TRI desk →
+            </Link>
+          </>
+        ) : (
+          <div className="text-xs text-[var(--text-secondary)]">
+            <span className="text-[var(--accent-warning)]">Not deployed</span> — apply{" "}
+            <code className="text-[var(--text-primary)]">029_triangle_scanner.sql</code> in Supabase, then run{" "}
+            <code className="text-[var(--text-primary)]">pipeline.triangle_scanner.jobs.nightly</code>.
+          </div>
+        )}
+      </div>
+
       <h2 className="text-xs text-[var(--text-muted)] tracking-widest mb-2">PIPELINE RUNS (latest per source)</h2>
       <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
         <table className="w-full text-xs">

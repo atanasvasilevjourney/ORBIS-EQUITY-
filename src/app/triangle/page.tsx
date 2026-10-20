@@ -5,12 +5,9 @@ import { MultiSortBar } from "@/components/table/MultiSortBar";
 import { SortableTh } from "@/components/table/SortableTh";
 import { useMultiSort } from "@/hooks/useMultiSort";
 import Link from "next/link";
-import {
-  TradingChart,
-  type Candle,
-  type ChartLevel,
-  type ChartSegment,
-} from "@/components/chart/TradingChart";
+import type { ChartLevel } from "@/components/chart/TradingChart";
+import { ChartPane } from "@/components/desk/ChartPane";
+import { DeskSplitLayout, type DeskLayoutMode } from "@/components/desk/DeskSplitLayout";
 import { ModuleHeader } from "@/components/ui/ModuleHeader";
 import { triangleGeometryToChart, type TriangleHit } from "@/lib/trianglePattern";
 
@@ -50,6 +47,10 @@ const TRI_SORT_LABELS: Record<TriSortKey, string> = {
   resistancePrice: "Resistance",
 };
 
+function rowKey(r: Row) {
+  return `${r.symbol}::${r.patternType}`;
+}
+
 function statusColor(status: string) {
   if (status === "breakout_up") return "var(--accent-bull)";
   if (status === "breakout_down") return "var(--accent-bear)";
@@ -61,13 +62,8 @@ export default function TrianglePage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"breakout" | "forming" | "all">("breakout");
   const [pattern, setPattern] = useState<"all" | "ascending" | "descending">("all");
-  const [sel, setSel] = useState<string | null>(null);
-  const [chart, setChart] = useState<{
-    candles: Candle[];
-    sma20: (number | null)[];
-    swing?: import("@/components/chart/TradingChart").SwingEmaLines;
-    source: string;
-  } | null>(null);
+  const [selKey, setSelKey] = useState<string | null>(null);
+  const [layoutMode, setLayoutMode] = useState<DeskLayoutMode>("split");
 
   useEffect(() => {
     const params = new URLSearchParams({ filter });
@@ -77,7 +73,11 @@ export default function TrianglePage() {
       .then(async (r) => r.json())
       .then((x) => {
         setData(x);
-        setSel((prev) => prev || x.rows?.[0]?.symbol || null);
+        const first = x.rows?.[0];
+        setSelKey((prev) => {
+          if (prev && x.rows?.some((r: Row) => rowKey(r) === prev)) return prev;
+          return first ? rowKey(first) : null;
+        });
       })
       .catch(() => setData(null))
       .finally(() => setLoading(false));
@@ -102,47 +102,58 @@ export default function TrianglePage() {
     [{ key: "score", dir: "desc" }],
     TRI_SORT_LABELS
   );
-  const row = sortedRows.find((r) => r.symbol === sel) ?? sortedRows[0] ?? null;
-
-  useEffect(() => {
-    if (!row?.symbol) return;
-    const ac = new AbortController();
-    setChart(null);
-    fetch(`/api/chart/${row.symbol}?interval=1d`, { signal: ac.signal })
-      .then(async (r) => r.json())
-      .then(setChart)
-      .catch(() => setChart(null));
-    return () => ac.abort();
-  }, [row?.symbol]);
+  const row = sortedRows.find((r) => rowKey(r) === selKey) ?? sortedRows[0] ?? null;
 
   const { segments, levels: patternLevels } = useMemo(() => {
-    if (!row) return { segments: [] as ChartSegment[], levels: [] as ChartLevel[] };
+    if (!row) return { segments: [], levels: [] as ChartLevel[] };
     return triangleGeometryToChart(row.geometry, row.patternType);
   }, [row]);
 
-  const breakoutLevel: ChartLevel[] = useMemo(() => {
-    if (!row?.resistancePrice) return [];
-    return [
-      {
-        price: row.resistancePrice,
-        title: "resistance @ last",
-        color: "var(--accent-warning)",
-        dashed: false,
-      },
-    ];
-  }, [row]);
+  const levels = useMemo((): ChartLevel[] => {
+    const breakoutLevel: ChartLevel[] = row?.resistancePrice
+      ? [
+          {
+            price: row.resistancePrice,
+            title: "resistance @ last",
+            color: "var(--accent-warning)",
+            dashed: false,
+          },
+        ]
+      : [];
+    return [...patternLevels, ...breakoutLevel];
+  }, [patternLevels, row?.resistancePrice]);
 
-  const levels = [...patternLevels, ...breakoutLevel];
+  const usingLiveFallback = data?.dataSource !== "triangle_setups";
+
+  const patternMeta = row
+    ? (
+        <span
+          className="text-[10px] font-terminal px-2 py-0.5 rounded border"
+          style={{ borderColor: statusColor(row.status), color: statusColor(row.status) }}
+        >
+          {row.patternType} · {row.status} · close {fmt(row.close)} · S {fmt(row.supportPrice)} · R {fmt(row.resistancePrice)}
+        </span>
+      )
+    : null;
 
   return (
     <div className="px-4 py-6 space-y-4">
       <ModuleHeader
         module="TRI"
         title="TRIANGLE BREAKOUT"
-        description="Ascending & descending triangles on daily OHLC — pillai-style flat/rising legs with breakout detection. Chart overlays use the shared TradingChart engine (new segment layer)."
+        description="Ascending & descending triangles on daily OHLC — pillai-style flat/rising legs with breakout detection. Chart overlays use the shared TradingChart engine (segment layer)."
         source="EOD · LOOP universe"
         accent="var(--accent-warning)"
       />
+
+      {usingLiveFallback && !loading && (
+        <div className="px-4 py-2 rounded border border-[var(--accent-warning)] bg-[var(--badge-bg)] text-xs font-terminal text-[var(--text-secondary)]">
+          Nightly triangle tables not found or empty — showing a capped live Yahoo sample. Apply{" "}
+          <code className="text-[var(--text-primary)]">supabase/migrations/029_triangle_scanner.sql</code> and run{" "}
+          <code className="text-[var(--text-primary)]">python -m pipeline.triangle_scanner.jobs.nightly</code>. See{" "}
+          <Link href="/status" className="text-[var(--accent-info)] hover:underline">system status</Link>.
+        </div>
+      )}
 
       {data?.headline && (
         <div className="px-4 py-2 rounded border border-[var(--border)] bg-[var(--badge-bg)] text-sm font-terminal text-[var(--text-secondary)]">
@@ -191,83 +202,80 @@ export default function TrianglePage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] max-h-[640px] overflow-y-auto">
-          <MultiSortBar levels={sortLevels} labels={TRI_SORT_LABELS} onClear={clearSort} />
-          <table className="w-full text-sm font-terminal">
-            <thead>
-              <tr className="text-[10px] text-[var(--text-muted)] border-b border-[var(--border)] bg-[var(--surface-alt)]">
-                <SortableTh columnKey="symbol" label="TICKER" levels={sortLevels} onSort={onHeaderClick} />
-                <SortableTh columnKey="patternType" label="TYPE" levels={sortLevels} onSort={onHeaderClick} />
-                <SortableTh columnKey="status" label="STATUS" levels={sortLevels} onSort={onHeaderClick} />
-                <SortableTh columnKey="score" label="SCORE" levels={sortLevels} align="right" onSort={onHeaderClick} />
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={4} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td>
-                </tr>
-              ) : !sortedRows.length ? (
-                <tr>
-                  <td colSpan={4} className="px-3 py-8 text-center text-[var(--text-muted)]">
-                    No setups. Run: python -m pipeline.triangle_scanner.jobs.nightly
-                  </td>
-                </tr>
-              ) : (
-                sortedRows.map((r) => (
-                  <tr
-                    key={`${r.symbol}-${r.patternType}`}
-                    onClick={() => setSel(r.symbol)}
-                    className="border-b border-[var(--border)] cursor-pointer hover:bg-[var(--surface-alt)]"
-                    style={{ background: sel === r.symbol ? "var(--badge-bg)" : undefined }}
-                  >
-                    <td className="px-3 py-2 font-bold">
-                      <Link href={`/ticker/${r.symbol}?swing=1`} onClick={(e) => e.stopPropagation()}>
-                        {r.symbol}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2 text-xs">{r.patternType}</td>
-                    <td className="px-3 py-2 text-xs font-bold" style={{ color: statusColor(r.status) }}>
-                      {r.status}
-                    </td>
-                    <td className="px-3 py-2 text-right">{fmt(r.score, 1)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+      <p className="text-[10px] font-terminal text-[var(--text-muted)]">
+        {sortedRows.length} setups · selected {row ? `${row.symbol} (${row.patternType})` : "—"}
+      </p>
 
-        <div className="lg:col-span-2 space-y-3">
-          {row && (
-            <>
-              <div>
-                <Link href={`/ticker/${row.symbol}?swing=1`} className="text-lg font-terminal font-bold hover:text-[var(--accent-info)]">
-                  {row.symbol}
-                </Link>
-                <span className="ml-2 text-xs text-[var(--text-secondary)]">{row.companyName}</span>
-                <div className="text-sm font-terminal mt-1" style={{ color: statusColor(row.status) }}>
-                  {row.patternType} · {row.status} · close {fmt(row.close)} · support {fmt(row.supportPrice)} · res{" "}
-                  {fmt(row.resistancePrice)}
-                </div>
-              </div>
-              <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] overflow-hidden">
-                <div className="px-3 py-1 text-[10px] font-terminal text-[var(--text-muted)] border-b border-[var(--border)]">
-                  {row.symbol} · Triangle overlay · {chart?.source ?? "…"} · EMA ribbon + pattern legs
-                </div>
-                <TradingChart
-                  candles={chart?.candles ?? []}
-                  sma={chart?.sma20}
-                  swing={chart?.swing}
-                  segments={segments}
-                  levels={levels}
-                />
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+      <DeskSplitLayout
+        mode={layoutMode}
+        onModeChange={setLayoutMode}
+        listTitle="SETUPS · TRI"
+        chartTitle="CHART · TRIANGLE OVERLAY"
+        workspaceMinHeight={640}
+        list={
+          <div className="overflow-x-auto">
+            <MultiSortBar levels={sortLevels} labels={TRI_SORT_LABELS} onClear={clearSort} />
+            <table className="w-full text-sm font-terminal">
+              <thead className="sticky top-0 z-10">
+                <tr className="text-[10px] text-[var(--text-muted)] border-b border-[var(--border)] bg-[var(--surface-alt)]">
+                  <SortableTh columnKey="symbol" label="TICKER" levels={sortLevels} onSort={onHeaderClick} />
+                  <SortableTh columnKey="patternType" label="TYPE" levels={sortLevels} onSort={onHeaderClick} />
+                  <SortableTh columnKey="status" label="STATUS" levels={sortLevels} onSort={onHeaderClick} />
+                  <SortableTh columnKey="score" label="SCORE" levels={sortLevels} align="right" onSort={onHeaderClick} />
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td>
+                  </tr>
+                ) : !sortedRows.length ? (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-8 text-center text-[var(--text-muted)]">
+                      No setups. Run: python -m pipeline.triangle_scanner.jobs.nightly
+                    </td>
+                  </tr>
+                ) : (
+                  sortedRows.map((r) => {
+                    const key = rowKey(r);
+                    return (
+                      <tr
+                        key={key}
+                        onClick={() => setSelKey(key)}
+                        className="border-b border-[var(--border)] cursor-pointer hover:bg-[var(--surface-alt)]"
+                        style={{ background: selKey === key ? "var(--badge-bg)" : undefined }}
+                      >
+                        <td className="px-3 py-2 font-bold">
+                          <Link href={`/ticker/${r.symbol}?swing=1`} onClick={(e) => e.stopPropagation()}>
+                            {r.symbol}
+                          </Link>
+                        </td>
+                        <td className="px-3 py-2 text-xs">{r.patternType}</td>
+                        <td className="px-3 py-2 text-xs font-bold" style={{ color: statusColor(r.status) }}>
+                          {r.status}
+                        </td>
+                        <td className="px-3 py-2 text-right">{fmt(r.score, 1)}</td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        }
+        chart={
+          <ChartPane
+            symbol={row?.symbol ?? null}
+            companyName={row?.companyName}
+            interval="1d"
+            fill={layoutMode === "chart"}
+            height={layoutMode === "chart" ? undefined : 520}
+            segments={segments}
+            levels={levels}
+            toolbarExtra={patternMeta}
+          />
+        }
+      />
     </div>
   );
 }
