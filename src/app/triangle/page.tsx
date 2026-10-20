@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { MultiSortBar } from "@/components/table/MultiSortBar";
+import { SortableTh } from "@/components/table/SortableTh";
+import { useMultiSort } from "@/hooks/useMultiSort";
 import Link from "next/link";
 import {
   TradingChart,
@@ -34,6 +37,18 @@ type Payload = {
 };
 
 const fmt = (v: number | null | undefined, d = 2) => (v == null ? "—" : v.toFixed(d));
+
+type TriSortKey = "symbol" | "patternType" | "status" | "score" | "close" | "supportPrice" | "resistancePrice";
+
+const TRI_SORT_LABELS: Record<TriSortKey, string> = {
+  symbol: "Ticker",
+  patternType: "Type",
+  status: "Status",
+  score: "Score",
+  close: "Close",
+  supportPrice: "Support",
+  resistancePrice: "Resistance",
+};
 
 function statusColor(status: string) {
   if (status === "breakout_up") return "var(--accent-bull)";
@@ -69,7 +84,25 @@ export default function TrianglePage() {
   }, [filter, pattern]);
 
   const rows = data?.rows ?? [];
-  const row = rows.find((r) => r.symbol === sel) ?? rows[0] ?? null;
+  const triAccessors = useMemo(
+    (): Record<TriSortKey, (r: Row) => string | number | null | undefined> => ({
+      symbol: (r) => r.symbol,
+      patternType: (r) => r.patternType,
+      status: (r) => r.status,
+      score: (r) => r.score,
+      close: (r) => r.close,
+      supportPrice: (r) => r.supportPrice,
+      resistancePrice: (r) => r.resistancePrice,
+    }),
+    []
+  );
+  const { sorted: sortedRows, levels, onHeaderClick, clearSort } = useMultiSort(
+    rows,
+    triAccessors,
+    [{ key: "score", dir: "desc" }],
+    TRI_SORT_LABELS
+  );
+  const row = sortedRows.find((r) => r.symbol === sel) ?? sortedRows[0] ?? null;
 
   useEffect(() => {
     if (!row?.symbol) return;
@@ -160,13 +193,14 @@ export default function TrianglePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] max-h-[640px] overflow-y-auto">
+          <MultiSortBar levels={levels} labels={TRI_SORT_LABELS} onClear={clearSort} />
           <table className="w-full text-sm font-terminal">
             <thead>
               <tr className="text-[10px] text-[var(--text-muted)] border-b border-[var(--border)] bg-[var(--surface-alt)]">
-                <th className="text-left px-3 py-2">TICKER</th>
-                <th className="text-left px-3 py-2">TYPE</th>
-                <th className="text-left px-3 py-2">STATUS</th>
-                <th className="text-right px-3 py-2">SCORE</th>
+                <SortableTh columnKey="symbol" label="TICKER" levels={levels} onSort={onHeaderClick} />
+                <SortableTh columnKey="patternType" label="TYPE" levels={levels} onSort={onHeaderClick} />
+                <SortableTh columnKey="status" label="STATUS" levels={levels} onSort={onHeaderClick} />
+                <SortableTh columnKey="score" label="SCORE" levels={levels} align="right" onSort={onHeaderClick} />
               </tr>
             </thead>
             <tbody>
@@ -174,14 +208,14 @@ export default function TrianglePage() {
                 <tr>
                   <td colSpan={4} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td>
                 </tr>
-              ) : !rows.length ? (
+              ) : !sortedRows.length ? (
                 <tr>
                   <td colSpan={4} className="px-3 py-8 text-center text-[var(--text-muted)]">
                     No setups. Run: python -m pipeline.triangle_scanner.jobs.nightly
                   </td>
                 </tr>
               ) : (
-                rows.map((r) => (
+                sortedRows.map((r) => (
                   <tr
                     key={`${r.symbol}-${r.patternType}`}
                     onClick={() => setSel(r.symbol)}

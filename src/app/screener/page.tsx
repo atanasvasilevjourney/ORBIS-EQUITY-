@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScoreboardRow, type ScreenerRow } from "@/components/scoreboard/ScoreboardRow";
+import { MultiSortBar } from "@/components/table/MultiSortBar";
+import { SortableTh } from "@/components/table/SortableTh";
+import { useMultiSort } from "@/hooks/useMultiSort";
 import { ModuleHeader } from "@/components/ui/ModuleHeader";
 import { ModulePanel } from "@/components/ui/ModulePanel";
 import { MetricCard } from "@/components/ui/MetricCard";
@@ -54,6 +57,41 @@ const DAY_FILTERS = [
   { key: 10, label: "Day ≥10%" },
 ];
 
+type ScreenerSortKey =
+  | "symbol"
+  | "orbisScore"
+  | "dayPct"
+  | "relVolume"
+  | "pctFromHigh"
+  | "rank"
+  | "sector"
+  | "price"
+  | "marketCap";
+
+const SCREENER_SORT_LABELS: Record<ScreenerSortKey, string> = {
+  symbol: "Ticker",
+  orbisScore: "Orbis",
+  dayPct: "Day %",
+  relVolume: "Rel vol",
+  pctFromHigh: "Off high",
+  rank: "Rank",
+  sector: "Sector",
+  price: "Last",
+  marketCap: "Mkt cap",
+};
+
+const SCREENER_ACCESSORS: Record<ScreenerSortKey, (r: ScreenerRow) => string | number | null | undefined> = {
+  symbol: (r) => r.symbol,
+  orbisScore: (r) => r.orbisScore,
+  dayPct: (r) => r.dayPct ?? r.zMom,
+  relVolume: (r) => r.relVolume ?? r.fEwmac,
+  pctFromHigh: (r) => r.pctFromHigh ?? r.z52 * 100,
+  rank: (r) => r.rank,
+  sector: (r) => r.sector,
+  price: (r) => r.price,
+  marketCap: (r) => r.marketCap,
+};
+
 export default function ScreenerPage() {
   const { isFocusActive, symbolsParam, universeParam } = useFocusUniverse();
   const [rows, setRows] = useState<ScreenerRow[]>([]);
@@ -98,6 +136,14 @@ export default function ScreenerPage() {
     fetchData();
   }, [fetchData]);
 
+  const accessors = useMemo(() => SCREENER_ACCESSORS, []);
+  const { sorted: sortedRows, levels, onHeaderClick, clearSort } = useMultiSort(
+    rows,
+    accessors,
+    [{ key: "pctFromHigh", dir: "desc" }],
+    SCREENER_SORT_LABELS
+  );
+
   const postureColor =
     (summary?.posture ?? 50) >= 55
       ? "var(--accent-bull)"
@@ -112,7 +158,7 @@ export default function ScreenerPage() {
       <ModuleHeader
         module="MODULE 1"
         title="WATCHLIST"
-        description="Scan only. On list: day ≥ +4% and volume ≥ 2× the prior 50-day average. Hot: ≥ +10% and ≥ 5×. Sorted by distance from the session high. Orders come from other modules."
+        description="Scan only. On list: day ≥ +4% and volume ≥ 2× the prior 50-day average. Hot: ≥ +10% and ≥ 5×. Click column headers to sort; shift+click for multi-sort tie-breakers (IB-style). Orders come from other modules."
         source="EOD PRICES"
         accent="var(--module-1)"
       />
@@ -181,23 +227,24 @@ export default function ScreenerPage() {
         title="WATCHLIST"
         badge="SCAN"
         accent="var(--module-1)"
-        source={`${rows.length} NAMES · ${summary?.asOfDate ?? "—"} EOD`}
+        source={`${sortedRows.length} NAMES · ${summary?.asOfDate ?? "—"} EOD`}
       >
         {error ? (
           <EmptyState title="Failed to load screener" detail="Check API connectivity and try again." />
         ) : (
           <div className="overflow-x-auto -mx-3 -mb-3">
+            <MultiSortBar levels={levels} labels={SCREENER_SORT_LABELS} onClear={clearSort} />
             <table className="w-full text-sm font-terminal">
               <thead>
                 <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--panel-border)] bg-[var(--panel-header)]">
-                  <th className="text-left px-3 py-2">TICKER</th>
+                  <SortableTh columnKey="symbol" label="TICKER" levels={levels} onSort={onHeaderClick} />
                   <th className="text-left px-3 py-2">STATUS</th>
-                  <th className="text-right px-3 py-2">ORBIS</th>
-                  <th className="text-right px-3 py-2">DAY</th>
-                  <th className="text-right px-3 py-2">REL VOL</th>
-                  <th className="text-right px-3 py-2">OFF HIGH</th>
-                  <th className="text-left px-3 py-2">SECTOR</th>
-                  <th className="text-right px-3 py-2">LAST</th>
+                  <SortableTh columnKey="orbisScore" label="ORBIS" levels={levels} align="right" onSort={onHeaderClick} />
+                  <SortableTh columnKey="dayPct" label="DAY" levels={levels} align="right" onSort={onHeaderClick} />
+                  <SortableTh columnKey="relVolume" label="REL VOL" levels={levels} align="right" onSort={onHeaderClick} />
+                  <SortableTh columnKey="pctFromHigh" label="OFF HIGH" levels={levels} align="right" onSort={onHeaderClick} />
+                  <SortableTh columnKey="sector" label="SECTOR" levels={levels} onSort={onHeaderClick} />
+                  <SortableTh columnKey="price" label="LAST" levels={levels} align="right" onSort={onHeaderClick} />
                   <th className="text-left px-3 py-2">BADGES</th>
                 </tr>
               </thead>
@@ -208,7 +255,7 @@ export default function ScreenerPage() {
                       Loading scoreboard…
                     </td>
                   </tr>
-                ) : rows.length === 0 ? (
+                ) : sortedRows.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-3 py-4">
                       <EmptyState
@@ -218,7 +265,7 @@ export default function ScreenerPage() {
                     </td>
                   </tr>
                 ) : (
-                  rows.map((r) => <ScoreboardRow key={r.symbol} row={r} />)
+                  sortedRows.map((r) => <ScoreboardRow key={r.symbol} row={r} />)
                 )}
               </tbody>
             </table>
