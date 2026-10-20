@@ -8,6 +8,13 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Ema200WatchTable, type Ema200TableRow } from "@/components/ema200/Ema200WatchTable";
 import { FocusUniverseModuleBanner } from "@/components/universe/FocusUniverseModuleBanner";
 import { useFocusUniverse } from "@/hooks/useFocusUniverse";
+import { FilterChip } from "@/components/ui/FilterChip";
+import {
+  EMA200_TF_STORAGE_KEY,
+  type Ema200Timeframe,
+  ema200TimeframeLabel,
+  parseEma200Timeframe,
+} from "@/lib/ema200Timeframe";
 
 type ApiPayload = {
   mode: string;
@@ -22,6 +29,7 @@ type ApiPayload = {
   desk?: Ema200TableRow[];
   rows: Ema200TableRow[];
   dataSource?: string;
+  timeframe?: Ema200Timeframe;
 };
 
 export default function Ema200WatchlistPage() {
@@ -30,6 +38,25 @@ export default function Ema200WatchlistPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [deskOtherOpen, setDeskOtherOpen] = useState(false);
+  const [timeframe, setTimeframe] = useState<Ema200Timeframe>("daily");
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(EMA200_TF_STORAGE_KEY);
+      if (stored) setTimeframe(parseEma200Timeframe(stored));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const selectTimeframe = (tf: Ema200Timeframe) => {
+    setTimeframe(tf);
+    try {
+      localStorage.setItem(EMA200_TF_STORAGE_KEY, tf);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -42,6 +69,7 @@ export default function Ema200WatchlistPage() {
       } else if (universeParam) {
         params.set("universe", universeParam);
       }
+      if (timeframe === "weekly") params.set("tf", "weekly");
       const qs = params.toString();
       const res = await fetch(`/api/ema200${qs ? `?${qs}` : ""}`);
       setData(await res.json());
@@ -50,7 +78,7 @@ export default function Ema200WatchlistPage() {
     } finally {
       setLoading(false);
     }
-  }, [isFocusActive, symbolsParam, universeParam]);
+  }, [isFocusActive, symbolsParam, universeParam, timeframe]);
 
   useEffect(() => {
     load();
@@ -65,6 +93,25 @@ export default function Ema200WatchlistPage() {
     <div className="px-4 py-6 space-y-4">
       <FocusUniverseModuleBanner allowIndexDesk />
 
+      <div className="flex flex-wrap items-center gap-2 text-[10px] font-terminal">
+        <span className="text-[var(--text-muted)] uppercase tracking-wide">Timeframe</span>
+        <FilterChip
+          active={timeframe === "daily"}
+          onClick={() => selectTimeframe("daily")}
+          label="Daily (1D)"
+        />
+        <FilterChip
+          active={timeframe === "weekly"}
+          onClick={() => selectTimeframe("weekly")}
+          label="Weekly (1W)"
+        />
+        {timeframe === "weekly" && (
+          <span className="text-[var(--text-muted)]">
+            PB-EMA 200 on weekly bars · matches TradingView 1W ribbon
+          </span>
+        )}
+      </div>
+
       <ModuleHeader
         module="EMA200"
         title={isFocusActive ? "MY WATCHLIST · EMA200" : "RETRACE WATCHLIST"}
@@ -73,7 +120,7 @@ export default function Ema200WatchlistPage() {
             ? "Scanning your watchlist only. Ribbon distance via live Yahoo when needed. WATCH ≤1.5 ATR; names farther out still show under desk scan."
             : `Scans ${deskLabel} (index desk). Not every stock on the NASDAQ exchange — venue ≠ universe. WATCH ≤1.5 ATR to the double EMA200 ribbon.`
         }
-        source="SP500 ∪ NDX-100 + supplements · EOD"
+        source={`${ema200TimeframeLabel(data?.timeframe ?? timeframe)} · SP500 ∪ NDX-100 + supplements · EOD`}
         accent="var(--accent-info)"
       />
 
@@ -85,7 +132,8 @@ export default function Ema200WatchlistPage() {
 
       <p className="text-[10px] font-terminal text-[var(--text-muted)]">
         Universe: {isWatchlist ? `watchlist (${symbolsParam.split(",").filter(Boolean).length})` : deskLabel} · as
-        of {data?.asOfDate ?? "—"} · watch {watch.length} · approaching {approaching.length}
+        of {data?.asOfDate ?? "—"} · {ema200TimeframeLabel(data?.timeframe ?? timeframe)} · watch {watch.length} ·
+        approaching {approaching.length}
         {data?.dataSource === "prices_daily_live" ? " · live scan" : ""}
       </p>
       <p className="text-[10px] font-terminal text-[var(--text-muted)] border border-[var(--panel-border)] rounded px-3 py-2">

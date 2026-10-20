@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "@/lib/theme/ThemeProvider";
 import { withAlpha } from "@/lib/chartColors";
+import { createEma200RibbonPrimitive } from "@/lib/chartEmaRibbonPrimitive";
 
 export type Candle = {
   time: string | number;
@@ -165,6 +166,16 @@ export function TradingChart({
           close: c.close,
         }))
       );
+
+      const hasRibbon =
+        swing?.ema200?.some((v) => v != null) && swing?.ema200High?.some((v) => v != null);
+      if (hasRibbon && swing?.ema200 && swing?.ema200High) {
+        const ribbonPrim = createEma200RibbonPrimitive(candles, swing.ema200, swing.ema200High, {
+          fillBull: withAlpha(bull, 0.22),
+          fillBear: withAlpha(bear, 0.18),
+        });
+        candleSeries.attachPrimitive(ribbonPrim);
+      }
 
       if (candles.some((c) => c.volume != null)) {
         const vol = chart.addHistogramSeries({
