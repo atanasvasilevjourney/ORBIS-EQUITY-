@@ -16,9 +16,12 @@
 - **`/api/loop`** exposes `strategy.donchianVwap` entry candidates / exit hints from `strategy_signals`.
 - LOOP UI shows **Donchian entry candidates** table.
 
-## Still open
+## Shipped (`cursor/loop-paper-economics-5ca5`)
 
-- Retire lite desk **signals** on rotate/quantropy (2f remainder).
-- LOOP `portfolio_loop` next-open fills and explicit cost rows on `paper_orders`.
+- **`portfolio_loop`** reads `donchian_vwap` BUY rows from `strategy_signals` (falls back to inline prior-bar if bus empty).
+- **Paper economics** — migration `032_paper_order_costs.sql`; orders store `fill_price`, `fill_mode`, commission/slippage/`cost_usd` (5+5 bps/side); BUY entries prefer next-session open when on tape.
+- **Rotate / Quantropy APIs** no longer recompute lite desk **signals** when pipeline snapshots are missing (empty + headline only).
+
+## Still open
 - Historical index membership before first snapshot date (true survivorship-free backtests).
 - Login/session auth in front of `/api` (replace `Sec-Fetch-Site` gate).

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
-import { EMPTY_QUANT, liteQuantPayload, parseCorr } from "@/lib/liteDeskApi";
+import { EMPTY_QUANT, parseCorr } from "@/lib/liteDeskApi";
 import { evaluateFreshness } from "@/lib/freshness";
 import { staleHeadline } from "@/lib/signalGate";
-import { blockLiteDesk, deskFreshnessForLite } from "@/lib/liteDeskGate";
+import { deskFreshnessForLite } from "@/lib/liteDeskGate";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -55,16 +55,15 @@ export async function GET() {
     const latest = runs[0] ?? null;
     if (!latest || !latest.names) {
       const fresh = await deskFreshnessForLite(sb, null);
-      if (blockLiteDesk(fresh.signalsSuppressed)) {
-        return NextResponse.json({
-          ...EMPTY_QUANT,
-          stale: true,
-          signalsSuppressed: true,
-          headline: "STALE — Quantropy snapshot unavailable",
-        });
-      }
-      const lite = await liteQuantPayload(sb);
-      return NextResponse.json({ ...lite, signalsSuppressed: fresh.signalsSuppressed });
+      return NextResponse.json({
+        ...EMPTY_QUANT,
+        stale: fresh.stale || fresh.signalsSuppressed,
+        signalsSuppressed: fresh.signalsSuppressed,
+        headline: fresh.signalsSuppressed
+          ? "STALE — Quantropy snapshot unavailable"
+          : "Quantropy snapshot pending — run nightly pipeline",
+        lite: false,
+      });
     }
     const rows = await fetchAll<NameRow>(
       sb,

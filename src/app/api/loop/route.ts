@@ -60,6 +60,11 @@ export async function GET() {
       reason: string | null;
       sector: string | null;
       risk_usd: number | null;
+      fill_price: number | null;
+      fill_mode: string | null;
+      commission_usd: number | null;
+      slippage_usd: number | null;
+      cost_usd: number | null;
       created_at: string | null;
     };
     type JournalDbRow = {
@@ -107,7 +112,8 @@ export async function GET() {
       fetchAll<OrderRow>(
         sb,
         "paper_orders",
-        "id, run_id, ticker, action, type, shares, limit_price, reason, sector, risk_usd, created_at"
+        `id, run_id, ticker, action, type, shares, limit_price, reason, sector, risk_usd,
+         fill_price, fill_mode, commission_usd, slippage_usd, cost_usd, created_at`
       ),
     ]);
 
@@ -321,6 +327,11 @@ export async function GET() {
           shares: o.shares,
           type: o.type,
           limitPrice: o.limit_price,
+          fillPrice: o.fill_price,
+          fillMode: o.fill_mode,
+          commissionUsd: o.commission_usd,
+          slippageUsd: o.slippage_usd,
+          costUsd: o.cost_usd,
           reason: o.reason,
           sector: o.sector,
           riskUsd: o.risk_usd,

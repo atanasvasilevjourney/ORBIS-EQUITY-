@@ -18,22 +18,8 @@ vi.mock("@/lib/liteDeskGate", async (importOriginal) => {
       minFreshDate: "2026-10-09",
       asOfDate: null,
     }),
-    blockLiteDesk: () => false,
   };
 });
-
-function px(symbol: string, n = 80, g = 1.002) {
-  const end = new Date();
-  return Array.from({ length: n }, (_, i) => {
-    const d = new Date(end);
-    d.setUTCDate(d.getUTCDate() - (n - 1 - i));
-    return {
-      symbol,
-      date: d.toISOString().slice(0, 10),
-      close: 50 * g ** i,
-    };
-  });
-}
 
 describe("GET /api/quantropy", () => {
   beforeEach(() => {
@@ -41,30 +27,20 @@ describe("GET /api/quantropy", () => {
     mockCreateServerClient.mockReset();
   });
 
-  it("returns lite corr from prices_daily when there is no snapshot", async () => {
+  it("returns empty desk when there is no snapshot (no lite recompute)", async () => {
     mockCreateServerClient.mockReturnValue(
       createMockSupabase({
         quantropy_runs: () => ({ data: [], error: null }),
-        universe_members: () => ({
-          data: [
-            { symbol: "AAPL", sector: "Technology", company_name: "Apple" },
-            { symbol: "XOM", sector: "Energy", company_name: "Exxon" },
-          ],
-          error: null,
-        }),
-        prices_daily: () => ({
-          data: [...px("AAPL", 90, 1.003), ...px("XOM", 90, 1.001)],
-          error: null,
-        }),
+        prices_daily: () => ({ data: [], error: null }),
       })
     );
     const { GET } = await import("../quantropy/route");
     const res = await GET();
     const body = await res.json();
     expect(res.status).toBe(200);
-    expect(body.lite).toBe(true);
-    expect(body.corr.labels.length).toBeGreaterThanOrEqual(2);
-    expect(body.names.length).toBeGreaterThanOrEqual(2);
+    expect(body.lite).toBe(false);
+    expect(body.names).toEqual([]);
+    expect(body.headline).toMatch(/pending|unavailable/i);
   });
 
   it("returns an empty desk on unexpected errors instead of 500 JSON", async () => {
@@ -87,34 +63,20 @@ describe("GET /api/rotate", () => {
     mockCreateServerClient.mockReset();
   });
 
-  it("returns lite canaries from prices_daily when rotation snapshot is missing", async () => {
-    const sectors = [
-      ["AAPL", "Technology", 1.004],
-      ["MSFT", "Technology", 1.0035],
-      ["XOM", "Energy", 1.001],
-      ["JNJ", "Health Care", 1.0004],
-      ["PG", "Consumer Staples", 1.0005],
-      ["JPM", "Financials", 1.0015],
-      ["AMZN", "Consumer Discretionary", 1.0025],
-    ] as const;
-    const uni = sectors.map(([symbol, sector]) => ({ symbol, sector, company_name: symbol }));
-    const prices = sectors.flatMap(([symbol, , g]) => px(symbol, 220, g));
+  it("returns empty desk when rotation snapshot is missing (no lite recompute)", async () => {
     mockCreateServerClient.mockReturnValue(
       createMockSupabase({
         sector_rotation_runs: () => ({ data: [], error: null }),
-        universe_members: () => ({ data: uni, error: null }),
-        prices_daily: () => ({ data: prices, error: null }),
+        prices_daily: () => ({ data: [], error: null }),
       })
     );
     const { GET } = await import("../rotate/route");
     const res = await GET();
     const body = await res.json();
     expect(res.status).toBe(200);
-    expect(body.lite).toBe(true);
-    expect(body.canaries.length).toBeGreaterThan(0);
-    expect(body.corr.labels.length).toBeGreaterThan(1);
-    const qqq = body.canaries.find((c: { name: string }) => c.name === "QQQ/SPY");
-    expect(qqq?.tape?.length ?? 0).toBeGreaterThan(0);
+    expect(body.lite).toBe(false);
+    expect(body.canaries).toEqual([]);
+    expect(body.headline).toMatch(/pending|unavailable/i);
   });
 
   it("returns an empty desk on unexpected errors instead of 500 JSON", async () => {
