@@ -39,6 +39,11 @@ from pipeline.compute.loop_atr_trail import (
     chandelier_trail_snapshot,
 )
 from pipeline.universe_filters import is_loop_tradable, is_pharma_stock
+from pipeline.compute.loop_order_economics import next_session_open, order_economics
+from pipeline.compute.loop_strategy_bus import (
+    donchian_buy_scores,
+    latest_signal_as_of,
+)
 from pipeline.compute.sync_loop_journal import sync_loop_trading_journal
 from pipeline.utils.supabase import fetch_all
 
@@ -168,6 +173,28 @@ def _run_portfolio_loop(sb, run) -> None:
 
     snapshots, prior_snaps = _build_snaps(all_px)
 
+    signal_as_of = latest_signal_as_of(sb, "donchian_vwap", today)
+    buy_scores: dict[str, float] = {}
+    signal_source = "inline_prior_bar"
+    if signal_as_of:
+        buy_scores = donchian_buy_scores(sb, signal_as_of)
+        if buy_scores:
+            signal_source = "strategy_signals"
+    if not buy_scores:
+        for sym, prev in prior_snaps.items():
+            if prev.get("eligible"):
+                buy_scores[sym] = float(prev.get("strength") or 0.0)
+        note(
+            "INFO",
+            "strategy_signals empty — inline prior-bar Donchian eligibility",
+        )
+    else:
+        note(
+            "INFO",
+            f"Rebalance candidates from strategy_signals · as_of={signal_as_of} · "
+            f"{len(buy_scores)} BUY",
+        )
+
     px_by_sym: dict[str, pd.DataFrame] = {}
     if all_px:
         px_df = pd.DataFrame(all_px)
@@ -184,10 +211,47 @@ def _run_portfolio_loop(sb, run) -> None:
     orders: list[dict] = []
     oid = 0
 
-    def add_order(**kw) -> None:
+    def add_order(
+        *,
+        ticker: str,
+        action: str,
+        type: str,
+        shares: int,
+        limit_price: float | None,
+        reason: str,
+        sector: str,
+        risk_usd,
+        ohlcv: pd.DataFrame | None = None,
+        use_next_open: bool = False,
+    ) -> None:
         nonlocal oid
         oid += 1
-        orders.append({"id": f"{run_id}_ord_{oid:03d}", "run_id": run_id, **kw})
+        fill_px = limit_price
+        fill_mode = "eod_close"
+        if use_next_open and action == "BUY":
+            nopen, mode = next_session_open(ohlcv, today)
+            if nopen is not None:
+                fill_px = nopen
+                fill_mode = mode
+        econ = order_economics(
+            shares,
+            limit_price,
+            fill_price=fill_px,
+            fill_mode=fill_mode,
+        )
+        orders.append({
+            "id": f"{run_id}_ord_{oid:03d}",
+            "run_id": run_id,
+            "ticker": ticker,
+            "action": action,
+            "type": type,
+            "shares": shares,
+            "limit_price": limit_price,
+            "reason": reason,
+            "sector": sector,
+            "risk_usd": risk_usd,
+            **econ,
+        })
 
     held = {p["symbol"]: p for p in book_rows}
     surviving: dict[str, dict] = {}
@@ -236,15 +300,15 @@ def _run_portfolio_loop(sb, run) -> None:
         else:
             sector_count: dict[str, int] = defaultdict(int)
             cands: list[tuple[str, float, str]] = []
-            for sym, prev in prior_snaps.items():
-                if not prev.get("eligible"):
+            for sym, score in buy_scores.items():
+                if sym not in uni:
                     continue
                 sec = uni[sym].get("sector") or "Unknown"
-                cands.append((sym, float(prev["strength"]), sec))
+                cands.append((sym, score, sec))
             eligible_n = len(cands)
             note(
                 "INFO",
-                f"Prior-bar eligible: {eligible_n} / {len(prior_snaps)} "
+                f"Eligible candidates ({signal_source}): {eligible_n} "
                 f"(universe {len(uni)} · bars {len(snapshots)})",
             )
             cands.sort(key=lambda x: -x[1])
@@ -306,9 +370,14 @@ def _run_portfolio_loop(sb, run) -> None:
                 continue
             sector = u.get("sector") or "Unknown"
             price = float(snap["close"])
+            ohlcv_sym = px_by_sym.get(sym)
             if price < MIN_PRICE:
                 skip(sym, "MIN_PRICE", f"price {price}", sector)
                 continue
+            entry_px = price
+            nopen, _ = next_session_open(ohlcv_sym, today)
+            if nopen is not None:
+                entry_px = nopen
             shares = int(slot_equity // price)
             notional = shares * price
             if shares < 1 or notional < MIN_NOTIONAL:
@@ -316,7 +385,6 @@ def _run_portfolio_loop(sb, run) -> None:
                 continue
             strength = snap.get("strength") or 0
             reason = f"DC{55}+VWAP{20} str {strength:.3f}"
-            ohlcv_sym = px_by_sym.get(sym)
             trail = (
                 chandelier_trail_snapshot(ohlcv_sym, entry_price=price, opened=today, asof=today)
                 if ohlcv_sym is not None
@@ -331,8 +399,16 @@ def _run_portfolio_loop(sb, run) -> None:
                 delta = shares - old_sh
                 if delta > 0:
                     add_order(
-                        ticker=sym, action="BUY", type="RESIZE", shares=delta,
-                        limit_price=round(price, 2), reason=reason, sector=sector, risk_usd=None,
+                        ticker=sym,
+                        action="BUY",
+                        type="RESIZE",
+                        shares=delta,
+                        limit_price=round(price, 2),
+                        reason=reason,
+                        sector=sector,
+                        risk_usd=None,
+                        ohlcv=ohlcv_sym,
+                        use_next_open=True,
                     )
                 elif delta < 0:
                     add_order(
@@ -341,13 +417,31 @@ def _run_portfolio_loop(sb, run) -> None:
                     )
             else:
                 add_order(
-                    ticker=sym, action="BUY", type="ENTER", shares=shares,
-                    limit_price=round(price, 2), reason=reason, sector=sector, risk_usd=None,
+                    ticker=sym,
+                    action="BUY",
+                    type="ENTER",
+                    shares=shares,
+                    limit_price=round(price, 2),
+                    reason=reason,
+                    sector=sector,
+                    risk_usd=None,
+                    ohlcv=ohlcv_sym,
+                    use_next_open=True,
                 )
                 note("ORDER", f"ENTER {sym} {shares} · {reason}")
 
             surviving[sym] = _position_row(
-                sym, u, snap, shares, price, atr_stop, strength, run_id, now, today, reason,
+                sym,
+                u,
+                snap,
+                shares,
+                entry_px,
+                atr_stop,
+                strength,
+                run_id,
+                now,
+                today,
+                reason,
             )
 
     surviving_list = list(surviving.values())
@@ -387,6 +481,9 @@ def _run_portfolio_loop(sb, run) -> None:
             "maxPerSector": MAX_PER_SECTOR,
             "rebalanceDays": REBALANCE_DAYS,
             "equalWeight": True,
+            "signalSource": signal_source,
+            "signalAsOf": signal_as_of.isoformat() if signal_as_of else None,
+            "costModelBpsPerSide": 10.0,
         },
     }
 

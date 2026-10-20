@@ -69,6 +69,7 @@ supabase/migrations/024_pipeline_runs.sql
 supabase/migrations/025_fundamental_analysis_columns.sql
 supabase/migrations/030_strategy_signals.sql
 supabase/migrations/031_universe_snapshots.sql
+supabase/migrations/032_paper_order_costs.sql
 ```
 
 ### Web

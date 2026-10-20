@@ -17,6 +17,18 @@ def test_atr_trail_exit_wired():
     assert "LOOP_ATR_MULT" in text
 
 
+def test_rebalance_reads_strategy_signals_bus():
+    text = Path("pipeline/compute/portfolio_loop.py").read_text(encoding="utf-8")
+    assert "donchian_buy_scores" in text
+    assert "strategy_signals" in text or "signal_source" in text
+
+
+def test_paper_orders_include_cost_fields():
+    text = Path("pipeline/compute/portfolio_loop.py").read_text(encoding="utf-8")
+    assert "order_economics" in text
+    assert "**econ" in text
+
+
 def test_empty_target_does_not_rotate_out_held():
     text = Path("pipeline/compute/portfolio_loop.py").read_text(encoding="utf-8")
     assert "if target_syms:" in text

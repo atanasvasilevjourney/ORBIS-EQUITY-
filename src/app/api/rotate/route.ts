@@ -4,13 +4,12 @@ import { fetchAll } from "@/lib/supabase/paginate";
 import {
   EMPTY_ROTATE,
   canaryTapesFromConfig,
-  liteRotatePayload,
   parseCorr,
   tapePoints,
 } from "@/lib/liteDeskApi";
 import { evaluateFreshness } from "@/lib/freshness";
 import { gateSide, staleHeadline } from "@/lib/signalGate";
-import { blockLiteDesk, deskFreshnessForLite } from "@/lib/liteDeskGate";
+import { deskFreshnessForLite } from "@/lib/liteDeskGate";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -142,16 +141,15 @@ export async function GET() {
     const latest = runs[0] ?? null;
     if (!latest) {
       const fresh = await deskFreshnessForLite(sb, null);
-      if (blockLiteDesk(fresh.signalsSuppressed)) {
-        return NextResponse.json({
-          ...EMPTY_ROTATE,
-          stale: true,
-          signalsSuppressed: true,
-          headline: "STALE — rotate snapshot unavailable",
-        });
-      }
-      const lite = await liteRotatePayload(sb);
-      return NextResponse.json({ ...lite, signalsSuppressed: fresh.signalsSuppressed });
+      return NextResponse.json({
+        ...EMPTY_ROTATE,
+        stale: fresh.stale || fresh.signalsSuppressed,
+        signalsSuppressed: fresh.signalsSuppressed,
+        headline: fresh.signalsSuppressed
+          ? "STALE — rotate snapshot unavailable"
+          : "Rotate snapshot pending — run nightly pipeline",
+        lite: false,
+      });
     }
     const [rows, canaryRows, triggerRows, carverRows] = await Promise.all([
       fetchAll<GroupRow>(sb, "sector_rotation_groups", "*"),
@@ -225,19 +223,14 @@ export async function GET() {
     const fading = sectors.filter((s) => s.label === "FADE" || s.label === "LAG").length;
     const corr = parseCorr((latest.config as { corr?: unknown } | null)?.corr);
     if (!canaries.length && !sectors.length) {
-      if (blockLiteDesk(suppress)) {
-        return NextResponse.json({
-          ...EMPTY_ROTATE,
-          stale: true,
-          signalsSuppressed: true,
-          headline: staleHeadline(latest.headline, true),
-        });
-      }
-      const lite = await liteRotatePayload(sb);
       return NextResponse.json({
-        ...lite,
-        headline: latest.headline || lite.headline,
-        signalsSuppressed: suppress,
+        ...EMPTY_ROTATE,
+        stale: true,
+        signalsSuppressed: true,
+        headline:
+          staleHeadline(latest.headline, true) ??
+          "Rotate snapshot empty — run nightly pipeline",
+        lite: false,
       });
     }
     const gatedTriggers = suppress
