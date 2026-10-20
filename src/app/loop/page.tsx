@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DeskPageHeader } from "@/components/ui/DeskPageHeader";
+import { MetricStrip } from "@/components/ui/MetricStrip";
 import { ModulePanel } from "@/components/ui/ModulePanel";
 
 type Sleeve = "donchian" | "xs";
@@ -231,16 +232,7 @@ export default function LoopPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
-        {cards.map((c) => (
-          <div key={c.label} className="glass-metric">
-            <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">{c.label}</div>
-            <div className="text-lg font-terminal font-bold mt-1" style={{ color: c.color || undefined }}>
-              {loading ? "…" : c.value}
-            </div>
-          </div>
-        ))}
-      </div>
+      <MetricStrip items={cards} columns={6} loading={loading} />
 
       <ModulePanel
         title="Open book"

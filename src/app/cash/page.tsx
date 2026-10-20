@@ -2,6 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { DeskPageHeader } from "@/components/ui/DeskPageHeader";
+import { InfoCallout } from "@/components/ui/InfoCallout";
+import { MetricStrip } from "@/components/ui/MetricStrip";
+import { FilterChip } from "@/components/ui/FilterChip";
 import { TemaRibbon } from "@/components/charts/TemaRibbon";
 import { deskList, parseDesk } from "@/lib/deskPayload";
 import { temaTape, type TemaBar, type TemaReadout } from "@/lib/tema";
@@ -171,61 +175,33 @@ export default function CashPage() {
   ];
 
   return (
-    <div className="px-4 py-6">
-      <div className="mb-4">
-        <h1 className="text-lg font-terminal font-bold tracking-wider" style={{ color: "var(--accent-info)" }}>
-          CASH BOOK · TEMA + CARVER
-        </h1>
-        <p className="text-xs text-[var(--text-secondary)]">
-          Listed close from prices_daily (Yahoo → Stooq cash EOD) · fully funded shares · no USDT-M leverage, funding, or liquidation · paper only
-        </p>
-      </div>
+    <div className="py-6">
+      <DeskPageHeader
+        badge="CASH DESK"
+        title="TEMA + Carver book"
+        subtitle="Listed EOD closes · fully funded paper shares · isolated from LOOP / ORB / ROTATE"
+      />
 
-      <div className="px-4 py-3 mb-4 rounded border border-[var(--border)] bg-[var(--badge-bg)] text-xs text-[var(--text-secondary)] font-terminal space-y-1">
+      <InfoCallout title="CASH book">
         <p>
-          <span style={{ color: "var(--accent-info)" }}>CASH:</span>{" "}
-          Same TEMA 9/99/199 swing and Carver EWMAC as before, sized on the actual stock close
-          from the cash EOD ingest (Yahoo chart API, Stooq fallback — QMIE-shaped, not perp klines).
-          A slot is shares × cash price, capped at the allocated sleeve cash. Longs are paper long stock.
-          Shorts are paper shorts of the listed name — no borrow / locate model. Isolated from LOOP / ORB / BIAS / ROTATE.
+          Same TEMA 9/99/199 swing and Carver EWMAC, sized on cash EOD from prices_daily (Yahoo → Stooq).
+          Slots are shares × close, capped at sleeve cash. No perp leverage or borrow model.
         </p>
-        <p>
-          MACD(12,26,9) is the systematic close. 2.5 ATR is the hard stop. Not investment advice. No live orders.
-        </p>
-      </div>
+        <p>MACD(12,26,9) is the systematic close. 2.5 ATR hard stop. Paper only — not investment advice.</p>
+      </InfoCallout>
 
       {(d?.headline || d?.summary == null) && (
-        <div className="px-4 py-2 mb-4 rounded border border-[var(--border)] bg-[var(--card-bg)] text-sm text-[var(--text-secondary)] font-terminal">
+        <div className="headline-banner mb-4">
           <span style={{ color: "var(--accent-info)" }}>CASH:</span>{" "}
           {d?.headline ?? "Paper TEMA ribbon on listed closes. Book slots fill after python -m pipeline.compute.perps_desk."}
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-        {cards.map((c) => (
-          <div key={c.label} className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
-            <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">{c.label}</div>
-            <div className="text-lg font-terminal font-bold mt-1" style={{ color: c.color || undefined }}>
-              {loading ? "…" : c.value}
-            </div>
-          </div>
-        ))}
-      </div>
+      <MetricStrip items={cards} columns={5} loading={loading} />
 
       <div className="mb-4 flex flex-wrap gap-2">
         {chips.map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setVizTicker(t)}
-            className="px-2 py-1 rounded border border-[var(--border)] text-xs font-terminal"
-            style={{
-              background: t === vizTicker ? "rgba(56, 189, 248, 0.18)" : "var(--card-bg)",
-              color: t === vizTicker ? "var(--accent-info)" : "var(--text-secondary)",
-            }}
-          >
-            {t}
-          </button>
+          <FilterChip key={t} label={t} active={t === vizTicker} onClick={() => setVizTicker(t)} />
         ))}
       </div>
       <p className="text-[10px] text-[var(--text-muted)] font-terminal mb-2">{tapeNote}</p>

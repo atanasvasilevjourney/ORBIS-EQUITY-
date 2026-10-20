@@ -125,7 +125,7 @@ export function Nav() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Ticker"
-              className="w-20 sm:w-24 px-2.5 py-1.5 text-xs font-terminal rounded-l-full border border-[var(--border)] bg-[var(--card-bg)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-info)]"
+              className="nav-search-input w-20 sm:w-28 rounded-l-full"
             />
             <button
               type="submit"
@@ -159,7 +159,7 @@ export function Nav() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search ticker..."
-              className="flex-1 px-3 py-2 text-xs font-terminal rounded-l-full border border-[var(--border)] bg-[var(--card-bg)]"
+              className="nav-search-input flex-1 rounded-l-full"
             />
             <button type="submit" className="px-4 py-2 text-xs font-terminal rounded-r-full border border-l-0 border-[var(--border)] bg-[var(--surface-alt)]">
               GO

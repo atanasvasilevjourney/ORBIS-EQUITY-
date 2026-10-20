@@ -134,6 +134,57 @@ body {
     background-size: 200% 100%;
     animation: shimmer 1.4s ease-in-out infinite;
   }
+
+  .chip-link {
+    @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-terminal transition-all;
+    border-color: var(--panel-border);
+    background: var(--surface-alt);
+    color: var(--text-secondary);
+  }
+
+  .chip-link:hover {
+    border-color: var(--accent-info);
+    color: var(--text-primary);
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.12);
+    transform: translateY(-1px);
+  }
+
+  .stat-pill {
+    @apply px-3 py-2 rounded-full border;
+    border-color: var(--panel-border);
+    background: var(--surface-alt);
+  }
+
+  .nav-search-input {
+    @apply px-2.5 py-1.5 text-xs font-terminal border border-[var(--border)] bg-[var(--card-bg)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-colors;
+  }
+
+  .nav-search-input:focus {
+    outline: none;
+    border-color: var(--accent-info);
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+  }
+
+  .module-desk-card {
+    @apply transition-all duration-200;
+  }
+
+  .module-desk-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-glow), var(--shadow-panel);
+  }
+
+  .ticker-tab {
+    @apply px-4 py-2 text-xs font-terminal rounded-full border transition-all;
+    border-color: transparent;
+    color: var(--text-muted);
+  }
+
+  .ticker-tab[data-active="true"] {
+    border-color: var(--accent-info);
+    color: var(--accent-info);
+    background: rgba(56, 189, 248, 0.1);
+  }
 }
 
 @keyframes page-fade-in {

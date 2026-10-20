@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { DeskPageHeader } from "@/components/ui/DeskPageHeader";
+import { MetricStrip } from "@/components/ui/MetricStrip";
 import { parseDesk, pickNamed } from "@/lib/deskPayload";
 
 type StrikePt = {
@@ -284,18 +286,15 @@ export default function SkewPage() {
   ];
 
   return (
-    <div className="px-4 py-6">
-      <div className="mb-4">
-        <h1 className="text-lg font-terminal font-bold tracking-wider" style={{ color: "var(--accent-info)" }}>
-          SKEW MAP
-        </h1>
-        <p className="text-xs text-[var(--text-secondary)]">
-          What listed options traders are paying for — IV vs strike, term, surface, weekend vol
-        </p>
-      </div>
+    <div className="py-6">
+      <DeskPageHeader
+        badge="OPTIONS DESK"
+        title="Skew map"
+        subtitle="Listed IV vs strike, term structure, surface, and weekend vol"
+      />
 
       {d?.headline && (
-        <div className="px-4 py-2 mb-4 rounded border border-[var(--border)] bg-[var(--badge-bg)] text-sm text-[var(--text-secondary)] font-terminal">
+        <div className="headline-banner mb-4">
           <span style={{ color: "var(--accent-info)" }}>SKEW:</span> {d.headline}
           {s?.asOfDate && (
             <span className="ml-3 text-[var(--text-muted)]" style={{ color: d.stale ? "var(--accent-warning)" : undefined }}>
@@ -305,16 +304,7 @@ export default function SkewPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-        {cards.map((c) => (
-          <div key={c.label} className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
-            <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">{c.label}</div>
-            <div className="text-lg font-terminal font-bold mt-1" style={{ color: c.color || undefined }}>
-              {loading ? "…" : c.value}
-            </div>
-          </div>
-        ))}
-      </div>
+      <MetricStrip items={cards} columns={5} loading={loading} />
 
       <div className="flex flex-wrap gap-1 mb-4">
         {(d?.names ?? []).map((n) => (

@@ -25,6 +25,7 @@ export function ModulePanel({
   return (
     <section
       className={`flex flex-col glass-panel overflow-hidden ${className}`}
+      style={{ boxShadow: `inset 0 2px 0 0 ${accent}, var(--shadow-panel)` }}
     >
       <header
         className="flex items-center justify-between gap-3 px-3 py-2 border-b"

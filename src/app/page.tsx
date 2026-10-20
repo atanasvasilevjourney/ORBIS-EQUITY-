@@ -8,6 +8,7 @@ import { PostureGauge } from "@/components/ui/PostureGauge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PostureBreakdown, type PosturePillars } from "@/components/ui/PostureBreakdown";
 import { CrossAssetStrip, type CrossAssetTile } from "@/components/dashboard/CrossAssetStrip";
+import { ChipLink, StatPill } from "@/components/ui/ChipLink";
 
 type DashData = {
   posture: number | null;
@@ -402,17 +403,13 @@ export default function Home() {
         <ModulePanel title="WATCHLIST MOVERS" badge="HOT" accent="var(--module-1)" source="MODULE 1">
           <div className="flex flex-wrap gap-2">
             {d!.watchlistMovers.map((m) => (
-              <Link
-                key={m.symbol}
-                href={`/ticker/${m.symbol}`}
-                className="px-2 py-1 rounded border border-[var(--panel-border)] text-xs font-terminal hover:border-[var(--accent-info)]"
-              >
+              <ChipLink key={m.symbol} href={`/ticker/${m.symbol}`}>
                 <span className="font-bold">{m.symbol}</span>
-                <span className="text-[var(--text-muted)] ml-2">O {m.orbisScore ?? "—"}</span>
-                <span className="ml-2" style={{ color: "var(--accent-bull)" }}>
+                <span className="text-[var(--text-muted)]">O {m.orbisScore ?? "—"}</span>
+                <span style={{ color: "var(--accent-bull)" }}>
                   {m.dayPct != null ? `+${m.dayPct.toFixed(1)}%` : ""}
                 </span>
-              </Link>
+              </ChipLink>
             ))}
           </div>
         </ModulePanel>
@@ -424,37 +421,23 @@ export default function Home() {
           <div className="flex flex-wrap gap-2">
             {regions.length > 0
               ? regions.map(([region, val]) => (
-                  <div
+                  <StatPill
                     key={region}
-                    className="px-3 py-2 rounded border border-[var(--panel-border)] font-terminal text-xs"
-                  >
-                    <span className="text-[var(--text-muted)] tracking-wider mr-2">
-                      {region.toUpperCase()}
-                    </span>
-                    <span
-                      style={{
-                        color:
-                          val >= 55
-                            ? "var(--accent-bull)"
-                            : val <= 45
-                              ? "var(--accent-bear)"
-                              : "var(--text-primary)",
-                      }}
-                    >
-                      {typeof val === "number" ? val.toFixed(0) : val}
-                    </span>
-                  </div>
+                    label={region.toUpperCase()}
+                    value={typeof val === "number" ? val.toFixed(0) : val}
+                    valueColor={
+                      val >= 55
+                        ? "var(--accent-bull)"
+                        : val <= 45
+                          ? "var(--accent-bear)"
+                          : "var(--text-primary)"
+                    }
+                  />
                 ))
               : (
                 <>
-                  <div className="px-3 py-2 rounded border border-[var(--panel-border)] font-terminal text-xs">
-                    <span className="text-[var(--text-muted)] mr-2">LEAD</span>
-                    <span style={{ color: "var(--accent-bull)" }}>{d?.bestSector}</span>
-                  </div>
-                  <div className="px-3 py-2 rounded border border-[var(--panel-border)] font-terminal text-xs">
-                    <span className="text-[var(--text-muted)] mr-2">LAG</span>
-                    <span style={{ color: "var(--accent-bear)" }}>{d?.worstSector}</span>
-                  </div>
+                  <StatPill label="LEAD" value={d?.bestSector ?? "—"} valueColor="var(--accent-bull)" />
+                  <StatPill label="LAG" value={d?.worstSector ?? "—"} valueColor="var(--accent-bear)" />
                 </>
               )}
           </div>
@@ -465,7 +448,8 @@ export default function Home() {
         <button
           type="button"
           onClick={() => setShowDesks((v) => !v)}
-          className="text-xs font-terminal px-3 py-1.5 rounded border border-[var(--panel-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+          className="sleeve-tab text-[var(--text-secondary)]"
+          data-active={showDesks}
         >
           {showDesks ? "Hide module desks" : "Show all module desks"}
         </button>
@@ -599,14 +583,14 @@ export default function Home() {
             ],
           },
         ] as const).map((m) => (
-          <Link key={m.badge} href={m.href} className="block group">
+          <Link key={m.badge} href={m.href} className="block group module-desk-card">
             <ModulePanel
               title={m.title}
               badge={m.badge}
               subtitle={m.subtitle}
               accent={m.accent}
               source={m.source}
-              className="h-full transition-opacity group-hover:opacity-95"
+              className="h-full"
             >
               <div className="grid grid-cols-3 gap-2">
                 {m.metrics.map((metric) => (
