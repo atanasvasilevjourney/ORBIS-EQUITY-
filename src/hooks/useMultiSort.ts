@@ -8,7 +8,7 @@ import {
   type SortLevel,
 } from "@/lib/deskMultiSort";
 
-export function useMultiSort<T, K extends string>(
+export function useMultiSort<T, K extends string = string>(
   rows: T[],
   accessors: Record<K, SortAccessor<T, K>>,
   defaultLevels: SortLevel<K>[],

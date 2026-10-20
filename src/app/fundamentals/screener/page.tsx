@@ -200,7 +200,7 @@ export default function FundamentalsScreenerPage() {
     }),
     []
   );
-  const { sorted: sortedRows, levels, onHeaderClick, clearSort } = useMultiSort(
+  const { sorted: sortedRows, levels, onHeaderClick, clearSort } = useMultiSort<ResultRow, FaSortKey>(
     rows,
     faAccessors,
     [{ key: "compositeScore", dir: "desc" }],

@@ -137,7 +137,7 @@ export default function ScreenerPage() {
   }, [fetchData]);
 
   const accessors = useMemo(() => SCREENER_ACCESSORS, []);
-  const { sorted: sortedRows, levels, onHeaderClick, clearSort } = useMultiSort(
+  const { sorted: sortedRows, levels, onHeaderClick, clearSort } = useMultiSort<ScreenerRow, ScreenerSortKey>(
     rows,
     accessors,
     [{ key: "pctFromHigh", dir: "desc" }],

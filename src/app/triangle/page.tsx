@@ -96,7 +96,7 @@ export default function TrianglePage() {
     }),
     []
   );
-  const { sorted: sortedRows, levels: sortLevels, onHeaderClick, clearSort } = useMultiSort(
+  const { sorted: sortedRows, levels: sortLevels, onHeaderClick, clearSort } = useMultiSort<Row, TriSortKey>(
     rows,
     triAccessors,
     [{ key: "score", dir: "desc" }],
