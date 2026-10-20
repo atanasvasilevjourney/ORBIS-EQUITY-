@@ -46,7 +46,7 @@ export function ModulePanel({
                   {badge}
                 </span>
               )}
-              <h2 className="text-xs font-terminal font-semibold tracking-wider truncate">
+              <h2 className="text-sm font-display font-semibold tracking-tight truncate">
                 {title}
               </h2>
             </div>

@@ -103,6 +103,77 @@ body {
     background: rgba(56, 189, 248, 0.12);
     box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.25);
   }
+
+  .page-enter {
+    animation: page-fade-in 0.45s ease-out both;
+  }
+
+  .section-label {
+    @apply text-[10px] font-terminal tracking-[0.2em] uppercase;
+    color: var(--text-muted);
+  }
+
+  .section-label-dot {
+    @apply w-1.5 h-1.5 rounded-full shrink-0;
+    background: var(--gradient-brand);
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.45);
+  }
+
+  .headline-banner {
+    @apply glass-panel px-4 py-2.5 text-sm font-terminal text-[var(--text-secondary)];
+  }
+
+  .skeleton-pulse {
+    @apply rounded animate-pulse;
+    background: linear-gradient(
+      90deg,
+      var(--surface-alt) 0%,
+      var(--panel-header) 50%,
+      var(--surface-alt) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--panel-border) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--panel-border);
+  border-radius: 999px;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--accent-info);
+  outline-offset: 2px;
 }
 
 ::selection {

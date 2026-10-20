@@ -32,7 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Nav />
             <DataHonestyBar />
             <DeskUniverseStrip />
-            <main className="mx-auto max-w-[1600px] px-3 sm:px-5 pb-10">{children}</main>
+            <main className="page-enter mx-auto max-w-[1600px] px-3 sm:px-5 pb-10">{children}</main>
             <CommandPalette />
           </DeskUniverseShell>
         </ThemeProvider>
