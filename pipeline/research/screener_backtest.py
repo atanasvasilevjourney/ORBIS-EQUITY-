@@ -75,16 +75,17 @@ def run_screener_portfolio(start: date, end: date) -> tuple[pd.Series, dict]:
     ]
 
     holdings: list[str] = []
+    prev_holdings: list[str] = []
     daily_rets: list[float] = []
     exits = {"left_green": 0, "rank_decay": 0, "rebalance_out": 0}
 
     for i, d in enumerate(days):
         signal_day = days[max(0, i - 1)]
 
-        # intraweek screener exits
+        # intraweek screener exits (signal on prior session, effective next open via return model)
         still = []
         for sym in holdings:
-            row = _radar_row(radar[sym], d) if sym in radar else None
+            row = _radar_row(radar[sym], signal_day) if sym in radar else None
             if row is None:
                 still.append(sym)
                 continue
@@ -132,20 +133,14 @@ def run_screener_portfolio(start: date, end: date) -> tuple[pd.Series, dict]:
                     exits["rebalance_out"] += 1
             holdings = target
 
-        parts = []
-        for sym in holdings:
-            bar = _bar_on(panels[sym], d)
-            if bar is None:
-                continue
-            ohlcv = panels[sym]
-            ts = pd.Timestamp(d)
-            loc = int(np.where(ohlcv.index.normalize() == ts)[0][0])
-            if loc == 0:
-                continue
-            parts.append(
-                float(ohlcv.iloc[loc]["close"]) / float(ohlcv.iloc[loc - 1]["close"]) - 1
+        from pipeline.strategies.execution import equal_weight_portfolio_return
+
+        daily_rets.append(
+            equal_weight_portfolio_return(
+                panels, d, holdings, prev_holdings=prev_holdings
             )
-        daily_rets.append(float(np.mean(parts)) if parts else 0.0)
+        )
+        prev_holdings = list(holdings)
 
     s = pd.Series(daily_rets, index=pd.to_datetime(days))
     eq = (1 + s).cumprod()

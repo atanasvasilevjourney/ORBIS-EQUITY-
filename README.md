@@ -67,6 +67,8 @@ supabase/migrations/020_ingest_runs.sql
 supabase/migrations/021_rls_lockdown.sql
 supabase/migrations/024_pipeline_runs.sql
 supabase/migrations/025_fundamental_analysis_columns.sql
+supabase/migrations/030_strategy_signals.sql
+supabase/migrations/031_universe_snapshots.sql
 ```
 
 ### Web
@@ -282,4 +284,6 @@ Scores are cross-sectional percentile ranks (0–100). Composite score is the we
 
 ## API
 
-All routes under `/api/*` are readable by the UI. External access requires `x-api-key` header when `API_SECRET` is set.
+All routes under `/api/*` are readable by the UI. External access requires the `x-api-key` header when `API_SECRET` is set.
+
+The UI is recognised by the browser's `Sec-Fetch-Site` header, which any non-browser client can also send, so this is a convenience gate and not authentication. In production with no `API_SECRET`, requests that do not look like browser fetches are refused. Put real auth in front of the app if the data must be private.

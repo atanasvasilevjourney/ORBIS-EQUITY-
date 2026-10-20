@@ -35,6 +35,7 @@ RISK_PCT = 0.01
 STOP_N = 2.0
 from pipeline.ingest.us_index_universe import build_merged_universe
 from pipeline.research.radar_alert_backtest import build_radar_history
+from pipeline.strategies.costs import DEFAULT_LOOP_COSTS
 from pipeline.universe_filters import is_loop_tradable, is_pharma_stock
 
 logger = logging.getLogger(__name__)
@@ -192,153 +193,156 @@ def run_loop_backtest(
     trades: list[dict] = []
     curve_rows: list[dict] = []
 
-    for d in days:
-        # --- exits ---
-        still: list[Position] = []
-        for pos in positions:
-            hist = radar.get(pos.symbol)
-            row = _radar_on(hist, d) if hist is not None else None
-            bar = _bar_on(panels[pos.symbol], d) if pos.symbol in panels else None
-            if row is None or bar is None:
-                still.append(pos)
-                continue
-            low = float(bar["low"])
-            close = float(bar["close"])
-            exit_px = None
-            reason = None
-            if int(row["state"]) == -1:
-                exit_px = close
-                reason = "state_red"
-            elif int(row["quality_rank"]) < 50:
-                exit_px = close
-                reason = "rank_decay"
-            elif float(row["z_mom"]) < 0 and float(row["f_ewmac"]) < 0:
-                exit_px = close
-                reason = "momentum_fail"
+    slip = DEFAULT_LOOP_COSTS.bps_per_side / 10_000.0
 
-            if exit_px is not None:
-                cash += pos.shares * exit_px
-                pnl = (exit_px - pos.entry) * pos.shares
-                trades.append(
-                    {
-                        "symbol": pos.symbol,
-                        "entry_date": pos.opened.isoformat(),
-                        "exit_date": d.isoformat(),
-                        "entry": pos.entry,
-                        "exit": exit_px,
-                        "shares": pos.shares,
-                        "pnl_usd": pnl,
-                        "return_pct": (exit_px / pos.entry - 1) * 100,
-                        "exit_reason": reason,
-                    }
-                )
-            else:
-                still.append(pos)
-        positions = still
+    for i, d in enumerate(days):
+        signal_day = days[i - 1] if i > 0 else None
 
-        # --- entries (EOD close fills) ---
-        if posture >= POSTURE_ENTRY_MIN and len(positions) < MAX_NAMES:
-            sector_count: dict[str, int] = defaultdict(int)
-            for p in positions:
-                sector_count[p.sector] += 1
-            open_risk = sum(p.risk_usd for p in positions)
+        # --- exits / entries at today's open from prior session radar ---
+        if signal_day is not None:
+            still: list[Position] = []
+            for pos in positions:
+                hist = radar.get(pos.symbol)
+                row = _radar_on(hist, signal_day) if hist is not None else None
+                bar = _bar_on(panels[pos.symbol], d) if pos.symbol in panels else None
+                if row is None or bar is None:
+                    still.append(pos)
+                    continue
+                exit_px = None
+                reason = None
+                if int(row["state"]) == -1:
+                    reason = "state_red"
+                elif int(row["quality_rank"]) < 50:
+                    reason = "rank_decay"
+                elif float(row["z_mom"]) < 0 and float(row["f_ewmac"]) < 0:
+                    reason = "momentum_fail"
 
-            candidates: list[dict] = []
-            held = {p.symbol for p in positions}
-            for sym, hist in radar.items():
-                if sym not in sym_sector or sym in held:
-                    continue
-                row = _radar_on(hist, d)
-                if row is None:
-                    continue
-                if int(row["state"]) != 1:
-                    continue
-                rank = int(row["quality_rank"])
-                if rank < MIN_RANK:
-                    continue
-                if not (float(row["z_mom"]) > 0 and float(row["f_ewmac"]) > 0):
-                    continue
-                brk = bool(row["breakout_active"])
-                vol = bool(row["volume_confirmed"])
-                if not (brk or vol):
-                    z52 = float(row["z_52"])
-                    if not (rank >= 65 and z52 > -0.10):
-                        continue
-                ohlcv = panels[sym]
-                bar = _bar_on(ohlcv, d)
-                if bar is None:
-                    continue
-                # integer location for ATR window
-                hits = ohlcv.index.normalize() == pd.Timestamp(d)
-                bar_idx = int(np.where(hits)[0][0])
-                n = _atr14(ohlcv, bar_idx)
-                close = float(bar["close"])
-                if n is None or n < MIN_ATR or close < MIN_PRICE:
-                    continue
-                candidates.append(
-                    {
-                        "symbol": sym,
-                        "sector": sym_sector[sym],
-                        "rank": rank,
-                        "close": close,
-                        "n": n,
-                        "conv": int(row["convergence"]),
-                        "vol": vol,
-                        "z52": float(row["z_52"]),
-                    }
-                )
-
-            candidates.sort(
-                key=lambda c: (c["rank"], c["conv"], c["vol"], c["z52"]),
-                reverse=True,
-            )
-
-            for c in candidates:
-                if len(positions) >= MAX_NAMES:
-                    break
-                if sector_count[c["sector"]] >= MAX_PER_SECTOR:
-                    continue
-                stop_dist = STOP_N * c["n"]
-                shares = int((initial_equity * RISK_PCT) // stop_dist)
-                notional = shares * c["close"]
-                if notional > initial_equity * MAX_NAME_PCT:
-                    shares = int((initial_equity * MAX_NAME_PCT) // c["close"])
-                    notional = shares * c["close"]
-                if shares < 1 or notional < MIN_NOTIONAL:
-                    continue
-                risk_usd = stop_dist * shares
-                if (open_risk + risk_usd) / initial_equity > MAX_OPEN_RISK_PCT:
-                    continue
-                stop = c["close"] - stop_dist
-                cost = shares * c["close"]
-                cash -= cost
-                open_risk += risk_usd
-                sector_count[c["sector"]] += 1
-                positions.append(
-                    Position(
-                        symbol=c["symbol"],
-                        sector=c["sector"],
-                        shares=shares,
-                        entry=c["close"],
-                        stop=stop,
-                        n=c["n"],
-                        risk_usd=risk_usd,
-                        opened=d,
+                if reason is not None:
+                    exit_px = float(bar["open"]) * (1 - slip)
+                    cash += pos.shares * exit_px
+                    pnl = (exit_px - pos.entry) * pos.shares
+                    trades.append(
+                        {
+                            "symbol": pos.symbol,
+                            "entry_date": pos.opened.isoformat(),
+                            "exit_date": d.isoformat(),
+                            "entry": pos.entry,
+                            "exit": exit_px,
+                            "shares": pos.shares,
+                            "pnl_usd": pnl,
+                            "return_pct": (exit_px / pos.entry - 1) * 100,
+                            "exit_reason": reason,
+                        }
                     )
+                else:
+                    still.append(pos)
+            positions = still
+
+            if posture >= POSTURE_ENTRY_MIN and len(positions) < MAX_NAMES:
+                sector_count: dict[str, int] = defaultdict(int)
+                for p in positions:
+                    sector_count[p.sector] += 1
+                open_risk = sum(p.risk_usd for p in positions)
+
+                candidates: list[dict] = []
+                held = {p.symbol for p in positions}
+                for sym, hist in radar.items():
+                    if sym not in sym_sector or sym in held:
+                        continue
+                    row = _radar_on(hist, signal_day)
+                    if row is None:
+                        continue
+                    if int(row["state"]) != 1:
+                        continue
+                    rank = int(row["quality_rank"])
+                    if rank < MIN_RANK:
+                        continue
+                    if not (float(row["z_mom"]) > 0 and float(row["f_ewmac"]) > 0):
+                        continue
+                    brk = bool(row["breakout_active"])
+                    vol = bool(row["volume_confirmed"])
+                    if not (brk or vol):
+                        z52 = float(row["z_52"])
+                        if not (rank >= 65 and z52 > -0.10):
+                            continue
+                    ohlcv = panels[sym]
+                    bar = _bar_on(ohlcv, signal_day)
+                    if bar is None:
+                        continue
+                    hits = ohlcv.index.normalize() == pd.Timestamp(signal_day)
+                    bar_idx = int(np.where(hits)[0][0])
+                    n = _atr14(ohlcv, bar_idx)
+                    close = float(bar["close"])
+                    if n is None or n < MIN_ATR or close < MIN_PRICE:
+                        continue
+                    candidates.append(
+                        {
+                            "symbol": sym,
+                            "sector": sym_sector[sym],
+                            "rank": rank,
+                            "close": close,
+                            "n": n,
+                            "conv": int(row["convergence"]),
+                            "vol": vol,
+                            "z52": float(row["z_52"]),
+                        }
+                    )
+
+                candidates.sort(
+                    key=lambda c: (c["rank"], c["conv"], c["vol"], c["z52"]),
+                    reverse=True,
                 )
-                trades.append(
-                    {
-                        "symbol": c["symbol"],
-                        "entry_date": d.isoformat(),
-                        "exit_date": "",
-                        "entry": c["close"],
-                        "exit": np.nan,
-                        "shares": shares,
-                        "pnl_usd": np.nan,
-                        "return_pct": np.nan,
-                        "exit_reason": "OPEN",
-                    }
-                )
+
+                for c in candidates:
+                    if len(positions) >= MAX_NAMES:
+                        break
+                    if sector_count[c["sector"]] >= MAX_PER_SECTOR:
+                        continue
+                    stop_dist = STOP_N * c["n"]
+                    shares = int((initial_equity * RISK_PCT) // stop_dist)
+                    notional = shares * c["close"]
+                    if notional > initial_equity * MAX_NAME_PCT:
+                        shares = int((initial_equity * MAX_NAME_PCT) // c["close"])
+                        notional = shares * c["close"]
+                    if shares < 1 or notional < MIN_NOTIONAL:
+                        continue
+                    risk_usd = stop_dist * shares
+                    if (open_risk + risk_usd) / initial_equity > MAX_OPEN_RISK_PCT:
+                        continue
+                    bar_open = _bar_on(panels[c["symbol"]], d)
+                    if bar_open is None:
+                        continue
+                    entry_px = float(bar_open["open"]) * (1 + slip)
+                    stop = entry_px - stop_dist
+                    cost = shares * entry_px
+                    cash -= cost
+                    open_risk += risk_usd
+                    sector_count[c["sector"]] += 1
+                    positions.append(
+                        Position(
+                            symbol=c["symbol"],
+                            sector=c["sector"],
+                            shares=shares,
+                            entry=entry_px,
+                            stop=stop,
+                            n=c["n"],
+                            risk_usd=risk_usd,
+                            opened=d,
+                        )
+                    )
+                    trades.append(
+                        {
+                            "symbol": c["symbol"],
+                            "entry_date": d.isoformat(),
+                            "exit_date": "",
+                            "entry": entry_px,
+                            "exit": np.nan,
+                            "shares": shares,
+                            "pnl_usd": np.nan,
+                            "return_pct": np.nan,
+                            "exit_reason": "OPEN",
+                        }
+                    )
 
         mkt = 0.0
         for pos in positions:

@@ -179,6 +179,13 @@ def main() -> None:
             "symbol", to_deactivate[i : i + batch_size]
         ).execute()
 
+    from datetime import date as date_cls
+
+    from pipeline.research.pit_universe import write_universe_snapshot
+
+    snap_n = write_universe_snapshot(sb, date_cls.today(), stocks)
+    logger.info("Wrote universe_member_snapshots for %s (%d rows)", date_cls.today(), snap_n)
+
     logger.info(
         "=== Universe sync complete: %d active index names, %d pharma excluded, %d deactivated stale ===",
         len(allowed),

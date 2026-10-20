@@ -1,29 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
+import { decideApiAccess } from "@/lib/apiAuth";
 
 /**
  * Protect external /api/* access with a shared API secret.
- * Same-origin browser requests (our UI) are exempt via Sec-Fetch-Site.
+ * Browser fetches from our UI are recognised via Sec-Fetch-Site.
  *
  * External clients must send: x-api-key: <API_SECRET>
  */
 export function middleware(req: NextRequest) {
-  const secret = process.env.API_SECRET;
+  const decision = decideApiAccess({
+    secret: process.env.API_SECRET,
+    isProduction: process.env.NODE_ENV === "production",
+    secFetchSite: req.headers.get("sec-fetch-site"),
+    apiKey: req.headers.get("x-api-key"),
+  });
 
-  if (!secret) {
-    return NextResponse.next();
-  }
-
-  // Same-origin / same-site browser fetches from our UI
-  const site = req.headers.get("sec-fetch-site");
-  if (site === "same-origin" || site === "same-site" || site === "none") {
-    return NextResponse.next();
-  }
-
-  const token = req.headers.get("x-api-key");
-  if (token !== secret) {
+  if (decision === "unauthorized") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
   return NextResponse.next();
 }
 

@@ -1,5 +1,7 @@
 /** US EOD freshness — calendar dates treated as America/New_York session dates. */
 
+import { isNyseTradingDay } from "@/lib/nyseCalendar";
+
 export function nyCalendarDate(now = new Date()): string {
   return now.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 }
@@ -19,22 +21,19 @@ export function isWeekendIso(iso: string): boolean {
   return dow === 0 || dow === 6;
 }
 
-/** Previous weekday strictly before ``iso`` (NY calendar date string). */
+/** Previous NYSE session strictly before ``iso`` (NY calendar date string). */
 export function previousTradingDayIso(iso: string): string {
-  let d = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
   do {
     d.setUTCDate(d.getUTCDate() - 1);
-  } while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
+  } while (!isNyseTradingDay(d.toISOString().slice(0, 10)));
   return d.toISOString().slice(0, 10);
 }
 
 /** Latest EOD session we expect to be ingested (before tonight's job on weekdays). */
 export function lastExpectedEodDate(now = new Date()): string {
   let d = nyCalendarDate(now);
-  while (isWeekendIso(d)) {
-    d = previousTradingDayIso(d);
-  }
-  if (nyHour(now) < 16) {
+  if (!isNyseTradingDay(d) || nyHour(now) < 16) {
     d = previousTradingDayIso(d);
   }
   return d;

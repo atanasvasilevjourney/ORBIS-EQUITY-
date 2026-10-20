@@ -26,6 +26,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+from datetime import date
 from typing import Any
 
 from dotenv import load_dotenv
@@ -64,30 +65,31 @@ def _safe_div(a, b):
     return a / b
 
 
-def _fetch_all_reports(sb: Client, report_type: str) -> dict[str, list[dict]]:
-    """Fetch all FY reports of a given type in bulk, grouped by symbol.
+def _fetch_all_reports(
+    sb: Client, report_type: str, as_of: date | None = None
+) -> dict[str, list[dict]]:
+    """FY report data known on or before ``as_of``, newest fiscal year first (up to 3)."""
+    from datetime import date as date_cls
 
-    Returns {symbol: [newest_data, second_newest_data]} — at most 2 per symbol.
-    """
+    from pipeline.utils.pit_reports import latest_fy_reports_as_of
     from pipeline.utils.supabase import fetch_all
 
+    as_of = as_of or date_cls.today()
     all_rows = fetch_all(
         sb,
         "financial_reports",
-        "symbol, date, data",
+        "symbol, date, filing_date, data",
         filters=lambda q, rt=report_type: q.eq("report_type", rt).eq("period", "FY"),
         order=("date", True),
     )
-    logger.info("Fetched %d %s report rows", len(all_rows), report_type)
+    logger.info("Fetched %d %s report rows (PIT as_of=%s)", len(all_rows), report_type, as_of)
 
-    grouped: dict[str, list[dict]] = {}
+    by_sym: dict[str, list[dict]] = {}
     for r in all_rows:
-        sym = r["symbol"]
-        if sym not in grouped:
-            grouped[sym] = []
-        if len(grouped[sym]) < 2:
-            grouped[sym].append(r["data"])
-
+        by_sym.setdefault(r["symbol"], []).append(r)
+    grouped: dict[str, list[dict]] = {}
+    for sym, rows in by_sym.items():
+        grouped[sym] = latest_fy_reports_as_of(rows, as_of, max_reports=3)
     return grouped
 
 
@@ -97,6 +99,7 @@ def compute_f_score_detail(
     balance_cur: dict | None,
     balance_pri: dict | None,
     cashflow_cur: dict | None,
+    balance_older: dict | None = None,
 ) -> dict[str, Any] | None:
     """Compute F-Score with boolean component breakdown. Returns None if data insufficient."""
     if not income_cur or not balance_cur or not income_pri or not balance_pri:
@@ -113,7 +116,7 @@ def compute_f_score_detail(
     components["cfo_positive"] = cfo is not None and cfo > 0
 
     prior_ni = income_pri.get("netIncome")
-    prior_ta_beg = balance_pri.get("totalAssets")
+    prior_ta_beg = (balance_older or balance_pri).get("totalAssets")
     prior_roa = _safe_div(prior_ni, prior_ta_beg)
     components["delta_roa"] = (
         roa is not None and prior_roa is not None and roa > prior_roa
@@ -223,9 +226,12 @@ def _run_f_score(sb, run) -> None:
     logger.info("Computing F-Score for %d symbols", len(symbols))
 
     logger.info("Pre-fetching financial reports...")
-    income_reports = _fetch_all_reports(sb, "income")
-    balance_reports = _fetch_all_reports(sb, "balance")
-    cashflow_reports = _fetch_all_reports(sb, "cashflow")
+    from datetime import date as date_cls
+
+    as_of = date_cls.today()
+    income_reports = _fetch_all_reports(sb, "income", as_of)
+    balance_reports = _fetch_all_reports(sb, "balance", as_of)
+    cashflow_reports = _fetch_all_reports(sb, "cashflow", as_of)
     logger.info(
         "Reports loaded: %d income, %d balance, %d cashflow symbols",
         len(income_reports),
@@ -247,10 +253,16 @@ def _run_f_score(sb, run) -> None:
             income_pri = income[1] if len(income) > 1 else None
             balance_cur = balance[0] if balance else None
             balance_pri = balance[1] if len(balance) > 1 else None
+            balance_older = balance[2] if len(balance) > 2 else None
             cashflow_cur = cashflow[0] if cashflow else None
 
             detail = compute_f_score_detail(
-                income_cur, income_pri, balance_cur, balance_pri, cashflow_cur
+                income_cur,
+                income_pri,
+                balance_cur,
+                balance_pri,
+                cashflow_cur,
+                balance_older,
             )
             if detail is not None:
                 f = int(detail["score"])

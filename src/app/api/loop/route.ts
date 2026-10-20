@@ -7,6 +7,7 @@ import { sectorExposureFromBook } from "@/lib/loopSectorHarness";
 import { evaluateFreshness } from "@/lib/freshness";
 import { closedTradesFromOrders } from "@/lib/loopClosedTrades";
 import { gateOrders, staleHeadline } from "@/lib/signalGate";
+import { fetchLatestStrategySignals } from "@/lib/strategySignals";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -279,6 +280,26 @@ export async function GET() {
       });
     }
 
+    const donchianBatch = await fetchLatestStrategySignals(sb, "donchian_vwap");
+    const heldTickers = new Set(bookOut.map((r) => r.ticker));
+    const entryCandidates = donchianBatch.signals
+      .filter((s) => s.side === "BUY" && !heldTickers.has(s.symbol))
+      .map((s) => ({
+        symbol: s.symbol,
+        score: s.score,
+        reason: s.reason,
+        asOf: s.asOf,
+        knownOn: s.knownOn,
+      }));
+    const exitHints = donchianBatch.signals
+      .filter((s) => s.side === "SELL" && heldTickers.has(s.symbol))
+      .map((s) => ({
+        symbol: s.symbol,
+        reason: s.reason,
+        asOf: s.asOf,
+        knownOn: s.knownOn,
+      }));
+
     return NextResponse.json({
       summary: {
         equity: latest.equity,
@@ -341,6 +362,14 @@ export async function GET() {
       loopRunStaleDays: latest.asof_date ? tradingStaleDays(latest.asof_date.slice(0, 10)) : null,
       journal,
       journalSummary,
+      strategy: {
+        donchianVwap: {
+          asOf: donchianBatch.asOf,
+          knownOn: donchianBatch.knownOn,
+          entryCandidates: freshVerdict.signalsSuppressed ? [] : entryCandidates,
+          exitHints: freshVerdict.signalsSuppressed ? [] : exitHints,
+        },
+      },
     });
   } catch (err) {
     console.error("Loop API error:", err);

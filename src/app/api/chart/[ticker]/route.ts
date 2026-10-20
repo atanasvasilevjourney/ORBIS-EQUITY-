@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { swingEmaOverlaysFromOhlc } from "@/lib/chartEma";
+import { rateLimitAllowed } from "@/lib/rateLimit";
 import { vwapOverlaysForIntraday } from "@/lib/vwap";
+import { cachedYahooJson } from "@/lib/yahooCache";
 import { fetchYahooDaily } from "@/lib/yahooDaily";
 
 export const dynamic = "force-dynamic";
@@ -31,13 +33,16 @@ function clampBar(o: number, h: number, l: number, c: number, vol?: number, time
 async function yahoo5m(ticker: string): Promise<Candle[]> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=5m&range=5d&includePrePost=false`;
   try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 OrbisEquity-Terminal" },
-      cache: "no-store",
-      signal: AbortSignal.timeout(8000),
+    const body = await cachedYahooJson(`5m:${ticker}`, 120_000, async () => {
+      const res = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0 OrbisEquity-Terminal" },
+        cache: "no-store",
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) return null;
+      return res.json();
     });
-    if (!res.ok) return [];
-    const body = await res.json();
+    if (!body) return [];
     const result = body?.chart?.result?.[0];
     const ts: number[] = result?.timestamp ?? [];
     const q = result?.indicators?.quote?.[0] ?? {};
@@ -70,6 +75,10 @@ export async function GET(
   const ticker = (params.ticker || "").toUpperCase();
   if (!/^[A-Z0-9.\-]{1,20}$/.test(ticker)) {
     return NextResponse.json({ error: "Invalid ticker" }, { status: 400 });
+  }
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+  if (!rateLimitAllowed(`chart:${ip}`, 30, 60_000)) {
+    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
   const requested = req.nextUrl.searchParams.get("interval") === "5m" ? "5m" : "1d";
 

@@ -76,8 +76,15 @@ def backtest_top_green_weekly(
     *,
     top_n: int = 8,
     min_rank: int = 60,
+    cost_bps: float = 5.0,
 ) -> StrategyResult:
-    """Equal-weight top-N GREEN names by rank; rebalance every 5 sessions."""
+    """Equal-weight top-N GREEN names by rank; rebalance every 5 sessions.
+
+    The book is chosen from the *prior* session's radar (known at that close) and new
+    names are bought at the next session's open, so day-d return for a new name is
+    open→close. Names carried over earn close→close. ``cost_bps`` is charged per side
+    on the fraction of the book traded.
+    """
     spy = panels.get("SPY")
     if spy is None:
         spy = yf.download("SPY", start=LOOKBACK_START, progress=False, auto_adjust=True)
@@ -85,14 +92,20 @@ def backtest_top_green_weekly(
     days = [d.date() if hasattr(d, "date") else d for d in spy.index]
     days = [d for d in days if YTD_START <= d <= YTD_END]
 
+    from pipeline.strategies.costs import CostModel
+    from pipeline.strategies.execution import equal_weight_portfolio_return
+
     rets = []
     holdings: list[str] = []
+    prev_holdings: list[str] = []
     rebalance_every = 5
+    cost = CostModel(commission_bps=cost_bps / 2, slippage_bps=cost_bps / 2)
     for i, d in enumerate(days):
-        if i % rebalance_every == 0 or not holdings:
+        if i > 0 and (i % rebalance_every == 0 or not holdings):
+            signal_day = days[i - 1]
             scores: list[tuple[str, int]] = []
             for sym, hist in radar.items():
-                row = _radar_on(hist, d)
+                row = _radar_on(hist, signal_day)
                 if row is None or int(row["state"]) != 1:
                     continue
                 rank = int(row["quality_rank"])
@@ -104,24 +117,16 @@ def backtest_top_green_weekly(
             scores.sort(key=lambda x: -x[1])
             holdings = [s for s, _ in scores[:top_n]]
 
-        if not holdings:
-            rets.append(0.0)
-            continue
-        day_ret = []
-        for sym in holdings:
-            bar = _bar_on(panels[sym], d)
-            if bar is None:
-                continue
-            ohlcv = panels[sym]
-            idx = list(ohlcv.index.normalize())
-            ts = pd.Timestamp(d)
-            loc = int(np.where(ohlcv.index.normalize() == ts)[0][0])
-            if loc == 0:
-                continue
-            prev = float(ohlcv.iloc[loc - 1]["close"])
-            cur = float(bar["close"])
-            day_ret.append(cur / prev - 1)
-        rets.append(float(np.mean(day_ret)) if day_ret else 0.0)
+        rets.append(
+            equal_weight_portfolio_return(
+                panels,
+                d,
+                holdings,
+                prev_holdings=prev_holdings,
+                cost=cost,
+            )
+        )
+        prev_holdings = list(holdings)
 
     s = pd.Series(rets)
     total = ((1 + s).prod() - 1) * 100
@@ -129,7 +134,8 @@ def backtest_top_green_weekly(
         "Top GREEN weekly (rank≥60, mom+, max 8)",
         total,
         _max_dd(s),
-        f"Rebalance every {rebalance_every} sessions; equal weight",
+        f"Rebalance every {rebalance_every} sessions; equal weight; "
+        f"signal t-1, fill next open; {cost_bps:g} bps/side",
     )
 
 
