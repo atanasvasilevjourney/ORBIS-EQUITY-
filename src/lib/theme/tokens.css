@@ -1,60 +1,77 @@
-/* Orbis Equity Theme Tokens — NEON (default) and PAPER
-   Same layout chrome in both themes; only color tokens swap. */
+/* Orbis Equity — 2026 terminal tokens (NEON default + PAPER) */
 
 :root,
 [data-theme="neon"] {
-  --surface: #0a0e14;
-  --surface-alt: #111820;
-  --text-primary: #e6edf3;
-  --text-secondary: #9ca3af;
-  --text-muted: #555d6b;
-  --accent-bull: #00ff88;
-  --accent-bear: #ff3366;
-  --accent-neutral: #6b7280;
-  --accent-info: #00aaff;
-  --accent-warning: #ffcc00;
-  --accent-desk: #ffcc00;
-  --accent-warn: #ffcc00;
-  --border: #1e2733;
-  --card-bg: #0d1117;
-  --badge-bg: #1a2332;
+  --surface: #06080c;
+  --surface-alt: #0c1018;
+  --text-primary: #f0f4f8;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent-bull: #34d399;
+  --accent-bear: #fb7185;
+  --accent-neutral: #64748b;
+  --accent-info: #38bdf8;
+  --accent-warning: #fbbf24;
+  --accent-desk: #fbbf24;
+  --accent-warn: #fbbf24;
+  --border: rgba(148, 163, 184, 0.12);
+  --card-bg: rgba(15, 23, 42, 0.55);
+  --badge-bg: rgba(30, 41, 59, 0.65);
 
-  /* Module chrome */
-  --panel-bg: #0d1117;
-  --panel-header: #111820;
-  --panel-border: #243041;
-  --panel-grid: #1a2330;
-  --gauge-track: #1e2733;
-  --module-1: #00aaff;
-  --module-2: #00ff88;
-  --module-3: #ffcc00;
+  --panel-bg: rgba(12, 18, 28, 0.72);
+  --panel-header: rgba(15, 23, 42, 0.85);
+  --panel-border: rgba(56, 189, 248, 0.14);
+  --panel-grid: rgba(30, 41, 59, 0.5);
+  --gauge-track: rgba(51, 65, 85, 0.8);
+  --module-1: #38bdf8;
+  --module-2: #34d399;
+  --module-3: #fbbf24;
   --module-4: #a78bfa;
+
+  --glass-blur: 16px;
+  --radius-panel: 14px;
+  --radius-pill: 999px;
+  --shadow-glow: 0 0 40px rgba(56, 189, 248, 0.08);
+  --shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.45);
+  --gradient-brand: linear-gradient(135deg, #38bdf8 0%, #a78bfa 50%, #34d399 100%);
+  --gradient-mesh: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(56, 189, 248, 0.15), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(167, 139, 250, 0.1), transparent),
+    radial-gradient(ellipse 50% 30% at 0% 100%, rgba(52, 211, 153, 0.06), transparent);
 }
 
 [data-theme="paper"] {
-  --surface: #fafaf9;
-  --surface-alt: #f5f5f4;
-  --text-primary: #1c1917;
-  --text-secondary: #57534e;
-  --text-muted: #a8a29e;
-  --accent-bull: #16a34a;
-  --accent-bear: #dc2626;
-  --accent-neutral: #78716c;
-  --accent-info: #2563eb;
-  --accent-warning: #ca8a04;
-  --accent-desk: #ca8a04;
-  --accent-warn: #ca8a04;
-  --border: #e7e5e4;
-  --card-bg: #ffffff;
-  --badge-bg: #f5f5f4;
+  --surface: #f8fafc;
+  --surface-alt: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --accent-bull: #059669;
+  --accent-bear: #e11d48;
+  --accent-neutral: #64748b;
+  --accent-info: #0284c7;
+  --accent-warning: #d97706;
+  --accent-desk: #d97706;
+  --accent-warn: #d97706;
+  --border: rgba(15, 23, 42, 0.08);
+  --card-bg: rgba(255, 255, 255, 0.85);
+  --badge-bg: rgba(241, 245, 249, 0.95);
 
-  --panel-bg: #ffffff;
-  --panel-header: #f5f5f4;
-  --panel-border: #d6d3d1;
-  --panel-grid: #e7e5e4;
-  --gauge-track: #e7e5e4;
-  --module-1: #2563eb;
-  --module-2: #16a34a;
-  --module-3: #ca8a04;
+  --panel-bg: rgba(255, 255, 255, 0.92);
+  --panel-header: rgba(248, 250, 252, 0.98);
+  --panel-border: rgba(15, 23, 42, 0.1);
+  --panel-grid: #e2e8f0;
+  --gauge-track: #e2e8f0;
+  --module-1: #0284c7;
+  --module-2: #059669;
+  --module-3: #d97706;
   --module-4: #7c3aed;
+
+  --glass-blur: 12px;
+  --radius-panel: 14px;
+  --radius-pill: 999px;
+  --shadow-glow: 0 0 32px rgba(2, 132, 199, 0.06);
+  --shadow-panel: 0 4px 20px rgba(15, 23, 42, 0.06);
+  --gradient-brand: linear-gradient(135deg, #0284c7 0%, #7c3aed 50%, #059669 100%);
+  --gradient-mesh: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(2, 132, 199, 0.08), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(124, 58, 237, 0.05), transparent);
 }

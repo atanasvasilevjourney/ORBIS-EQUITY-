@@ -4,19 +4,24 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ThemeToggle } from "@/components/cards/ThemeToggle";
-const NAV_LINKS = [
+
+const NAV_PRIMARY = [
+  { href: "/", label: "COCKPIT" },
   { href: "/screener", label: "WATCHLIST" },
-  { href: "/ema200", label: "EMA200" },
   { href: "/loop", label: "LOOP" },
+  { href: "/rotate", label: "ROTATE" },
+  { href: "/quantropy", label: "QUANT" },
+  { href: "/fundamentals", label: "FUNDAMENTALS" },
+];
+
+const NAV_MORE = [
+  { href: "/ema200", label: "EMA200" },
   { href: "/orb", label: "ORB" },
   { href: "/skew", label: "SKEW" },
   { href: "/analysis", label: "ANALYZE" },
   { href: "/bias", label: "BIAS" },
   { href: "/triangle", label: "TRI" },
   { href: "/cash", label: "CASH" },
-  { href: "/rotate", label: "ROTATE" },
-  { href: "/quantropy", label: "QUANT" },
-  { href: "/fundamentals", label: "FUNDAMENTALS" },
   { href: "/fundamentals/screener", label: "FA SCR" },
   { href: "/health", label: "HEALTH" },
   { href: "/earnings-news", label: "EARNINGS" },
@@ -28,6 +33,7 @@ export function Nav() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,70 +44,104 @@ export function Nav() {
     }
   };
 
+  const isActive = (href: string) =>
+    href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
+
   return (
-    <nav className="border-b border-[var(--border)] bg-[var(--surface)]">
-      <div className="flex items-center justify-between px-4 py-2">
-        <div className="flex items-center gap-6">
-          <Link
-            href="/"
-            className="text-lg font-bold font-terminal tracking-widest"
-            style={{ color: "var(--accent-info)" }}
-          >
-            ORBIS EQUITY
+    <nav
+      className="sticky top-0 z-50 border-b border-[var(--border)] bg-[var(--panel-bg)] backdrop-blur-xl"
+      style={{ boxShadow: "var(--shadow-panel)" }}
+    >
+      <div className="mx-auto max-w-[1600px] px-3 sm:px-5 flex items-center justify-between gap-4 py-2.5">
+        <div className="flex items-center gap-4 min-w-0">
+          <Link href="/" className="shrink-0 group">
+            <span
+              className="font-display text-lg font-semibold tracking-tight"
+              style={{
+                background: "var(--gradient-brand)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+              }}
+            >
+              ORBIS
+            </span>
+            <span className="hidden sm:inline font-terminal text-[10px] text-[var(--text-muted)] ml-1.5 tracking-widest">
+              EQUITY
+            </span>
           </Link>
-          <div className="hidden md:flex items-center gap-1 max-w-[min(72rem,calc(100vw-22rem))] overflow-x-auto">
-            {NAV_LINKS.map((l) => {
-              const isActive = pathname === l.href || pathname.startsWith(l.href + "/");
-              return (
-                <Link
-                  key={l.href}
-                  href={l.href}
-                  className={`px-3 py-1.5 text-xs font-terminal rounded transition-colors ${
-                    isActive
-                      ? "bg-[var(--badge-bg)] text-[var(--accent-info)]"
-                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-alt)]"
-                  }`}
+          <div className="hidden lg:flex items-center gap-0.5 overflow-x-auto max-w-[42rem]">
+            {NAV_PRIMARY.map((l) => (
+              <Link
+                key={l.href}
+                href={l.href}
+                className="nav-link-pill"
+                data-active={isActive(l.href)}
+              >
+                {l.label}
+              </Link>
+            ))}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setMoreOpen((v) => !v)}
+                className="nav-link-pill"
+                data-active={NAV_MORE.some((m) => isActive(m.href))}
+              >
+                MORE ▾
+              </button>
+              {moreOpen && (
+                <div
+                  className="absolute left-0 top-full mt-1 py-2 px-1 min-w-[11rem] glass-panel z-50 grid gap-0.5"
+                  onMouseLeave={() => setMoreOpen(false)}
                 >
-                  {l.label}
-                </Link>
-              );
-            })}
+                  {NAV_MORE.map((l) => (
+                    <Link
+                      key={l.href}
+                      href={l.href}
+                      onClick={() => setMoreOpen(false)}
+                      className="nav-link-pill block text-left"
+                      data-active={isActive(l.href)}
+                    >
+                      {l.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          {/* Command palette affordance */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <button
             type="button"
             onClick={() => window.dispatchEvent(new Event("orbis:open-palette"))}
-            className="hidden sm:flex items-center gap-2 px-2 py-1 text-[10px] font-terminal rounded border border-[var(--panel-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent-info)] transition-colors"
-            title="Open command palette"
+            className="hidden sm:flex items-center gap-2 px-2.5 py-1.5 text-[10px] font-terminal rounded-full border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent-info)] transition-colors"
           >
-            <span>JUMP</span>
-            <kbd className="px-1 rounded bg-[var(--surface-alt)] border border-[var(--panel-border)]">⌘K</kbd>
+            <span>⌘K</span>
           </button>
-          {/* Ticker search */}
           <form onSubmit={handleSearch} className="hidden sm:flex">
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Ticker..."
-              className="w-24 px-2 py-1 text-xs font-terminal rounded-l border border-[var(--border)] bg-[var(--card-bg)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-info)]"
+              placeholder="Ticker"
+              className="w-20 sm:w-24 px-2.5 py-1.5 text-xs font-terminal rounded-l-full border border-[var(--border)] bg-[var(--card-bg)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-info)]"
             />
             <button
               type="submit"
-              className="px-2 py-1 text-xs font-terminal rounded-r border border-l-0 border-[var(--border)] bg-[var(--surface-alt)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              className="px-3 py-1.5 text-xs font-terminal rounded-r-full border border-l-0 border-[var(--border)] bg-[var(--surface-alt)] text-[var(--text-muted)] hover:text-[var(--accent-info)]"
             >
-              GO
+              →
             </button>
           </form>
           <ThemeToggle />
-          {/* Mobile hamburger */}
           <button
+            type="button"
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="md:hidden text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1"
+            className="lg:hidden text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1.5 rounded-full border border-[var(--border)]"
+            aria-label="Menu"
           >
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
               {mobileOpen ? (
                 <path d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" />
               ) : (
@@ -111,42 +151,31 @@ export function Nav() {
           </button>
         </div>
       </div>
-      {/* Mobile menu */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-[var(--border)] px-4 py-2 space-y-1">
-          {/* Mobile search */}
-          <form onSubmit={handleSearch} className="flex mb-2">
+        <div className="lg:hidden border-t border-[var(--border)] px-3 py-3 space-y-1 bg-[var(--surface-alt)]">
+          <form onSubmit={handleSearch} className="flex mb-3">
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search ticker..."
-              className="flex-1 px-2 py-1.5 text-xs font-terminal rounded-l border border-[var(--border)] bg-[var(--card-bg)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+              className="flex-1 px-3 py-2 text-xs font-terminal rounded-l-full border border-[var(--border)] bg-[var(--card-bg)]"
             />
-            <button
-              type="submit"
-              className="px-3 py-1.5 text-xs font-terminal rounded-r border border-l-0 border-[var(--border)] bg-[var(--surface-alt)] text-[var(--text-muted)]"
-            >
+            <button type="submit" className="px-4 py-2 text-xs font-terminal rounded-r-full border border-l-0 border-[var(--border)] bg-[var(--surface-alt)]">
               GO
             </button>
           </form>
-          {NAV_LINKS.map((l) => {
-            const isActive = pathname === l.href;
-            return (
-              <Link
-                key={l.href}
-                href={l.href}
-                onClick={() => setMobileOpen(false)}
-                className={`block px-3 py-2 text-xs font-terminal rounded transition-colors ${
-                  isActive
-                    ? "bg-[var(--badge-bg)] text-[var(--accent-info)]"
-                    : "text-[var(--text-secondary)] hover:bg-[var(--surface-alt)]"
-                }`}
-              >
-                {l.label}
-              </Link>
-            );
-          })}
+          {[...NAV_PRIMARY, ...NAV_MORE].map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              onClick={() => setMobileOpen(false)}
+              className="nav-link-pill block"
+              data-active={isActive(l.href)}
+            >
+              {l.label}
+            </Link>
+          ))}
         </div>
       )}
     </nav>

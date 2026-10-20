@@ -175,18 +175,22 @@ export default function Home() {
   const regions = Object.entries(d?.regionBreadth ?? {});
 
   return (
-    <div className="px-4 py-6 space-y-4">
-      {/* Brand strip — keep first viewport focused */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="py-6 space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3 glass-panel px-5 py-4">
         <div>
           <h1
-            className="text-2xl md:text-3xl font-terminal font-bold tracking-wider"
-            style={{ color: "var(--accent-info)" }}
+            className="font-display text-2xl md:text-3xl font-semibold tracking-tight"
+            style={{
+              background: "var(--gradient-brand)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+            }}
           >
-            ORBIS EQUITY
+            Market cockpit
           </h1>
-          <p className="text-xs text-[var(--text-secondary)] mt-1">
-            Equity Swing Terminal — Free Data, Honest Signals, Global Coverage
+          <p className="text-sm text-[var(--text-secondary)] mt-1">
+            Equity swing terminal — honest signals, global coverage, paper desks
           </p>
         </div>
         <div className="text-right font-terminal text-[10px] text-[var(--text-muted)] tracking-wider">

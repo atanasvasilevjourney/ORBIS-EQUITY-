@@ -24,8 +24,7 @@ export function ModulePanel({
 }: ModulePanelProps) {
   return (
     <section
-      className={`flex flex-col rounded border bg-[var(--panel-bg)] overflow-hidden ${className}`}
-      style={{ borderColor: "var(--panel-border)" }}
+      className={`flex flex-col glass-panel overflow-hidden ${className}`}
     >
       <header
         className="flex items-center justify-between gap-3 px-3 py-2 border-b"

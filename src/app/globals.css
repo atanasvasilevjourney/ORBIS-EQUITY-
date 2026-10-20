@@ -10,7 +10,102 @@ body {
   font-family: "Inter", system-ui, sans-serif;
 }
 
-/* Terminal-style mono text */
+.app-shell {
+  min-height: 100vh;
+  background: var(--gradient-mesh), var(--surface);
+  background-attachment: fixed;
+}
+
 .font-terminal {
-  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+}
+
+.font-display {
+  font-family: "Outfit", "Inter", system-ui, sans-serif;
+}
+
+@layer components {
+  .glass-panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-panel);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+  }
+
+  .glass-metric {
+    @apply glass-panel text-center p-3 transition-transform duration-200;
+  }
+
+  .glass-metric:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-glow), var(--shadow-panel);
+  }
+
+  .desk-table-wrap {
+    @apply glass-panel overflow-hidden overflow-x-auto;
+  }
+
+  .desk-table {
+    @apply w-full text-sm font-terminal;
+  }
+
+  .desk-table thead tr {
+    @apply text-[10px] tracking-widest border-b;
+    color: var(--text-muted);
+    border-color: var(--border);
+    background: var(--panel-header);
+  }
+
+  .desk-table th {
+    @apply px-3 py-2.5 font-medium;
+  }
+
+  .desk-table tbody tr {
+    border-color: var(--border);
+    @apply border-b transition-colors;
+  }
+
+  .desk-table tbody tr:hover {
+    background: var(--surface-alt);
+  }
+
+  .desk-table td {
+    @apply px-3 py-2;
+  }
+
+  .sleeve-tab {
+    @apply px-4 py-2 text-xs font-terminal tracking-wider rounded-full border transition-all;
+    border-color: var(--border);
+    color: var(--text-secondary);
+  }
+
+  .sleeve-tab[data-active="true"] {
+    border-color: var(--accent-info);
+    color: var(--accent-info);
+    background: rgba(56, 189, 248, 0.1);
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.15);
+  }
+
+  .nav-link-pill {
+    @apply px-3 py-1.5 text-[11px] font-terminal rounded-full transition-all whitespace-nowrap;
+    color: var(--text-secondary);
+  }
+
+  .nav-link-pill:hover {
+    color: var(--text-primary);
+    background: var(--surface-alt);
+  }
+
+  .nav-link-pill[data-active="true"] {
+    color: var(--accent-info);
+    background: rgba(56, 189, 248, 0.12);
+    box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.25);
+  }
+}
+
+::selection {
+  background: rgba(56, 189, 248, 0.35);
+  color: var(--text-primary);
 }

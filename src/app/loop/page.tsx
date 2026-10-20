@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { DeskPageHeader } from "@/components/ui/DeskPageHeader";
+import { ModulePanel } from "@/components/ui/ModulePanel";
+
+type Sleeve = "donchian" | "xs";
 
 type BookRow = {
   ticker: string;
@@ -88,6 +92,31 @@ type LoopData = {
       exitHints: { symbol: string; reason: string }[];
     };
   };
+  xs?: {
+    summary: {
+      equity: number;
+      deployedPct: number | null;
+      names: number | null;
+      asOfDate: string;
+      runId: string;
+      lastRunAt: string | null;
+      headline: string | null;
+    };
+    book: {
+      ticker: string;
+      companyName: string | null;
+      shares: number;
+      entry: number;
+      last: number | null;
+      sector: string | null;
+      reason: string | null;
+      rank: number | null;
+      unrealizedPnlUsd: number | null;
+      daysHeld: number | null;
+      openedAt: string | null;
+    }[];
+    harness: Record<string, unknown> | null;
+  } | null;
 };
 
 const usd = (v: number | null | undefined, d = 2) =>
@@ -98,6 +127,7 @@ const px = (v: number | null | undefined) => (v == null ? "—" : v.toFixed(2));
 export default function LoopPage() {
   const [d, setD] = useState<LoopData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sleeve, setSleeve] = useState<Sleeve>("donchian");
 
   useEffect(() => {
     fetch("/api/loop")
@@ -108,31 +138,88 @@ export default function LoopPage() {
   }, []);
 
   const s = d?.summary;
+  const xs = d?.xs;
   const cfg = d?.harness?.config;
+  const activeSummary = sleeve === "xs" && xs?.summary ? xs.summary : s;
   const cards = [
-    { label: "EQUITY", value: s ? usd(s.equity, 0) : "—", color: "" },
-    { label: "DEPLOYED", value: s ? pct(s.deployedPct) : "—", color: "var(--accent-info)" },
-    { label: "OPEN RISK", value: s ? pct(s.openRiskPct) : "—", color: (s?.openRiskPct ?? 0) > 0.064 ? "var(--accent-warning)" : "var(--accent-bull)" },
-    { label: "NAMES", value: s ? `${s.names ?? 0} / ${cfg?.maxNames ?? 8}` : "—", color: "" },
-    { label: "LAST LOOP", value: s?.asOfDate ?? "—", color: d?.stale ? "var(--accent-warning)" : "" },
-    { label: "PX AS OF", value: d?.priceAsOfDate ?? "—", color: (d?.priceStaleDays ?? 0) > 1 ? "var(--accent-warning)" : "" },
+    {
+      label: "EQUITY",
+      value: activeSummary ? usd(activeSummary.equity, 0) : "—",
+      color: "",
+    },
+    {
+      label: "DEPLOYED",
+      value: activeSummary ? pct(activeSummary.deployedPct) : "—",
+      color: "var(--accent-info)",
+    },
+    {
+      label: "OPEN RISK",
+      value: sleeve === "xs" ? "—" : s ? pct(s.openRiskPct) : "—",
+      color: (s?.openRiskPct ?? 0) > 0.064 ? "var(--accent-warning)" : "var(--accent-bull)",
+    },
+    {
+      label: "NAMES",
+      value: activeSummary
+        ? `${activeSummary.names ?? 0} / ${cfg?.maxNames ?? 8}`
+        : "—",
+      color: "",
+    },
+    {
+      label: "AS OF",
+      value:
+        sleeve === "xs"
+          ? xs?.summary?.asOfDate ?? "—"
+          : s?.asOfDate ?? "—",
+      color: d?.stale ? "var(--accent-warning)" : "",
+    },
+    {
+      label: "PX AS OF",
+      value: d?.priceAsOfDate ?? "—",
+      color: (d?.priceStaleDays ?? 0) > 1 ? "var(--accent-warning)" : "",
+    },
   ];
 
-  return (
-    <div className="px-4 py-6">
-      <div className="mb-4">
-        <h1 className="text-lg font-terminal font-bold tracking-wider" style={{ color: "var(--accent-warning)" }}>
-          LOOP TERMINAL
-        </h1>
-        <p className="text-xs text-[var(--text-secondary)]">
-          Donchian 55 + 20d VWAP · exit ATR(14)×2 trail · equal-weight · paper only
-        </p>
-      </div>
+  const headline =
+    sleeve === "xs" ? xs?.summary?.headline ?? null : d?.headline ?? null;
 
-      {d?.headline && (
-        <div className="px-4 py-2 mb-4 rounded border border-[var(--border)] bg-[var(--badge-bg)] text-sm text-[var(--text-secondary)] font-terminal">
-          <span style={{ color: "var(--accent-warning)" }}>LOOP:</span> {d.headline}
-          {s?.posture != null && <span className="ml-3 text-[var(--text-muted)]">posture {s.posture}</span>}
+  return (
+    <div className="py-6">
+      <DeskPageHeader
+        badge="PAPER DESK"
+        title="LOOP Terminal"
+        subtitle="Donchian breakout sleeve (production paper) and XS cross-sectional watchlist sleeve (research). Equal weight · not investment advice."
+      >
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="sleeve-tab"
+            data-active={sleeve === "donchian"}
+            onClick={() => setSleeve("donchian")}
+          >
+            Donchian 55
+          </button>
+          <button
+            type="button"
+            className="sleeve-tab"
+            data-active={sleeve === "xs"}
+            onClick={() => setSleeve("xs")}
+            disabled={!xs?.summary}
+            title={!xs?.summary ? "Run portfolio_loop_xs (no XS snapshot yet)" : undefined}
+          >
+            XS Watchlist
+          </button>
+        </div>
+      </DeskPageHeader>
+
+      {headline && (
+        <div className="glass-panel px-4 py-3 mb-4 text-sm text-[var(--text-secondary)] font-terminal">
+          <span style={{ color: "var(--accent-warning)" }}>
+            {sleeve === "xs" ? "XS:" : "LOOP:"}
+          </span>{" "}
+          {headline}
+          {sleeve === "donchian" && s?.posture != null && (
+            <span className="ml-3 text-[var(--text-muted)]">posture {s.posture}</span>
+          )}
         </div>
       )}
 
@@ -144,9 +231,9 @@ export default function LoopPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
         {cards.map((c) => (
-          <div key={c.label} className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
+          <div key={c.label} className="glass-metric">
             <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">{c.label}</div>
             <div className="text-lg font-terminal font-bold mt-1" style={{ color: c.color || undefined }}>
               {loading ? "…" : c.value}
@@ -155,28 +242,73 @@ export default function LoopPage() {
         ))}
       </div>
 
-      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">OPEN BOOK</h2>
-      <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
-        <table className="w-full text-sm font-terminal">
+      <ModulePanel
+        title="Open book"
+        badge={sleeve === "xs" ? "XS SLEEVE" : "DONCHIAN"}
+        accent={sleeve === "xs" ? "var(--module-4)" : "var(--accent-warning)"}
+        className="mb-6"
+      >
+      <div className="desk-table-wrap border-0 shadow-none bg-transparent backdrop-blur-none -mx-3 -mb-3">
+        <table className="desk-table">
           <thead>
-            <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
-              <th className="text-left px-3 py-2">TICKER</th>
-              <th className="text-left px-3 py-2">SIDE</th>
-              <th className="text-right px-3 py-2">SHARES</th>
-              <th className="text-left px-3 py-2">OPENED</th>
-              <th className="text-right px-3 py-2">DAYS</th>
-              <th className="text-right px-3 py-2">ENTRY</th>
-              <th className="text-right px-3 py-2">LAST</th>
-              <th className="text-right px-3 py-2">ATR STOP</th>
-              <th className="text-right px-3 py-2">STR</th>
-              <th className="text-right px-3 py-2">—</th>
-              <th className="text-right px-3 py-2">P&amp;L</th>
-              <th className="text-left px-3 py-2">REASON</th>
-            </tr>
+            {sleeve === "xs" ? (
+              <tr>
+                <th className="text-left">TICKER</th>
+                <th className="text-right">SHARES</th>
+                <th className="text-left">OPENED</th>
+                <th className="text-right">DAYS</th>
+                <th className="text-right">ENTRY</th>
+                <th className="text-right">LAST</th>
+                <th className="text-right">RANK</th>
+                <th className="text-right">P&amp;L</th>
+              </tr>
+            ) : (
+              <tr>
+                <th className="text-left">TICKER</th>
+                <th className="text-left">SIDE</th>
+                <th className="text-right">SHARES</th>
+                <th className="text-left">OPENED</th>
+                <th className="text-right">DAYS</th>
+                <th className="text-right">ENTRY</th>
+                <th className="text-right">LAST</th>
+                <th className="text-right">ATR STOP</th>
+                <th className="text-right">STR</th>
+                <th className="text-right">—</th>
+                <th className="text-right">P&amp;L</th>
+                <th className="text-left">REASON</th>
+              </tr>
+            )}
           </thead>
           <tbody>
             {loading ? (
               <tr><td colSpan={12} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
+            ) : sleeve === "xs" ? (
+              !xs?.book?.length ? (
+                <tr>
+                  <td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)] text-xs leading-relaxed">
+                    No XS positions. Run nightly <code className="text-[var(--accent-info)]">portfolio_loop_xs</code> after migration 033.
+                  </td>
+                </tr>
+              ) : (
+                xs.book.map((r) => {
+                  const pnlColor = (r.unrealizedPnlUsd ?? 0) >= 0 ? "var(--accent-bull)" : "var(--accent-bear)";
+                  return (
+                    <tr key={r.ticker}>
+                      <td className="px-3 py-2">
+                        <Link href={`/ticker/${r.ticker}`} className="font-bold hover:text-[var(--accent-info)]">{r.ticker}</Link>
+                        <span className="text-[var(--text-muted)] ml-2 text-xs hidden lg:inline">{r.companyName}</span>
+                      </td>
+                      <td className="px-3 py-2 text-right">{r.shares}</td>
+                      <td className="px-3 py-2 text-xs">{r.openedAt ?? "—"}</td>
+                      <td className="px-3 py-2 text-right">{r.daysHeld ?? "—"}</td>
+                      <td className="px-3 py-2 text-right">{px(r.entry)}</td>
+                      <td className="px-3 py-2 text-right">{px(r.last)}</td>
+                      <td className="px-3 py-2 text-right">{r.rank ?? "—"}</td>
+                      <td className="px-3 py-2 text-right font-bold" style={{ color: pnlColor }}>{usd(r.unrealizedPnlUsd, 0)}</td>
+                    </tr>
+                  );
+                })
+              )
             ) : !d?.book?.length ? (
               <tr>
                 <td colSpan={12} className="px-3 py-8 text-center text-[var(--text-muted)] text-xs leading-relaxed">
@@ -225,7 +357,9 @@ export default function LoopPage() {
           </tbody>
         </table>
       </div>
+      </ModulePanel>
 
+      {sleeve === "donchian" && (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div>
           <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">SECTOR HARNESS</h2>
@@ -317,7 +451,10 @@ export default function LoopPage() {
           </div>
         </div>
       </div>
+      )}
 
+      {sleeve === "donchian" && (
+      <>
       <div className="flex flex-wrap items-end justify-between gap-2 mb-2">
         <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest">TRADING JOURNAL</h2>
         {d?.journalSummary && d.journalSummary.closedTrades > 0 && (
@@ -435,6 +572,14 @@ export default function LoopPage() {
         Paper harness: Donchian {cfg?.entryChannel ?? 55} + VWAP {cfg?.vwapWindow ?? 20} · equal weight · max {cfg?.maxNames ?? 8} names · rebalance every {cfg?.rebalanceDays ?? 5} sessions.
         Systematic sizing only — not investment advice. No live broker orders.
       </p>
+      </>
+      )}
+
+      {sleeve === "xs" && (
+        <p className="text-[10px] text-[var(--text-muted)] font-terminal mt-3">
+          XS sleeve: top watchlist names · SPY regime gate · down-day exits · paper only. Compare to Donchian before any promotion.
+        </p>
+      )}
     </div>
   );
 }
