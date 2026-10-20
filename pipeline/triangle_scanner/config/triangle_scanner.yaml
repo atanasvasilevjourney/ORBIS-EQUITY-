@@ -1,0 +1,15 @@
+# Triangle pattern scanner — ascending (pillai-style) + descending break-up.
+# Thresholds are the single source of truth; do not hardcode in code.
+
+lookback_bars: 80
+min_history_bars: 60
+swing_order: 3
+min_swing_points: 2
+flat_tolerance_pct: 1.8
+min_slope_pct_per_bar: 0.02
+max_slope_pct_per_bar: 2.5
+breakout_buffer_pct: 0.15
+min_price: 5.0
+max_setups_per_type: 40
+universe:
+  use_loop_universe: true
