@@ -13,14 +13,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>("neon");
 
   useEffect(() => {
-    const stored =
-      (localStorage.getItem("orbis-equity-theme") as Theme | null) ||
-      (localStorage.getItem("kovaview-theme") as Theme | null);
-    if (stored) {
-      setTheme(stored);
-      localStorage.setItem("orbis-equity-theme", stored);
-      localStorage.removeItem("kovaview-theme");
-    }
+    const stored = localStorage.getItem("orbis-equity-theme") as Theme | null;
+    if (stored) setTheme(stored);
   }, []);
 
   useEffect(() => {

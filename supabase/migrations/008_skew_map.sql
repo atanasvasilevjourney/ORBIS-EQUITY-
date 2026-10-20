@@ -1,5 +1,5 @@
 -- ============================================================================
--- KovaView Terminal — Migration 008: Options skew map + weekend vol
+-- ORBIS EQUITY — Migration 008: Options skew map + weekend vol
 -- Live IV surface from listed option chains (yfinance, no API key).
 -- ============================================================================
 

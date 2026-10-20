@@ -25,6 +25,13 @@ export type ModuleStatus = {
   rowCounts: Record<string, unknown> | null;
 };
 
+export type TriangleDeskHealth = {
+  migrationApplied: boolean;
+  asOfDate: string | null;
+  names: number | null;
+  headline: string | null;
+};
+
 export type SystemStatus = {
   nowNy: string;
   expectedEodDate: string;
@@ -34,10 +41,11 @@ export type SystemStatus = {
   freshness: ReturnType<typeof evaluateFreshness>;
   modules: ModuleStatus[];
   ingestRuns: { module: string; asof_date: string | null; headline: string | null }[];
+  triangleDesk: TriangleDeskHealth;
 };
 
 export async function buildSystemStatus(sb: SupabaseClient): Promise<SystemStatus> {
-  const [priceRow, brief, loopRun, pipelineRuns, ingestRuns] = await Promise.all([
+  const [priceRow, brief, loopRun, pipelineRuns, ingestRuns, triangleRun] = await Promise.all([
     sb.from("prices_daily").select("date").order("date", { ascending: false }).limit(1).maybeSingle(),
     sb.from("daily_brief").select("asof_date").order("asof_date", { ascending: false }).limit(1).maybeSingle(),
     sb.from("paper_loop_runs").select("asof_date").order("computed_at", { ascending: false }).limit(1).maybeSingle(),
@@ -53,6 +61,18 @@ export async function buildSystemStatus(sb: SupabaseClient): Promise<SystemStatu
       "module, asof_date, headline, started_at",
       (q) => q.order("started_at", { ascending: false })
     ).catch(() => []),
+    (async () => {
+      try {
+        return await sb
+          .from("triangle_scan_runs")
+          .select("asof_date, names, headline")
+          .order("asof_date", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+      } catch {
+        return { data: null, error: { message: "triangle_scan_runs unavailable" } };
+      }
+    })(),
   ]);
 
   const pricesAsOf = priceRow.data?.date?.slice?.(0, 10) ?? (priceRow.data?.date as string | null) ?? null;
@@ -82,6 +102,15 @@ export async function buildSystemStatus(sb: SupabaseClient): Promise<SystemStatu
     if (!ingestLatest.has(r.module)) ingestLatest.set(r.module, r);
   }
 
+  const triErr = triangleRun.error;
+  const triData = triangleRun.data;
+  const triangleDesk: TriangleDeskHealth = {
+    migrationApplied: !triErr,
+    asOfDate: triData?.asof_date?.slice?.(0, 10) ?? (triData?.asof_date as string | null) ?? null,
+    names: triData?.names ?? null,
+    headline: triData?.headline ?? null,
+  };
+
   return {
     nowNy: nyCalendarDate(),
     expectedEodDate: lastExpectedEodDate(),
@@ -91,5 +120,6 @@ export async function buildSystemStatus(sb: SupabaseClient): Promise<SystemStatu
     freshness,
     modules: modules.sort((a, b) => a.source.localeCompare(b.source)),
     ingestRuns: Array.from(ingestLatest.values()).slice(0, 12),
+    triangleDesk,
   };
 }

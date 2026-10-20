@@ -31,4 +31,7 @@ run_optional pipeline.compute.sector_rotation
 echo "[compute] ema200 watchlist features"
 python -m pipeline.ema200_scanner.jobs.nightly || echo "[compute] ema200 nightly skipped"
 
+echo "[compute] triangle pattern scan"
+python -m pipeline.triangle_scanner.jobs.nightly || echo "[compute] triangle nightly skipped"
+
 echo "[compute] signals done"

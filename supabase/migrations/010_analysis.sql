@@ -1,5 +1,5 @@
 -- ============================================================================
--- KovaView Terminal — Migration 010: Technical + fundamental analysis
+-- ORBIS EQUITY — Migration 010: Technical + fundamental analysis
 -- Long/mid-term MA, MACD, RSI, regression, and volume-trend signals.
 -- ============================================================================
 

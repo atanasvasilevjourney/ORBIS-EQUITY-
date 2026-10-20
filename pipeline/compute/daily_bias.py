@@ -1,6 +1,6 @@
 """Daily bias desk — key levels + paper trade ideas on listed names.
 
-Discord-style daily-bias card, built from KovaView data we actually have:
+Discord-style daily-bias card, built from ORBIS EQUITY data we actually have:
 
   Levels    classic floor pivots from prior day, swing high/low, SMA 20/50,
             prior high/low, optional 15m OR from orb_watch

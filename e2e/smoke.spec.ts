@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 /** Core routes exercised in smoke (subset of primary nav). */
-const PAGES = ["/", "/screener", "/ema200", "/fundamentals", "/health", "/earnings-news"];
+const PAGES = ["/", "/screener", "/triangle", "/ema200", "/fundamentals", "/health", "/earnings-news"];
 /** Linked from fundamentals module, not top nav. */
 const EXTRA_SMOKE_PAGES = ["/fundamentals/screener"];
 

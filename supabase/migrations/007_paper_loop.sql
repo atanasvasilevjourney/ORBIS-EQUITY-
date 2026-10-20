@@ -1,5 +1,5 @@
 -- ============================================================================
--- KovaView Terminal — Migration 007: Equity breakout paper loop
+-- ORBIS EQUITY — Migration 007: Equity breakout paper loop
 -- Paper book + orders + run log for the daily portfolio harness.
 -- ============================================================================
 

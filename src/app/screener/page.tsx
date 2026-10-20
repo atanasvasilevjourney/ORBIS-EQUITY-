@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScoreboardRow, type ScreenerRow } from "@/components/scoreboard/ScoreboardRow";
+import { MultiSortBar } from "@/components/table/MultiSortBar";
+import { SortableTh } from "@/components/table/SortableTh";
+import { useMultiSort } from "@/hooks/useMultiSort";
 import { ModuleHeader } from "@/components/ui/ModuleHeader";
 import { ModulePanel } from "@/components/ui/ModulePanel";
 import { MetricCard } from "@/components/ui/MetricCard";
@@ -9,6 +12,8 @@ import { FilterChip } from "@/components/ui/FilterChip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FocusUniverseModuleBanner } from "@/components/universe/FocusUniverseModuleBanner";
 import { useFocusUniverse } from "@/hooks/useFocusUniverse";
+import { ChartPane } from "@/components/desk/ChartPane";
+import { DeskSplitLayout, type DeskLayoutMode } from "@/components/desk/DeskSplitLayout";
 
 type Summary = {
   asOfDate: string | null;
@@ -54,6 +59,41 @@ const DAY_FILTERS = [
   { key: 10, label: "Day ≥10%" },
 ];
 
+type ScreenerSortKey =
+  | "symbol"
+  | "orbisScore"
+  | "dayPct"
+  | "relVolume"
+  | "pctFromHigh"
+  | "rank"
+  | "sector"
+  | "price"
+  | "marketCap";
+
+const SCREENER_SORT_LABELS: Record<ScreenerSortKey, string> = {
+  symbol: "Ticker",
+  orbisScore: "Orbis",
+  dayPct: "Day %",
+  relVolume: "Rel vol",
+  pctFromHigh: "Off high",
+  rank: "Rank",
+  sector: "Sector",
+  price: "Last",
+  marketCap: "Mkt cap",
+};
+
+const SCREENER_ACCESSORS: Record<ScreenerSortKey, (r: ScreenerRow) => string | number | null | undefined> = {
+  symbol: (r) => r.symbol,
+  orbisScore: (r) => r.orbisScore,
+  dayPct: (r) => r.dayPct ?? r.zMom,
+  relVolume: (r) => r.relVolume ?? r.fEwmac,
+  pctFromHigh: (r) => r.pctFromHigh ?? r.z52 * 100,
+  rank: (r) => r.rank,
+  sector: (r) => r.sector,
+  price: (r) => r.price,
+  marketCap: (r) => r.marketCap,
+};
+
 export default function ScreenerPage() {
   const { isFocusActive, symbolsParam, universeParam } = useFocusUniverse();
   const [rows, setRows] = useState<ScreenerRow[]>([]);
@@ -65,6 +105,9 @@ export default function ScreenerPage() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [chartInterval, setChartInterval] = useState<"1d" | "5m">("1d");
+  const [layoutMode, setLayoutMode] = useState<DeskLayoutMode>("split");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -98,6 +141,26 @@ export default function ScreenerPage() {
     fetchData();
   }, [fetchData]);
 
+  const accessors = useMemo(() => SCREENER_ACCESSORS, []);
+  const { sorted: sortedRows, levels, onHeaderClick, clearSort } = useMultiSort<ScreenerRow, ScreenerSortKey>(
+    rows,
+    accessors,
+    [{ key: "pctFromHigh", dir: "desc" }],
+    SCREENER_SORT_LABELS
+  );
+
+  const selectedRow = sortedRows.find((r) => r.symbol === selected) ?? sortedRows[0] ?? null;
+
+  useEffect(() => {
+    if (!sortedRows.length) {
+      setSelected(null);
+      return;
+    }
+    if (!selected || !sortedRows.some((r) => r.symbol === selected)) {
+      setSelected(sortedRows[0].symbol);
+    }
+  }, [sortedRows, selected]);
+
   const postureColor =
     (summary?.posture ?? 50) >= 55
       ? "var(--accent-bull)"
@@ -112,7 +175,7 @@ export default function ScreenerPage() {
       <ModuleHeader
         module="MODULE 1"
         title="WATCHLIST"
-        description="Scan only. On list: day ≥ +4% and volume ≥ 2× the prior 50-day average. Hot: ≥ +10% and ≥ 5×. Sorted by distance from the session high. Orders come from other modules."
+        description="TC2000-style split: watchlist left, chart right. ⛶ FULL or LAYOUT → CHART for chart-only; LIST for full-width reading. Click column headers to sort; shift+click multi-sort. Scan only — orders come from other modules."
         source="EOD PRICES"
         accent="var(--module-1)"
       />
@@ -177,54 +240,78 @@ export default function ScreenerPage() {
         ))}
       </div>
 
-      <ModulePanel
-        title="WATCHLIST"
-        badge="SCAN"
-        accent="var(--module-1)"
-        source={`${rows.length} NAMES · ${summary?.asOfDate ?? "—"} EOD`}
-      >
-        {error ? (
-          <EmptyState title="Failed to load screener" detail="Check API connectivity and try again." />
-        ) : (
-          <div className="overflow-x-auto -mx-3 -mb-3">
-            <table className="w-full text-sm font-terminal">
-              <thead>
-                <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--panel-border)] bg-[var(--panel-header)]">
-                  <th className="text-left px-3 py-2">TICKER</th>
-                  <th className="text-left px-3 py-2">STATUS</th>
-                  <th className="text-right px-3 py-2">ORBIS</th>
-                  <th className="text-right px-3 py-2">DAY</th>
-                  <th className="text-right px-3 py-2">REL VOL</th>
-                  <th className="text-right px-3 py-2">OFF HIGH</th>
-                  <th className="text-left px-3 py-2">SECTOR</th>
-                  <th className="text-right px-3 py-2">LAST</th>
-                  <th className="text-left px-3 py-2">BADGES</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={9} className="px-3 py-8 text-center text-[var(--text-muted)]">
-                      Loading scoreboard…
-                    </td>
+      <p className="text-[10px] font-terminal text-[var(--text-muted)]">
+        {sortedRows.length} names · {summary?.asOfDate ?? "—"} EOD · selected {selectedRow?.symbol ?? "—"}
+      </p>
+
+      {error ? (
+        <EmptyState title="Failed to load screener" detail="Check API connectivity and try again." />
+      ) : (
+        <DeskSplitLayout
+          mode={layoutMode}
+          onModeChange={setLayoutMode}
+          listTitle="WATCHLIST · SCAN"
+          chartTitle="CHART · EMA RIBBON"
+          workspaceMinHeight={640}
+          list={
+            <div className="overflow-x-auto">
+              <MultiSortBar levels={levels} labels={SCREENER_SORT_LABELS} onClear={clearSort} />
+              <table className="w-full text-sm font-terminal">
+                <thead className="sticky top-0 z-10">
+                  <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--panel-border)] bg-[var(--panel-header)]">
+                    <SortableTh columnKey="symbol" label="TICKER" levels={levels} onSort={onHeaderClick} />
+                    <th className="text-left px-3 py-2">STATUS</th>
+                    <SortableTh columnKey="orbisScore" label="ORBIS" levels={levels} align="right" onSort={onHeaderClick} />
+                    <SortableTh columnKey="dayPct" label="DAY" levels={levels} align="right" onSort={onHeaderClick} />
+                    <SortableTh columnKey="relVolume" label="REL VOL" levels={levels} align="right" onSort={onHeaderClick} />
+                    <SortableTh columnKey="pctFromHigh" label="OFF HIGH" levels={levels} align="right" onSort={onHeaderClick} />
+                    <SortableTh columnKey="sector" label="SECTOR" levels={levels} onSort={onHeaderClick} />
+                    <SortableTh columnKey="price" label="LAST" levels={levels} align="right" onSort={onHeaderClick} />
+                    <th className="text-left px-3 py-2">BADGES</th>
                   </tr>
-                ) : rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="px-3 py-4">
-                      <EmptyState
-                        title="No names on this scan"
-                        detail="On list needs a day of at least +4% and volume at least 2× the prior 50-day average. Switch to All to see every name sorted by distance from the session high."
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={9} className="px-3 py-8 text-center text-[var(--text-muted)]">
+                        Loading scoreboard…
+                      </td>
+                    </tr>
+                  ) : sortedRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="px-3 py-4">
+                        <EmptyState
+                          title="No names on this scan"
+                          detail="On list needs a day of at least +4% and volume at least 2× the prior 50-day average. Switch to All to see every name sorted by distance from the session high."
+                        />
+                      </td>
+                    </tr>
+                  ) : (
+                    sortedRows.map((r) => (
+                      <ScoreboardRow
+                        key={r.symbol}
+                        row={r}
+                        selected={selectedRow?.symbol === r.symbol}
+                        onSelect={setSelected}
                       />
-                    </td>
-                  </tr>
-                ) : (
-                  rows.map((r) => <ScoreboardRow key={r.symbol} row={r} />)
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </ModulePanel>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          }
+          chart={
+            <ChartPane
+              symbol={selectedRow?.symbol ?? null}
+              companyName={selectedRow?.companyName}
+              interval={chartInterval}
+              onIntervalChange={setChartInterval}
+              fill={layoutMode === "chart"}
+              height={layoutMode === "chart" ? undefined : 520}
+            />
+          }
+        />
+      )}
     </div>
   );
 }

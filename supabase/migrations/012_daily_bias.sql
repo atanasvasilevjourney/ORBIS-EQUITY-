@@ -1,5 +1,5 @@
 -- ============================================================================
--- KovaView Terminal — Migration 012: Daily bias + paper trade ideas
+-- ORBIS EQUITY — Migration 012: Daily bias + paper trade ideas
 -- Classic pivots, ATR range, ANALYZE vote, annotated chart levels.
 -- Paper only. No GEX / order-flow (we do not have that tape).
 -- ============================================================================

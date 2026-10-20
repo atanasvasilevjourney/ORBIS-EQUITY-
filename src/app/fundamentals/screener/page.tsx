@@ -7,6 +7,9 @@ import { FundamentalsModuleTabs } from "@/components/fundamentals/FundamentalsMo
 import { FilterChip } from "@/components/ui/FilterChip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BiasChip } from "@/components/scoreboard/BiasChip";
+import { MultiSortBar } from "@/components/table/MultiSortBar";
+import { SortableTh } from "@/components/table/SortableTh";
+import { useMultiSort } from "@/hooks/useMultiSort";
 import {
   FUNDAMENTAL_PRESETS,
   SCREENER_UI_FILTERS,
@@ -42,6 +45,29 @@ const REGION_OPTIONS = [
   { key: "uk", label: "UK" },
   { key: "eu", label: "EU" },
 ] as const;
+
+type FaSortKey =
+  | "symbol"
+  | "orbisScore"
+  | "compositeScore"
+  | "fScore"
+  | "pe"
+  | "roe"
+  | "revGrowth1y"
+  | "marketCap"
+  | "verdict";
+
+const FA_SORT_LABELS: Record<FaSortKey, string> = {
+  symbol: "Ticker",
+  orbisScore: "Orbis",
+  compositeScore: "Comp",
+  fScore: "F",
+  pe: "P/E",
+  roe: "ROE",
+  revGrowth1y: "Rev 1Y",
+  marketCap: "Mkt cap",
+  verdict: "Verdict",
+};
 
 function emptyRanges(): RangeDraft {
   const d: RangeDraft = {};
@@ -159,6 +185,27 @@ export default function FundamentalsScreenerPage() {
     }
     return n;
   }, [sector, region, verdict, watchlistOnly, minRank, ranges]);
+
+  const faAccessors = useMemo(
+    (): Record<FaSortKey, (r: ResultRow) => string | number | null | undefined> => ({
+      symbol: (r) => r.symbol,
+      orbisScore: (r) => r.orbisScore,
+      compositeScore: (r) => r.compositeScore,
+      fScore: (r) => r.fScore,
+      pe: (r) => r.pe,
+      roe: (r) => r.roe,
+      revGrowth1y: (r) => r.revGrowth1y,
+      marketCap: (r) => r.marketCap,
+      verdict: (r) => r.verdict,
+    }),
+    []
+  );
+  const { sorted: sortedRows, levels, onHeaderClick, clearSort } = useMultiSort<ResultRow, FaSortKey>(
+    rows,
+    faAccessors,
+    [{ key: "compositeScore", dir: "desc" }],
+    FA_SORT_LABELS
+  );
 
   const presetDescription =
     preset !== "custom" && preset in FUNDAMENTAL_PRESETS
@@ -336,20 +383,20 @@ export default function FundamentalsScreenerPage() {
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             {[
-              { label: "MATCHES", value: String(rows.length) },
+              { label: "MATCHES", value: String(sortedRows.length) },
               {
                 label: "ON WATCHLIST",
-                value: String(rows.filter((r) => r.state === 1).length),
+                value: String(sortedRows.filter((r) => r.state === 1).length),
                 color: "var(--accent-bull)",
               },
               {
                 label: "COMP 70+",
-                value: String(rows.filter((r) => (r.compositeScore ?? 0) >= 70).length),
+                value: String(sortedRows.filter((r) => (r.compositeScore ?? 0) >= 70).length),
                 color: "var(--accent-bull)",
               },
               {
                 label: "STRONG / ATTRACTIVE",
-                value: String(rows.filter((r) => r.verdict === "STRONG" || r.verdict === "ATTRACTIVE").length),
+                value: String(sortedRows.filter((r) => r.verdict === "STRONG" || r.verdict === "ATTRACTIVE").length),
                 color: "var(--accent-info)",
               },
             ].map((c) => (
@@ -366,29 +413,30 @@ export default function FundamentalsScreenerPage() {
           </div>
 
           <div className="overflow-x-auto rounded border border-[var(--border)]">
+            <MultiSortBar levels={levels} labels={FA_SORT_LABELS} onClear={clearSort} />
             <table className="w-full text-sm font-terminal">
               <thead>
                 <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
-                  <th className="text-left px-3 py-2">TICKER</th>
-                  <th className="text-right px-3 py-2">ORBIS</th>
-                  <th className="text-right px-3 py-2">COMP</th>
-                  <th className="text-right px-3 py-2">F</th>
-                  <th className="text-right px-3 py-2">P/E</th>
-                  <th className="text-right px-3 py-2">ROE</th>
-                  <th className="text-right px-3 py-2">REV 1Y</th>
-                  <th className="text-right px-3 py-2">MKTCAP</th>
-                  <th className="text-right px-3 py-2">VERDICT</th>
+                  <SortableTh columnKey="symbol" label="TICKER" levels={levels} onSort={onHeaderClick} />
+                  <SortableTh columnKey="orbisScore" label="ORBIS" levels={levels} align="right" onSort={onHeaderClick} />
+                  <SortableTh columnKey="compositeScore" label="COMP" levels={levels} align="right" onSort={onHeaderClick} />
+                  <SortableTh columnKey="fScore" label="F" levels={levels} align="right" onSort={onHeaderClick} />
+                  <SortableTh columnKey="pe" label="P/E" levels={levels} align="right" onSort={onHeaderClick} />
+                  <SortableTh columnKey="roe" label="ROE" levels={levels} align="right" onSort={onHeaderClick} />
+                  <SortableTh columnKey="revGrowth1y" label="REV 1Y" levels={levels} align="right" onSort={onHeaderClick} />
+                  <SortableTh columnKey="marketCap" label="MKTCAP" levels={levels} align="right" onSort={onHeaderClick} />
+                  <SortableTh columnKey="verdict" label="VERDICT" levels={levels} align="right" onSort={onHeaderClick} />
                 </tr>
               </thead>
               <tbody>
-                {rows.length === 0 ? (
+                {sortedRows.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-3 py-8 text-center text-[var(--text-muted)]">
                       No names match — loosen filters or try another preset
                     </td>
                   </tr>
                 ) : (
-                  rows.map((r) => (
+                  sortedRows.map((r) => (
                     <tr key={r.symbol} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">
                       <td className="px-3 py-2.5">
                         <Link href={`/ticker/${r.symbol}`} className="font-semibold text-[var(--accent-info)] hover:underline">

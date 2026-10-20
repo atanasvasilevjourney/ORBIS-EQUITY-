@@ -36,6 +36,8 @@ export type CockpitDeskSummaries = {
   biasShorts: number;
   cashTema: number;
   cashCarver: number;
+  triangleSetups: number;
+  triangleBreakouts: number;
 };
 
 export async function fetchCockpitDeskSummaries(sb: SupabaseClient): Promise<CockpitDeskSummaries> {
@@ -51,6 +53,8 @@ export async function fetchCockpitDeskSummaries(sb: SupabaseClient): Promise<Coc
     cash,
     earningsRes,
     newsRes,
+    triangleRun,
+    triangleBreakoutsRes,
   ] = await Promise.all([
     latestRow<{ names: number | null; headline: string | null }>(sb, "skew_runs", "names, headline"),
     latestRow<{ names: number | null; breakouts: number | null }>(sb, "orb_runs", "names, breakouts"),
@@ -68,6 +72,15 @@ export async function fetchCockpitDeskSummaries(sb: SupabaseClient): Promise<Coc
     ),
     sb.from("earnings_calendar").select("surprise_pct, event_date").gte("event_date", today).limit(500),
     sb.from("news_items").select("id", { count: "exact", head: true }).gte("published_at", weekAgo),
+    latestRow<{ names: number | null }>(sb, "triangle_scan_runs", "names", "asof_date"),
+    (async () => {
+      const { count, error } = await sb
+        .from("triangle_setups")
+        .select("symbol", { count: "exact", head: true })
+        .or("status.eq.breakout_up,status.eq.breakout_down");
+      if (error) return 0;
+      return count ?? 0;
+    })(),
   ]);
 
   const earnings = earningsRes.data ?? [];
@@ -106,5 +119,7 @@ export async function fetchCockpitDeskSummaries(sb: SupabaseClient): Promise<Coc
     biasShorts: bias?.shorts ?? 0,
     cashTema: cash?.tema_slots ?? 0,
     cashCarver: cash?.carver_slots ?? 0,
+    triangleSetups: triangleRun?.names ?? 0,
+    triangleBreakouts: triangleBreakoutsRes ?? 0,
   };
 }

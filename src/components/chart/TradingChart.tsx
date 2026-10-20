@@ -20,6 +20,14 @@ export type ChartLevel = {
   dashed?: boolean;
 };
 
+/** Sloped or multi-point overlays (triangle trendlines, channels). */
+export type ChartSegment = {
+  points: { time: string | number; price: number }[];
+  title?: string;
+  color: string;
+  dashed?: boolean;
+};
+
 export type SwingEmaLines = {
   ema49?: (number | null)[];
   ema50?: (number | null)[];
@@ -37,6 +45,8 @@ type Props = {
   /** Anchored VWAP (5m; week anchor in ET by default from API). */
   vwapAnchored?: (number | null)[];
   levels: ChartLevel[];
+  /** Pattern geometry (triangle legs, channels) drawn as line series. */
+  segments?: ChartSegment[];
   height?: number;
 };
 
@@ -62,7 +72,16 @@ function lineOverlayData(candles: Candle[], values: (number | null)[]) {
   return candles.flatMap((c, i) => (values[i] == null ? [] : [{ time: c.time as never, value: values[i] as number }]));
 }
 
-export function TradingChart({ candles, sma, swing, vwapSession, vwapAnchored, levels, height = 420 }: Props) {
+export function TradingChart({
+  candles,
+  sma,
+  swing,
+  vwapSession,
+  vwapAnchored,
+  levels,
+  segments,
+  height = 420,
+}: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof import("lightweight-charts").createChart> | null>(null);
   const seriesRef = useRef<ReturnType<
@@ -240,6 +259,24 @@ export function TradingChart({ candles, sma, swing, vwapSession, vwapAnchored, l
         line.setData(lineOverlayData(candles, vwapAnchored));
       }
 
+      for (const seg of segments ?? []) {
+        if (!seg.points?.length) continue;
+        const line = chart.addLineSeries({
+          color: resolveColor(seg.color),
+          lineWidth: 2,
+          lineStyle: seg.dashed ? LineStyle.Dashed : LineStyle.Solid,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          title: seg.title ?? "pattern",
+        });
+        line.setData(
+          seg.points.map((p) => ({
+            time: p.time as never,
+            value: p.price,
+          }))
+        );
+      }
+
       chart.timeScale().fitContent();
       setChartReady((n) => n + 1);
 
@@ -267,7 +304,7 @@ export function TradingChart({ candles, sma, swing, vwapSession, vwapAnchored, l
       chartRef.current = null;
       seriesRef.current = null;
     };
-  }, [candles, sma, swing, vwapSession, vwapAnchored, height, theme]);
+  }, [candles, sma, swing, vwapSession, vwapAnchored, segments, height, theme]);
 
   useEffect(() => {
     const series = seriesRef.current;

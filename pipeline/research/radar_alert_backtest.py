@@ -514,7 +514,7 @@ def summarize(trades: list[Trade]) -> dict:
 def print_journal(trades: list[Trade], limit: int | None = None) -> None:
     show = trades if limit is None else trades[:limit]
     print("=" * 120)
-    print("KOVA VIEW RADAR ALERT TRADE JOURNAL (+ regime + timing + ATR + trail)")
+    print("ORBIS EQUITY RADAR ALERT TRADE JOURNAL (+ regime + timing + ATR + trail)")
     print("=" * 120)
     print(
         f"{'#':>3} {'Ticker':<6} {'Alert':<14} {'Entry':<12} {'Exit':<12} "

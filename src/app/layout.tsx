@@ -18,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem("orbis-equity-theme")||localStorage.getItem("kovaview-theme")||"neon";document.documentElement.setAttribute("data-theme",t);localStorage.setItem("orbis-equity-theme",t);localStorage.removeItem("kovaview-theme")}catch(e){}`,
+            __html: `try{var t=localStorage.getItem("orbis-equity-theme")||"neon";document.documentElement.setAttribute("data-theme",t);localStorage.setItem("orbis-equity-theme",t)}catch(e){}`,
           }}
         />
         <link

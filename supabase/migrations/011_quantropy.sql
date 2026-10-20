@@ -1,5 +1,5 @@
 -- ============================================================================
--- KovaView Terminal — Migration 011: Quantropy desk
+-- ORBIS EQUITY — Migration 011: Quantropy desk
 -- Risk metrics, CAPM, Altman Z, and Markowitz allocation (paper).
 -- ============================================================================
 

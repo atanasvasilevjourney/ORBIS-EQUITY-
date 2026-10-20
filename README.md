@@ -1,4 +1,4 @@
-# KovaView Terminal
+# ORBIS EQUITY
 
 Systematic equity research terminal — momentum screener, multi-factor fundamentals, earnings & news.
 
@@ -174,7 +174,7 @@ Surfaced at `/analysis` and `GET /api/analysis`. Heuristic signals — not inves
 
 ## Quantropy (risk + allocation)
 
-Port of [atanasvasilevjourney/Quantropy](https://github.com/atanasvasilevjourney/Quantropy) (Matilda) onto KovaView daily bars. No Alpaca, no Ken-French file drop.
+Port of [atanasvasilevjourney/Quantropy](https://github.com/atanasvasilevjourney/Quantropy) (Matilda) onto ORBIS EQUITY daily bars. No Alpaca, no Ken-French file drop.
 
 - **Risk:** annual vol, Sharpe, Sortino, max drawdown, historical VaR/CVaR 5%
 - **CAPM:** alpha and beta vs the equal-weight universe
@@ -204,6 +204,16 @@ python -m pipeline.compute.daily_bias
 ```
 
 Surfaced at `/bias`, ticker **CHART** tab, `GET /api/bias`, and `GET /api/chart/[ticker]`. Paper ideas — not live orders, not investment advice.
+
+## Triangle breakout (ascending + descending)
+
+Daily pattern scanner inspired by [pillai-amal/Ascending_Triangle_Breakout_using_Python](https://github.com/pillai-amal/Ascending_Triangle_Breakout_using_Python), extended with **descending triangle break-up** (flat support + falling highs). Swing highs/lows, flat-leg tolerance, and breakout buffer live in `pipeline/triangle_scanner/config/triangle_scanner.yaml`.
+
+- **Pipeline:** `python -m pipeline.triangle_scanner.jobs.nightly` (LOOP universe, `triangle_setups` table — migration `029_triangle_scanner.sql`)
+- **UI:** `/triangle` — list + **TradingChart** overlays via new `segments` prop (sloped trendlines; levels for horizontal support)
+- **API:** `GET /api/triangle` (falls back to live Yahoo scan when DB empty)
+
+Research only — not investment advice.
 
 ## TEMA + Carver cash (listed stock, fully funded)
 

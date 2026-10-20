@@ -1,6 +1,6 @@
-# Multi-Agent Testing Guide for KovaView
+# Multi-Agent Testing Guide for ORBIS EQUITY
 
-This document describes how to run KovaView's multi-agent testing workflow using Cursor Cloud Agent subagents.
+This document describes how to run ORBIS EQUITY's multi-agent testing workflow using Cursor Cloud Agent subagents.
 
 ## Architecture
 
@@ -39,7 +39,7 @@ Launch these subagents simultaneously:
 
 ```
 explore:
-  "Map all testable surfaces in KovaView; list P0 coverage gaps in pipeline compute,
+  "Map all testable surfaces in ORBIS EQUITY; list P0 coverage gaps in pipeline compute,
    API routes, and UI pages."
 
 generalPurpose (pipeline):

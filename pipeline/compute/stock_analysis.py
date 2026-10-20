@@ -1,7 +1,7 @@
 """Stock analysis module — technical indicators + fundamental overlay.
 
 Ports MorcilloSanz/stockanalysis (long-term MA/regression + mid-term
-MACD/RSI/volume decision tree) onto KovaView `prices_daily`, then joins
+MACD/RSI/volume decision tree) onto ORBIS EQUITY `prices_daily`, then joins
 composite factor score and Piotroski F-Score from the fundamentals snapshot.
 
 Usage:

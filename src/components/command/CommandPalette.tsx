@@ -18,6 +18,7 @@ const STATIC_ITEMS: PaletteItem[] = [
   { id: "watchlist-edit", label: "Edit my watchlist", hint: "DESK", href: "/?desk=edit", group: "Navigate" },
   { id: "screener", label: "Watchlist", hint: "SCR", href: "/screener", group: "Navigate" },
   { id: "ema200", label: "EMA200", hint: "EMA", href: "/ema200", group: "Navigate" },
+  { id: "triangle", label: "Triangle Breakout", hint: "TRI", href: "/triangle", group: "Navigate" },
   { id: "fundamentals", label: "Fundamentals", hint: "FA", href: "/fundamentals", group: "Navigate" },
   { id: "fund-screener", label: "Fundamental Screener", hint: "FSCR", href: "/fundamentals/screener", group: "Navigate" },
   { id: "health", label: "Health Sector", hint: "HC", href: "/health", group: "Navigate" },
@@ -28,9 +29,7 @@ type SearchHit = { symbol: string; name: string };
 
 function recentTickers(): string[] {
   try {
-    const raw =
-      localStorage.getItem("orbis-equity-recent-tickers") ||
-      localStorage.getItem("kovaview-recent-tickers");
+    const raw = localStorage.getItem("orbis-equity-recent-tickers");
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.slice(0, 8) : [];
@@ -47,7 +46,6 @@ export function recordRecentTicker(ticker: string) {
       "orbis-equity-recent-tickers",
       JSON.stringify([t, ...prev].slice(0, 8))
     );
-    localStorage.removeItem("kovaview-recent-tickers");
   } catch {
     /* ignore */
   }

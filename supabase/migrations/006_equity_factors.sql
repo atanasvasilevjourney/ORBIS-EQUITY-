@@ -1,5 +1,5 @@
 -- ============================================================================
--- KovaView Terminal — Migration 006: Equity factor scores + insider dedup fix
+-- ORBIS EQUITY — Migration 006: Equity factor scores + insider dedup fix
 -- Adds systematic quant factor columns to fundamentals_snapshot.
 -- ============================================================================
 
