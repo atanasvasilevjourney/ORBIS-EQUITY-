@@ -48,7 +48,15 @@ function isRecentFlip(changedAt: string | null): boolean {
   return diff < 3 * 24 * 60 * 60 * 1000;
 }
 
-export function ScoreboardRow({ row }: { row: ScreenerRow }) {
+export function ScoreboardRow({
+  row,
+  selected,
+  onSelect,
+}: {
+  row: ScreenerRow;
+  selected?: boolean;
+  onSelect?: (symbol: string) => void;
+}) {
   const noRadar = row.hasTrendRadar === false;
   const dayPct = row.dayPct ?? row.zMom;
   const relVol = row.relVolume ?? row.fEwmac;
@@ -59,12 +67,17 @@ export function ScoreboardRow({ row }: { row: ScreenerRow }) {
 
   return (
     <tr
-      className={`border-b border-[var(--border)] hover:bg-[var(--surface-alt)] transition-colors ${
+      onClick={() => onSelect?.(row.symbol)}
+      className={`border-b border-[var(--border)] hover:bg-[var(--surface-alt)] transition-colors cursor-pointer ${
         noRadar ? "opacity-60" : ""
-      }`}
+      } ${selected ? "bg-[var(--badge-bg)]" : ""}`}
     >
       <td className="px-3 py-2.5">
-        <Link href={`/ticker/${row.symbol}`} className="hover:text-[var(--accent-info)] transition-colors">
+        <Link
+          href={`/ticker/${row.symbol}`}
+          className="hover:text-[var(--accent-info)] transition-colors"
+          onClick={(e) => e.stopPropagation()}
+        >
           <span className="font-semibold">{row.symbol}</span>
         </Link>
         <span className="text-[var(--text-muted)] ml-2 text-xs hidden lg:inline">{row.companyName}</span>
