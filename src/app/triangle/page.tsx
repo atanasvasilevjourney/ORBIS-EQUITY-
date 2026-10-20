@@ -96,7 +96,7 @@ export default function TrianglePage() {
     }),
     []
   );
-  const { sorted: sortedRows, levels, onHeaderClick, clearSort } = useMultiSort(
+  const { sorted: sortedRows, levels: sortLevels, onHeaderClick, clearSort } = useMultiSort(
     rows,
     triAccessors,
     [{ key: "score", dir: "desc" }],
@@ -193,14 +193,14 @@ export default function TrianglePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] max-h-[640px] overflow-y-auto">
-          <MultiSortBar levels={levels} labels={TRI_SORT_LABELS} onClear={clearSort} />
+          <MultiSortBar levels={sortLevels} labels={TRI_SORT_LABELS} onClear={clearSort} />
           <table className="w-full text-sm font-terminal">
             <thead>
               <tr className="text-[10px] text-[var(--text-muted)] border-b border-[var(--border)] bg-[var(--surface-alt)]">
-                <SortableTh columnKey="symbol" label="TICKER" levels={levels} onSort={onHeaderClick} />
-                <SortableTh columnKey="patternType" label="TYPE" levels={levels} onSort={onHeaderClick} />
-                <SortableTh columnKey="status" label="STATUS" levels={levels} onSort={onHeaderClick} />
-                <SortableTh columnKey="score" label="SCORE" levels={levels} align="right" onSort={onHeaderClick} />
+                <SortableTh columnKey="symbol" label="TICKER" levels={sortLevels} onSort={onHeaderClick} />
+                <SortableTh columnKey="patternType" label="TYPE" levels={sortLevels} onSort={onHeaderClick} />
+                <SortableTh columnKey="status" label="STATUS" levels={sortLevels} onSort={onHeaderClick} />
+                <SortableTh columnKey="score" label="SCORE" levels={sortLevels} align="right" onSort={onHeaderClick} />
               </tr>
             </thead>
             <tbody>
