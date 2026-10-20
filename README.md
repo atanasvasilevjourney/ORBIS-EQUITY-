@@ -205,6 +205,16 @@ python -m pipeline.compute.daily_bias
 
 Surfaced at `/bias`, ticker **CHART** tab, `GET /api/bias`, and `GET /api/chart/[ticker]`. Paper ideas — not live orders, not investment advice.
 
+## Triangle breakout (ascending + descending)
+
+Daily pattern scanner inspired by [pillai-amal/Ascending_Triangle_Breakout_using_Python](https://github.com/pillai-amal/Ascending_Triangle_Breakout_using_Python), extended with **descending triangle break-up** (flat support + falling highs). Swing highs/lows, flat-leg tolerance, and breakout buffer live in `pipeline/triangle_scanner/config/triangle_scanner.yaml`.
+
+- **Pipeline:** `python -m pipeline.triangle_scanner.jobs.nightly` (LOOP universe, `triangle_setups` table — migration `029_triangle_scanner.sql`)
+- **UI:** `/triangle` — list + **TradingChart** overlays via new `segments` prop (sloped trendlines; levels for horizontal support)
+- **API:** `GET /api/triangle` (falls back to live Yahoo scan when DB empty)
+
+Research only — not investment advice.
+
 ## TEMA + Carver cash (listed stock, fully funded)
 
 [QMIE](https://github.com/atanasvasilevjourney/QMIE) is a **crypto USDT-perp scanner**. It does **not** implement TEMA or Carver. This desk maps those two ideas onto **listed cash equities** at the `prices_daily` close. No Bybit/Binance mark, no funding, no liquidation.
