@@ -71,6 +71,7 @@ supabase/migrations/030_strategy_signals.sql
 supabase/migrations/031_universe_snapshots.sql
 supabase/migrations/032_paper_order_costs.sql
 supabase/migrations/033_paper_loop_xs.sql
+supabase/migrations/034_paper_loop_xs_service_rls.sql
 ```
 
 ### Web
