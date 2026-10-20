@@ -112,7 +112,16 @@ def _run(sb, run) -> None:
     uni = {r["symbol"]: r for r in universe if is_loop_tradable(r)}
     sym_sector = {s: (uni[s].get("sector") or "Unknown") for s in uni}
 
-    book_rows = fetch_all(sb, "paper_book_xs", "*")
+    try:
+        book_rows = fetch_all(sb, "paper_book_xs", "*")
+    except Exception as exc:
+        msg = str(exc)
+        if "paper_book_xs" in msg and ("PGRST205" in msg or "schema cache" in msg):
+            raise SystemExit(
+                "paper_book_xs not found — apply supabase/migrations/033_paper_loop_xs.sql "
+                "in Supabase, then re-run: python -m pipeline.compute.portfolio_loop_xs"
+            ) from exc
+        raise
     brief_rows = fetch_all(sb, "daily_brief", "asof_date, inputs")
     prior_runs = fetch_all(
         sb,
