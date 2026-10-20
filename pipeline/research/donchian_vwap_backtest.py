@@ -22,6 +22,8 @@ from pipeline.compute.donchian_vwap import (
     donchian_frame,
     rolling_vwap,
 )
+from pipeline.compute.loop_atr_trail import LOOP_ATR_MULT, LOOP_ATR_PERIOD
+from pipeline.compute.loop_harness import PRODUCTION_EXIT_MODE
 from pipeline.ingest.us_index_universe import build_merged_universe
 from pipeline.research.loop_backtest import _bar_on, _download_panel
 from pipeline.universe_filters import is_loop_tradable, is_pharma_stock
@@ -135,9 +137,9 @@ def run_donchian_vwap_portfolio(
     end: date,
     *,
     data_start: str = "2022-06-01",
-    exit_mode: ExitMode = "donchian20",
-    atr_period: int = 14,
-    atr_mult: float = 2.5,
+    exit_mode: ExitMode = PRODUCTION_EXIT_MODE,
+    atr_period: int = LOOP_ATR_PERIOD,
+    atr_mult: float = LOOP_ATR_MULT,
     panels: dict[str, pd.DataFrame] | None = None,
     signals: dict[str, pd.DataFrame] | None = None,
 ) -> tuple[pd.Series, pd.DataFrame]:

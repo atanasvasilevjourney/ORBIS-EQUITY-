@@ -2,10 +2,10 @@
   "exit_mode": "atr_trail",
   "best_atr_period": 14,
   "best_atr_mult": 2.0,
-  "is_return_pct": 160.54375564056903,
-  "oos_return_pct": 307.02853701676656,
-  "is_sharpe": 2.9296058128249465,
-  "oos_sharpe": 3.7317169364653835,
-  "is_max_dd_pct": -11.569226694232103,
-  "oos_max_dd_pct": -8.955978747920422
+  "is_return_pct": 153.8677501712337,
+  "oos_return_pct": 307.0287056309355,
+  "is_sharpe": 2.8619228537540504,
+  "oos_sharpe": 3.7317187231435147,
+  "is_max_dd_pct": -13.835156386868075,
+  "oos_max_dd_pct": -8.955978747920446
 }

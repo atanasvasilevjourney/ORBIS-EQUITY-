@@ -1,4 +1,8 @@
-"""Donchian channel + rolling VWAP — LOOP production signal layer."""
+"""Donchian channel + rolling VWAP — LOOP production entry signals.
+
+Production exits use ATR chandelier trail (``loop_atr_trail``): ATR(14)×2.0 EOD.
+``EXIT_CHANNEL`` / ``exit_signal`` remain for diagnostics and research baselines only.
+"""
 from __future__ import annotations
 
 import numpy as np

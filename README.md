@@ -13,7 +13,7 @@ Systematic equity research terminal — momentum screener, multi-factor fundamen
 1. **Watchlist Screener** — day change, relative volume, distance from session high (no orders)
 2. **Quant Fundamentals** — cross-sectional factor scores (value, quality, growth, earnings quality, leverage) + Piotroski F-Score
 3. **Health Sector** — Health Care fundamentals + watchlist bias
-4. **Loop Terminal** — Donchian 55 + 20d VWAP paper portfolio (equal weight, sector caps)
+4. **Loop Terminal** — Donchian 55 + 20d VWAP entries, **ATR(14)×2 trail** exit (equal weight, sector caps)
 5. **Earnings & News** — calendar + GDELT headlines
 6. **Skew Map** — listed IV surface (skew, term, weekend vol) from yfinance option chains
 7. **Opening Range Breakout** — premarket/open gappers, 15-minute OR, long-only 1R paper brackets
