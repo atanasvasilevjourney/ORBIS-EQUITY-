@@ -20,13 +20,18 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
-def _universe_symbols(cfg: dict) -> list[str]:
-    if cfg.get("universe", {}).get("use_loop_universe", True):
-        from pipeline.ingest.us_index_universe import build_merged_universe
+def _universe_symbols(sb, cfg: dict) -> list[str]:
+    if not cfg.get("universe", {}).get("use_loop_universe", True):
+        return []
+    from pipeline.utils.supabase import fetch_active_symbols
 
-        stocks, _ = build_merged_universe()
-        return sorted(stocks.keys())
-    return []
+    symbols = fetch_active_symbols(sb)
+    if symbols:
+        return symbols
+    from pipeline.ingest.us_index_universe import build_merged_universe
+
+    stocks, _ = build_merged_universe()
+    return sorted({s["symbol"] for s in stocks if s.get("symbol")})
 
 
 def _load_prices(sb, symbol: str, min_bars: int) -> pd.DataFrame:
@@ -42,14 +47,17 @@ def _run(sb, _run_id: str) -> None:
     min_bars = int(cfg.get("min_history_bars", 60))
     min_price = float(cfg.get("min_price", 5.0))
     max_per = int(cfg.get("max_setups_per_type", 40))
-    symbols = _universe_symbols(cfg)
+    symbols = _universe_symbols(sb, cfg)
     if not symbols:
         logger.warning("Triangle scan: empty universe")
         return
+    logger.info("Triangle scan: %d symbols", len(symbols))
 
     as_of = date.today()
     all_rows: list[dict] = []
-    for sym in symbols:
+    for i, sym in enumerate(symbols, start=1):
+        if i == 1 or i % 50 == 0 or i == len(symbols):
+            logger.info("Triangle scan progress %d/%d · hits %d", i, len(symbols), len(all_rows))
         df = _load_prices(sb, sym, min_bars)
         if len(df) < min_bars:
             continue
