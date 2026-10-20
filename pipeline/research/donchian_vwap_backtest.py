@@ -140,6 +140,7 @@ def run_donchian_vwap_portfolio(
     atr_mult: float = 2.5,
     panels: dict[str, pd.DataFrame] | None = None,
     signals: dict[str, pd.DataFrame] | None = None,
+    sym_sector: dict[str, str] | None = None,
 ) -> tuple[pd.Series, pd.DataFrame]:
     """
     Weekly rebalance: hold up to TOP_N names with Donchian(55) break + close > 20d VWAP.
@@ -150,7 +151,8 @@ def run_donchian_vwap_portfolio(
     Equal weight; max MAX_PER_SECTOR per sector.
     Returns (daily_return_series indexed by date, equity_curve dataframe).
     """
-    sym_sector = _universe()
+    if sym_sector is None:
+        sym_sector = _universe()
     if panels is None or signals is None:
         panels, signals = build_research_panels(data_start)
 

@@ -22,6 +22,12 @@
 - **Paper economics** — migration `032_paper_order_costs.sql`; orders store `fill_price`, `fill_mode`, commission/slippage/`cost_usd` (5+5 bps/side); BUY entries prefer next-session open when on tape.
 - **Rotate / Quantropy APIs** no longer recompute lite desk **signals** when pipeline snapshots are missing (empty + headline only).
 
+## Shipped (research gate)
+
+- **`backtest_top_green_weekly`** optional `require_regime` (SPY `buys_allowed` on signal day).
+- **CI smoke** — `pipeline/tests/test_donchian_vwap_backtest_smoke.py`, `test_backtest_regime_gate.py`; runner `python -m pipeline.jobs.loop_research_gate`.
+
 ## Still open
 - Historical index membership before first snapshot date (true survivorship-free backtests).
 - Login/session auth in front of `/api` (replace `Sec-Fetch-Site` gate).
+- `portfolio_loop_xs` production harness (LOOP v2 cross-sectional sleeve).

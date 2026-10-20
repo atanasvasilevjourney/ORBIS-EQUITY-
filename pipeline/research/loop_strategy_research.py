@@ -77,6 +77,7 @@ def backtest_top_green_weekly(
     top_n: int = 8,
     min_rank: int = 60,
     cost_bps: float = 5.0,
+    require_regime: bool = False,
 ) -> StrategyResult:
     """Equal-weight top-N GREEN names by rank; rebalance every 5 sessions.
 
@@ -95,6 +96,8 @@ def backtest_top_green_weekly(
     from pipeline.strategies.costs import CostModel
     from pipeline.strategies.execution import equal_weight_portfolio_return
 
+    mkt = regime_series(spy) if require_regime else None
+
     rets = []
     holdings: list[str] = []
     prev_holdings: list[str] = []
@@ -103,6 +106,23 @@ def backtest_top_green_weekly(
     for i, d in enumerate(days):
         if i > 0 and (i % rebalance_every == 0 or not holdings):
             signal_day = days[i - 1]
+            buys_allowed = True
+            if mkt is not None:
+                ts = pd.Timestamp(signal_day)
+                if ts in mkt.index:
+                    buys_allowed = bool(mkt.loc[ts, "buys_allowed"])
+            if not buys_allowed:
+                prev_holdings = list(holdings)
+                rets.append(
+                    equal_weight_portfolio_return(
+                        panels,
+                        d,
+                        holdings,
+                        prev_holdings=prev_holdings,
+                        cost=cost,
+                    )
+                )
+                continue
             scores: list[tuple[str, int]] = []
             for sym, hist in radar.items():
                 row = _radar_on(hist, signal_day)
@@ -135,7 +155,8 @@ def backtest_top_green_weekly(
         total,
         _max_dd(s),
         f"Rebalance every {rebalance_every} sessions; equal weight; "
-        f"signal t-1, fill next open; {cost_bps:g} bps/side",
+        f"signal t-1, fill next open; {cost_bps:g} bps/side"
+        + ("; SPY regime gate" if require_regime else ""),
     )
 
 

@@ -1,11 +1,11 @@
 # LOOP v2 proposal (research · YTD 2026)
 
-> **Validation status: unvalidated.** The return figures below were produced before the
-> same-bar fixes. Known remaining caveats: universe is *current* S&P 500 ∪ Nasdaq-100
-> applied to history (survivorship), `loop_backtest.py` / `donchian_vwap_backtest.py` still
-> fill on the signal bar, and only `backtest_top_green_weekly` charges costs. Treat every
-> number as an upper bound until rerun. `backtest_top_green_weekly` now signals on t−1,
-> fills at the next open, and charges 5 bps/side.
+> **Validation status: partially validated (CI smoke).** Backtest harnesses use **t−1
+> signals**, **next-open fills**, and **5+5 bps/side** via `pipeline.strategies.execution`.
+> `backtest_top_green_weekly` supports optional **`require_regime`** (SPY SMA200 + vol gate).
+> Remaining caveats: universe is still mostly *current* index membership applied to history
+> (survivorship) until PIT snapshots cover the full window. Re-run headline numbers before
+> promoting LOOP v2 to production.
 
 ## Why v1 underperforms SPY in a trending year
 
@@ -65,6 +65,8 @@ Same as today: **S&P 500 ∪ Nasdaq-100**, **no pharma/biotech**.
 
 1. Add `pipeline/compute/portfolio_loop_xs.py` (cross-sectional weekly book) or refactor `portfolio_loop.py` with `mode=xs`.
 2. Wire nightly job after `trend_radar` compute.
-3. Backtest: `backtest_top_green_weekly` is now **lag-1 with next-open fills and costs** (done); still to do: regime gate, point-in-time universe, same fix in `loop_backtest.py` / `donchian_vwap_backtest.py`, then promote to CI smoke.
+3. Backtest: lag-1 + costs + regime gate on top-green sleeve (done); **CI smoke** via
+   `python -m pipeline.jobs.loop_research_gate`. Still to do: point-in-time universe on full
+   history, then `portfolio_loop_xs` production harness.
 
 Not investment advice. Paper only.
