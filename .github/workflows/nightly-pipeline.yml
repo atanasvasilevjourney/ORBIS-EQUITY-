@@ -310,6 +310,12 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
+      - name: Run LOOP v2 cross-sectional paper harness
+        run: python -m pipeline.compute.portfolio_loop_xs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
       - name: Run equity breakout portfolio loop
         run: python -m pipeline.compute.portfolio_loop
         env:

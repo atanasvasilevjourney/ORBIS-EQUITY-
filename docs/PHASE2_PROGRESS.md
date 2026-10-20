@@ -27,7 +27,13 @@
 - **`backtest_top_green_weekly`** optional `require_regime` (SPY `buys_allowed` on signal day).
 - **CI smoke** — `pipeline/tests/test_donchian_vwap_backtest_smoke.py`, `test_backtest_regime_gate.py`; runner `python -m pipeline.jobs.loop_research_gate`.
 
+## Shipped (`cursor/portfolio-loop-xs-5ca5`)
+
+- **`portfolio_loop_xs`** — cross-sectional watchlist sleeve (regime gate, top-8 equal weight); tables `paper_*_xs` (migration `033`).
+- Nightly step after strategy signals, before Donchian `portfolio_loop`.
+- LOOP API exposes optional **`xs`** summary/book when XS tables exist.
+
 ## Still open
 - Historical index membership before first snapshot date (true survivorship-free backtests).
 - Login/session auth in front of `/api` (replace `Sec-Fetch-Site` gate).
-- `portfolio_loop_xs` production harness (LOOP v2 cross-sectional sleeve).
+- LOOP UI panel for XS book (API field ready).

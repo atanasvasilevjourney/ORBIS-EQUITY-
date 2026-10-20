@@ -306,6 +306,76 @@ export async function GET() {
         knownOn: s.knownOn,
       }));
 
+    let xs: {
+      summary: {
+        equity: number;
+        deployedPct: number | null;
+        names: number | null;
+        asOfDate: string;
+        runId: string;
+        lastRunAt: string | null;
+        headline: string | null;
+      };
+      book: Array<{
+        ticker: string;
+        companyName: string | null;
+        shares: number;
+        entry: number;
+        last: number | null;
+        sector: string | null;
+        reason: string | null;
+        rank: number | null;
+        unrealizedPnlUsd: number | null;
+        daysHeld: number | null;
+        openedAt: string | null;
+      }>;
+      harness: Record<string, unknown> | null;
+    } | null = null;
+    try {
+      const xsRuns = await fetchAll<RunRow>(
+        sb,
+        "paper_loop_xs_runs",
+        "run_id, asof_date, equity, deployed_pct, open_risk_pct, names, posture, status, headline, harness, log, computed_at",
+        (q) => q.order("computed_at", { ascending: false })
+      );
+      const xsLatest = xsRuns[0] ?? null;
+      if (xsLatest) {
+        const xsBook = await fetchAll<BookRow>(
+          sb,
+          "paper_book_xs",
+          `symbol, company_name, side, shares, entry, last, stop, n, risk_usd,
+           sector, reason, rank, breakout, green, unrealized_pnl_usd, days_held, opened_at`
+        );
+        xs = {
+          summary: {
+            equity: xsLatest.equity,
+            deployedPct: xsLatest.deployed_pct,
+            names: xsLatest.names,
+            asOfDate: xsLatest.asof_date,
+            runId: xsLatest.run_id,
+            lastRunAt: xsLatest.computed_at,
+            headline: xsLatest.headline,
+          },
+          book: xsBook.map((r) => ({
+            ticker: r.symbol,
+            companyName: r.company_name,
+            shares: r.shares,
+            entry: r.entry,
+            last: r.last,
+            sector: r.sector,
+            reason: r.reason,
+            rank: r.rank,
+            unrealizedPnlUsd: r.unrealized_pnl_usd,
+            daysHeld: r.days_held,
+            openedAt: r.opened_at,
+          })),
+          harness: xsLatest.harness,
+        };
+      }
+    } catch {
+      xs = null;
+    }
+
     return NextResponse.json({
       summary: {
         equity: latest.equity,
@@ -381,6 +451,7 @@ export async function GET() {
           exitHints: freshVerdict.signalsSuppressed ? [] : exitHints,
         },
       },
+      xs,
     });
   } catch (err) {
     console.error("Loop API error:", err);
