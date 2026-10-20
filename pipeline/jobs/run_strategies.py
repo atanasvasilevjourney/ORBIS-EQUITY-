@@ -87,6 +87,9 @@ def run(strategy_id: str, as_of: date, params: dict) -> int:
         }
         for s in signals
     ]
+    sb.table("strategy_signals").delete().eq("strategy_id", strategy_id).eq(
+        "as_of", as_of.isoformat()
+    ).execute()
     if not payload:
         logger.warning("No signals for %s on %s", strategy_id, as_of)
         return 0
@@ -97,14 +100,25 @@ def run(strategy_id: str, as_of: date, params: dict) -> int:
     return len(payload)
 
 
+def run_all(as_of: date) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for strategy_id in list_strategies():
+        counts[strategy_id] = run(strategy_id, as_of, {})
+    return counts
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     p = argparse.ArgumentParser()
-    p.add_argument("--strategy", default="donchian_vwap", choices=list_strategies())
-    p.add_argument("--as-of", default=None, help="YYYY-MM-DD (default: latest prices_daily)")
+    p.add_argument("--strategy", default=None, choices=list_strategies())
+    p.add_argument("--all", action="store_true", help="Run every registered strategy")
+    p.add_argument("--as-of", default=None, help="YYYY-MM-DD (default: today)")
     args = p.parse_args()
     as_of = date.fromisoformat(args.as_of) if args.as_of else date.today()
-    run(args.strategy, as_of, {})
+    if args.all:
+        run_all(as_of)
+    else:
+        run(args.strategy or "donchian_vwap", as_of, {})
 
 
 if __name__ == "__main__":

@@ -271,6 +271,12 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
+      - name: Publish strategy signals (watchlist + LOOP donchian)
+        run: python -m pipeline.jobs.run_strategies --all
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
       - name: Email EOD alert digest
         id: digest
         continue-on-error: true
@@ -306,12 +312,6 @@ jobs:
 
       - name: Run equity breakout portfolio loop
         run: python -m pipeline.compute.portfolio_loop
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-
-      - name: Publish donchian_vwap strategy signals
-        run: python -m pipeline.jobs.run_strategies --strategy donchian_vwap
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}

@@ -80,6 +80,14 @@ type LoopData = {
   loopRunStaleDays?: number | null;
   journal?: JournalRow[];
   journalSummary?: { closedTrades: number; realizedPnlUsd: number; winRatePct: number | null };
+  strategy?: {
+    donchianVwap?: {
+      asOf: string | null;
+      knownOn: string | null;
+      entryCandidates: { symbol: string; score: number; reason: string }[];
+      exitHints: { symbol: string; reason: string }[];
+    };
+  };
 };
 
 const usd = (v: number | null | undefined, d = 2) =>
@@ -242,6 +250,41 @@ export default function LoopPage() {
                 ))}
                 {!d?.harness?.sectorExposure?.length && (
                   <tr><td colSpan={4} className="px-3 py-4 text-center text-[var(--text-muted)]">—</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">
+            DONCHIAN ENTRY CANDIDATES
+            {d?.strategy?.donchianVwap?.asOf ? (
+              <span className="ml-2 text-[var(--text-muted)]">as of {d.strategy.donchianVwap.asOf}</span>
+            ) : null}
+          </h2>
+          <div className="rounded border border-[var(--border)] overflow-hidden max-h-40 overflow-y-auto mb-4">
+            <table className="w-full text-sm font-terminal">
+              <thead>
+                <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
+                  <th className="text-left px-3 py-2">TICKER</th>
+                  <th className="text-right px-3 py-2">SCORE</th>
+                  <th className="text-left px-3 py-2">REASON</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(d?.strategy?.donchianVwap?.entryCandidates ?? []).slice(0, 12).map((x) => (
+                  <tr key={x.symbol} className="border-b border-[var(--border)]">
+                    <td className="px-3 py-2 font-bold">{x.symbol}</td>
+                    <td className="px-3 py-2 text-right">{x.score.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{x.reason}</td>
+                  </tr>
+                ))}
+                {!d?.strategy?.donchianVwap?.entryCandidates?.length && (
+                  <tr>
+                    <td colSpan={3} className="px-3 py-4 text-center text-[var(--text-muted)]">
+                      No published candidates (run strategy bus nightly)
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>

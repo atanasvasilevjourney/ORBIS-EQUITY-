@@ -9,9 +9,16 @@
 - **Backtests** — `loop_backtest`, `donchian_vwap_backtest`, `screener_backtest`, and `backtest_top_green_weekly` use shared execution economics.
 - **Yahoo routes** — in-memory cache (`yahooCache.ts`) and per-IP rate limits on `/api/chart` and `/api/symbols/search`.
 
+## Shipped (follow-up)
+
+- **`watchlist_momentum`** strategy + nightly `--all` publish (after trend radar, before LOOP).
+- **`/api/screener`** uses `watchlist_momentum` BUY rows when present (falls back to `trend_radar` filters).
+- **`/api/loop`** exposes `strategy.donchianVwap` entry candidates / exit hints from `strategy_signals`.
+- LOOP UI shows **Donchian entry candidates** table.
+
 ## Still open
 
-- Wire desk APIs to read `strategy_signals` (retire lite desk **signals** per 2f).
+- Retire lite desk **signals** on rotate/quantropy (2f remainder).
 - LOOP `portfolio_loop` next-open fills and explicit cost rows on `paper_orders`.
 - Historical index membership before first snapshot date (true survivorship-free backtests).
 - Login/session auth in front of `/api` (replace `Sec-Fetch-Site` gate).

@@ -5,6 +5,7 @@ import { isMissingColumn } from "@/lib/supabase/errors";
 import { orbisScore } from "@/lib/orbisScore";
 import { parseSymbolsQueryParam } from "@/lib/symbolsQuery";
 import { resolveUniverseDesk } from "@/lib/resolveIndexDesk";
+import { fetchLatestStrategySignals } from "@/lib/strategySignals";
 
 export const revalidate = 900;
 
@@ -120,6 +121,22 @@ export async function GET(req: NextRequest) {
     const allowedSymbols = new Set(filteredUniverse.map((u) => u.symbol));
     const deskMode = deskSymbols.length > 0;
 
+    const watchBatch = deskMode
+      ? { asOf: null, knownOn: null, signals: [] }
+      : await fetchLatestStrategySignals(sb, "watchlist_momentum");
+    let strategyBuySymbols: string[] = [];
+    if (watchBatch.signals.length > 0 && !deskMode && direction !== "bear") {
+      strategyBuySymbols = watchBatch.signals
+        .filter((s) => {
+          if (s.side !== "BUY" || s.score < minRank) return false;
+          if (direction === "hot") return s.reason === "hot";
+          if (direction === "bull") return true;
+          return true;
+        })
+        .map((s) => s.symbol)
+        .filter((sym) => allowedSymbols.has(sym));
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const radarFilter = (q: any) => {
       let query = q.order("quality_rank", { ascending: false });
@@ -141,8 +158,15 @@ export async function GET(req: NextRequest) {
       "symbol, state, quality_rank, z_mom, f_ewmac, z_52, breakout_active, volume_confirmed, convergence_count, state_changed_at, computed_at";
 
     let allRadar: RadarRow[];
+    const useStrategyBus = strategyBuySymbols.length > 0 && !deskMode;
     try {
-      allRadar = await fetchAll<RadarRow>(sb, "trend_radar", radarFull, radarFilter);
+      if (useStrategyBus) {
+        allRadar = await fetchAll<RadarRow>(sb, "trend_radar", radarFull, (q) =>
+          q.in("symbol", strategyBuySymbols.slice(0, 1000)).order("quality_rank", { ascending: false })
+        );
+      } else {
+        allRadar = await fetchAll<RadarRow>(sb, "trend_radar", radarFull, radarFilter);
+      }
     } catch (err) {
       if (!isMissingColumn(err)) throw err;
       const slim = await fetchAll<Omit<RadarRow, "kama_regime" | "adx" | "entry_timing">>(
@@ -195,6 +219,8 @@ export async function GET(req: NextRequest) {
           orbisScore: orbisScore(r.quality_rank, f?.composite_factor_score ?? null),
           compositeScore: f?.composite_factor_score ?? null,
           hasTrendRadar: true,
+          signalSource: useStrategyBus ? "strategy_signals" : "trend_radar",
+          strategyAsOf: useStrategyBus ? watchBatch.asOf : null,
         };
       })
       .filter(Boolean);
@@ -203,7 +229,7 @@ export async function GET(req: NextRequest) {
       const radarBySym = new Map(allRadar.map((r) => [r.symbol, r]));
       const merged = deskSymbols.map((sym) => {
         const existing = rows.find((row) => row && row.symbol === sym);
-        if (existing) return { ...existing, hasTrendRadar: true };
+        if (existing) return { ...existing, hasTrendRadar: true, signalSource: "trend_radar", strategyAsOf: null };
         const u = filteredUniverse.find((x) => x.symbol === sym);
         const f = fundamentals.find((x) => x.symbol === sym);
         const r = radarBySym.get(sym);
@@ -237,6 +263,8 @@ export async function GET(req: NextRequest) {
             orbisScore: orbisScore(r.quality_rank, f?.composite_factor_score ?? null),
             compositeScore: f?.composite_factor_score ?? null,
             hasTrendRadar: true,
+            signalSource: "trend_radar",
+            strategyAsOf: null,
           };
         }
         return {
@@ -268,9 +296,11 @@ export async function GET(req: NextRequest) {
           orbisScore: null,
           compositeScore: f?.composite_factor_score ?? null,
           hasTrendRadar: false,
+          signalSource: "trend_radar",
+          strategyAsOf: null,
         };
       });
-      rows = merged;
+      rows = merged as typeof rows;
     }
 
     return NextResponse.json(rows);
