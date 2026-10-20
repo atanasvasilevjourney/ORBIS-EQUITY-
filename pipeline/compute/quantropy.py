@@ -1,7 +1,7 @@
 """Quantropy desk — risk, CAPM, Altman Z, Markowitz allocation.
 
 Port of https://github.com/atanasvasilevjourney/Quantropy (Matilda) onto
-KovaView `prices_daily` + `fundamentals_snapshot`. No broker, no Ken-French
+ORBIS EQUITY `prices_daily` + `fundamentals_snapshot`. No broker, no Ken-French
 file drop, no Flask. Paper analytics only.
 
   Risk      vol, Sharpe, Sortino, max DD, historical VaR/CVaR (Quantropy

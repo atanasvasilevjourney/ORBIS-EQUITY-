@@ -1,5 +1,5 @@
 -- ============================================================================
--- KovaView Terminal — Migration 021: Fundamental analysis detail
+-- ORBIS EQUITY — Migration 021: Fundamental analysis detail
 -- Persists Piotroski component breakdown + automated fundamental verdict.
 -- ============================================================================
 

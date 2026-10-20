@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared configuration + helpers for the KovaView local dev stack.
+# Shared configuration + helpers for the ORBIS EQUITY local dev stack.
 #
 # The app (Next.js) and pipeline (Python) both talk to Supabase's PostgREST
 # HTTP API. There is no Docker in the Cloud Agent VM, so instead of the
@@ -14,12 +14,12 @@
 
 set -o pipefail
 
-export KV="${KV:-$HOME/.kovaview}"
+export KV="${KV:-$HOME/.orbis-equity}"
 export PGDATA="$KV/pgdata"
 export PGPORT="${KV_PGPORT:-5433}"
 export PGREST_PORT="${KV_PGREST_PORT:-3001}"
 export GATEWAY_PORT="${KV_GATEWAY_PORT:-54321}"
-export DBNAME="kovaview"
+export DBNAME="orbis_equity"
 export DBUSER="ubuntu"
 
 # Newest installed PostgreSQL bin dir (e.g. /usr/lib/postgresql/16/bin)

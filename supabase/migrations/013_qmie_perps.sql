@@ -1,5 +1,5 @@
 -- ============================================================================
--- KovaView Terminal — Migration 013: TEMA + Carver equity-perp paper desk
+-- ORBIS EQUITY — Migration 013: TEMA + Carver equity-perp paper desk
 -- Separate from LOOP / ORB / BIAS. Signals on listed names; size as USDT-M
 -- perpetuals. Paper only — no live exchange orders.
 -- ============================================================================

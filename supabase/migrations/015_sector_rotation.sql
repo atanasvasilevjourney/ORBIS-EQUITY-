@@ -1,5 +1,5 @@
 -- ============================================================================
--- KovaView Terminal — Migration 015: beta rotational sector / industry tape
+-- ORBIS EQUITY — Migration 015: beta rotational sector / industry tape
 -- Inspired by Caltropia's sector+industry outlook structure. Computed on this
 -- universe. Paper diagnostic — not a live book.
 -- ============================================================================

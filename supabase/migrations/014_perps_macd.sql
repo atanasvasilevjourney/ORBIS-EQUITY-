@@ -1,5 +1,5 @@
 -- ============================================================================
--- KovaView Terminal — Migration 014: MACD close on the TEMA perp sleeve
+-- ORBIS EQUITY — Migration 014: MACD close on the TEMA perp sleeve
 -- TEMA 9/99/199 still enters. MACD(12,26,9) is the systematic close.
 -- 2.5 ATR remains the hard stop. Carver sleeve is unchanged.
 -- ============================================================================

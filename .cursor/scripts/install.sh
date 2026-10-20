@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Idempotent setup for the KovaView dev environment.
+# Idempotent setup for the ORBIS EQUITY dev environment.
 # Safe to run repeatedly; preserves existing database contents.
 set -euo pipefail
 
@@ -160,7 +160,7 @@ secret = sys.argv[1].encode()
 b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b'=')
 def jwt(role):
     h = b64(json.dumps({"alg":"HS256","typ":"JWT"},separators=(',',':')).encode())
-    p = b64(json.dumps({"role":role,"iss":"kovaview-local","iat":1700000000,"exp":2000000000},separators=(',',':')).encode())
+    p = b64(json.dumps({"role":role,"iss":"orbis-equity-local","iat":1700000000,"exp":2000000000},separators=(',',':')).encode())
     s = b64(hmac.new(secret, h+b'.'+p, hashlib.sha256).digest())
     return (h+b'.'+p+b'.'+s).decode()
 print("ANON_KEY=" + jwt("anon"))

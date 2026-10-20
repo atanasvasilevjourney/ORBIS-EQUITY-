@@ -1,5 +1,5 @@
 -- ============================================================================
--- KovaView Terminal — Migration 009: Opening range breakout (paper)
+-- ORBIS EQUITY — Migration 009: Opening range breakout (paper)
 -- Premarket/open gappers + 15-minute OR + 1R bracket, long only.
 -- ============================================================================
 

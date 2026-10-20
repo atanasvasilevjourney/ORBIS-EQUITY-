@@ -29,9 +29,7 @@ type SearchHit = { symbol: string; name: string };
 
 function recentTickers(): string[] {
   try {
-    const raw =
-      localStorage.getItem("orbis-equity-recent-tickers") ||
-      localStorage.getItem("kovaview-recent-tickers");
+    const raw = localStorage.getItem("orbis-equity-recent-tickers");
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.slice(0, 8) : [];
@@ -48,7 +46,6 @@ export function recordRecentTicker(ticker: string) {
       "orbis-equity-recent-tickers",
       JSON.stringify([t, ...prev].slice(0, 8))
     );
-    localStorage.removeItem("kovaview-recent-tickers");
   } catch {
     /* ignore */
   }

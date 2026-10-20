@@ -10,7 +10,7 @@ Usage:
 Env:
     SUPABASE_URL, SUPABASE_SERVICE_KEY  — required to fetch radar
     RESEND_API_KEY, ALERT_EMAIL         — required to send (else skip)
-    ALERT_EMAIL_FROM                    — default: KovaView <onboarding@resend.dev>
+    ALERT_EMAIL_FROM                    — default: ORBIS EQUITY <onboarding@resend.dev>
     ALERT_MIN_RANK                      — default 60
     ALERT_MIN_CONVERGENCE               — default 4
     ALERT_SKIP_WAIT_PULLBACK            — default false
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MIN_RANK = 60
 DEFAULT_MIN_CONVERGENCE = 2
-DEFAULT_FROM = "KovaView Alerts <onboarding@resend.dev>"
+DEFAULT_FROM = "ORBIS EQUITY Alerts <onboarding@resend.dev>"
 RESEND_URL = "https://api.resend.com/emails"
 
 
@@ -135,7 +135,7 @@ def format_digest_text(
     app_base_url: str = "",
 ) -> str:
     lines = [
-        f"KovaView EOD Alert Digest — {as_of.isoformat()}",
+        f"ORBIS EQUITY EOD Alert Digest — {as_of.isoformat()}",
         "",
         "Watchlist additions (module 1 does not place orders).",
         "Use LOOP or another execution module if you take a trade.",
@@ -217,7 +217,7 @@ def format_digest_html(
     )
     return (
         f"<div style='font-family:system-ui,sans-serif'>"
-        f"<h2>KovaView EOD Alert Digest — {as_of.isoformat()}</h2>"
+        f"<h2>ORBIS EQUITY EOD Alert Digest — {as_of.isoformat()}</h2>"
         f"{body}"
         "<p style='color:#666;font-size:12px;margin-top:16px'>"
         "ATR×2.5 stop · ~1.25% equity risk · prefer SMA20 trail / exit on RED"
@@ -325,7 +325,7 @@ def run_digest(
     app_base = os.getenv("APP_BASE_URL", "").strip()
     text = format_digest_text(candidates, as_of=as_of, app_base_url=app_base)
     html = format_digest_html(candidates, as_of=as_of, app_base_url=app_base)
-    subject = f"KovaView alerts {as_of.isoformat()} — {len(candidates)} GREEN flip(s)"
+    subject = f"ORBIS EQUITY alerts {as_of.isoformat()} — {len(candidates)} GREEN flip(s)"
 
     logger.info("Digest prepared: %d candidates for %s", len(candidates), as_of)
     print(text)

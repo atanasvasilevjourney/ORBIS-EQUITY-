@@ -1,4 +1,4 @@
-/** Fundamental screener query parsing and preset definitions (Norn-style ranges + KovaView presets). */
+/** Fundamental screener query parsing and preset definitions (Norn-style ranges + ORBIS EQUITY presets). */
 
 export type ScreenerPresetId =
   | "custom"

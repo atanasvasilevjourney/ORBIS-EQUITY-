@@ -1,4 +1,4 @@
-# KovaView Terminal
+# ORBIS EQUITY
 
 Systematic equity research terminal — momentum screener, multi-factor fundamentals, earnings & news.
 
@@ -174,7 +174,7 @@ Surfaced at `/analysis` and `GET /api/analysis`. Heuristic signals — not inves
 
 ## Quantropy (risk + allocation)
 
-Port of [atanasvasilevjourney/Quantropy](https://github.com/atanasvasilevjourney/Quantropy) (Matilda) onto KovaView daily bars. No Alpaca, no Ken-French file drop.
+Port of [atanasvasilevjourney/Quantropy](https://github.com/atanasvasilevjourney/Quantropy) (Matilda) onto ORBIS EQUITY daily bars. No Alpaca, no Ken-French file drop.
 
 - **Risk:** annual vol, Sharpe, Sortino, max drawdown, historical VaR/CVaR 5%
 - **CAPM:** alpha and beta vs the equal-weight universe
