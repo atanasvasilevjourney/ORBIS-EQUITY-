@@ -141,8 +141,6 @@ export function liteQuantFromPrices(rows: PricePoint[]): {
   const invSum = invRaw.reduce((a, b) => a + b, 0) || 1;
   names.forEach((n, i) => {
     n.wInvVol = invRaw[i] / invSum;
-    n.wMaxSharpe = n.wEqual;
-    n.wMinVar = n.wInvVol;
   });
   names.sort((a, b) => (b.sharpe ?? -999) - (a.sharpe ?? -999));
   return {

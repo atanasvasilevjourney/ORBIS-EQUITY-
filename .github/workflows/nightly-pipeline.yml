@@ -111,7 +111,7 @@ jobs:
           LSE_API_KEY: ${{ secrets.LSE_API_KEY }}
 
   # ---------------------------------------------------------------------------
-  # 2. Ingest Prices — runs every weekday (even if universe-sync was skipped)
+  # 2. Ingest Prices — runs every weekday (also when universe-sync was skipped, never after it failed)
   # ---------------------------------------------------------------------------
   ingest-prices:
     runs-on: ubuntu-latest
@@ -121,8 +121,7 @@ jobs:
       always()
       && needs.validate-secrets.result == 'success'
       && (needs.universe-sync.result == 'success'
-          || needs.universe-sync.result == 'skipped'
-          || needs.universe-sync.result == 'failure')
+          || needs.universe-sync.result == 'skipped')
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -273,6 +272,8 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: Email EOD alert digest
+        id: digest
+        continue-on-error: true
         run: python -m pipeline.notify.alert_digest
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -310,30 +311,39 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: Run options skew map + weekend vol
+        id: skew
+        continue-on-error: true
         run: python -m pipeline.compute.skew_map
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: Run opening range breakout paper harness
+        id: orb
+        continue-on-error: true
         run: python -m pipeline.compute.opening_range
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: Run technical + fundamental stock analysis
+        id: analysis
+        continue-on-error: true
         run: python -m pipeline.compute.stock_analysis
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: Run Quantropy risk + Markowitz allocation
+        id: quantropy
+        continue-on-error: true
         run: python -m pipeline.compute.quantropy
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: Run daily bias levels + paper trade ideas
+        id: bias
         continue-on-error: true
         run: python -m pipeline.compute.daily_bias
         env:
@@ -341,6 +351,7 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: Run TEMA + MACD close + Carver equity-perp paper desk
+        id: perps
         continue-on-error: true
         run: python -m pipeline.compute.perps_desk
         env:
@@ -348,11 +359,25 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: Run beta rotational sector / industry tape
+        id: rotate
         continue-on-error: true
         run: python -m pipeline.compute.sector_rotation
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+      - name: Report optional desk failures
+        if: always()
+        run: |
+          failed=0
+          for pair in digest:${{ steps.digest.outcome }} skew:${{ steps.skew.outcome }} orb:${{ steps.orb.outcome }} analysis:${{ steps.analysis.outcome }} quantropy:${{ steps.quantropy.outcome }} bias:${{ steps.bias.outcome }} perps:${{ steps.perps.outcome }} rotate:${{ steps.rotate.outcome }}; do
+            name="${pair%%:*}"; outcome="${pair##*:}"
+            if [ "$outcome" = "failure" ]; then
+              echo "::warning title=Optional desk failed::$name failed; core signals still ran"
+              failed=$((failed+1))
+            fi
+          done
+          echo "optional desk failures: $failed" >> "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
   # 6. Ingest Earnings + News — runs every weekday

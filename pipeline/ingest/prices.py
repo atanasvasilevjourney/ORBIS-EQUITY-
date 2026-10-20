@@ -249,17 +249,18 @@ def _run_price_ingest(sb, run) -> None:
         all_rows.extend(_ingest_yfinance_prices(yf_symbols))
 
     got = {r.get("symbol") for r in all_rows if r.get("symbol")}
-    leftover = [
-        m
-        for m in members
-        if m.get("symbol") not in got
-        and m.get("data_source") in (None, "", "seed_demo")
-    ]
+    leftover = [m for m in members if m.get("symbol") not in got]
     if leftover:
+        cap = int(os.environ.get("PRICE_FALLBACK_MAX", "120"))
+        if len(leftover) > cap:
+            logger.warning(
+                "Cash EOD fallback capped at %d of %d missing names", cap, len(leftover)
+            )
+            leftover = leftover[:cap]
         from pipeline.clients.cash_eod import bars_to_rows, fetch_daily_bars
 
         logger.info(
-            "Cash EOD fallback for %d seed/unknown names with no LSE/yfinance rows",
+            "Cash EOD fallback for %d names with no primary-source rows",
             len(leftover),
         )
         for m in leftover:
@@ -301,6 +302,7 @@ def _run_price_ingest(sb, run) -> None:
     # Batch upsert
     batch_size = 500
     upserted = 0
+    failed_batches = 0
 
     for i in range(0, len(clean_rows), batch_size):
         batch = clean_rows[i : i + batch_size]
@@ -317,12 +319,15 @@ def _run_price_ingest(sb, run) -> None:
             logger.exception(
                 "Failed to upsert price batch %d-%d", i, i + len(batch)
             )
+            failed_batches += 1
 
     logger.info(
         "=== Price Ingest Complete: %d/%d rows upserted ===",
         upserted, len(clean_rows),
     )
     run.set_row_counts(upserted=upserted, collected=len(clean_rows))
+    if failed_batches:
+        run.mark_partial(f"{failed_batches} price upsert batch(es) failed")
     run.set_headline(f"upserted {upserted}/{len(clean_rows)} price rows")
 
 

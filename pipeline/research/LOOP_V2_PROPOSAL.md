@@ -1,5 +1,12 @@
 # LOOP v2 proposal (research · YTD 2026)
 
+> **Validation status: unvalidated.** The return figures below were produced before the
+> same-bar fixes. Known remaining caveats: universe is *current* S&P 500 ∪ Nasdaq-100
+> applied to history (survivorship), `loop_backtest.py` / `donchian_vwap_backtest.py` still
+> fill on the signal bar, and only `backtest_top_green_weekly` charges costs. Treat every
+> number as an upper bound until rerun. `backtest_top_green_weekly` now signals on t−1,
+> fills at the next open, and charges 5 bps/side.
+
 ## Why v1 underperforms SPY in a trending year
 
 1. **Exit churn:** With fixed stops removed, **100% of closes were `rank_decay` (rank &lt; 50)** while many names were still structurally GREEN. That cuts trend legs early.
@@ -58,6 +65,6 @@ Same as today: **S&P 500 ∪ Nasdaq-100**, **no pharma/biotech**.
 
 1. Add `pipeline/compute/portfolio_loop_xs.py` (cross-sectional weekly book) or refactor `portfolio_loop.py` with `mode=xs`.
 2. Wire nightly job after `trend_radar` compute.
-3. Backtest: fix `backtest_top_green_weekly` to **lag-1** and add regime gate; promote to CI smoke.
+3. Backtest: `backtest_top_green_weekly` is now **lag-1 with next-open fills and costs** (done); still to do: regime gate, point-in-time universe, same fix in `loop_backtest.py` / `donchian_vwap_backtest.py`, then promote to CI smoke.
 
 Not investment advice. Paper only.

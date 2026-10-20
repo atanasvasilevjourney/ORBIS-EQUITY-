@@ -4,6 +4,7 @@ import { fetchAll } from "@/lib/supabase/paginate";
 import { fetchLitePrices, LIQUID_NAMES } from "@/lib/liteDeskApi";
 import { orbisScore } from "@/lib/orbisScore";
 import { fetchCockpitDeskSummaries } from "@/lib/cockpitDeskSummaries";
+import { evaluateFreshness } from "@/lib/freshness";
 
 export const revalidate = 900;
 
@@ -145,10 +146,7 @@ export async function GET() {
       fetchCockpitDeskSummaries(sb),
     ]);
 
-    let stale = false;
-    if (brief?.asof_date) {
-      stale = (Date.now() - new Date(brief.asof_date).getTime()) / 86400000 > 3;
-    }
+    const stale = evaluateFreshness(brief?.asof_date).stale;
 
     return NextResponse.json({
       asOfDate: brief?.asof_date ?? null,
