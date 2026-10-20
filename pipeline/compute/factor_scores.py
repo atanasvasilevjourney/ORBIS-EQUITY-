@@ -147,20 +147,29 @@ def _fetch_financial_extras(sb) -> dict[str, dict]:
     """Per-symbol accruals ratio and interest coverage from latest FY reports."""
     extras: dict[str, dict] = {}
 
+    from datetime import date as date_cls
+
+    from pipeline.utils.pit_reports import latest_fy_reports_as_of
+
+    as_of = date_cls.today()
     for report_type, key in [("income", "income"), ("balance", "balance"), ("cashflow", "cashflow")]:
         rows = fetch_all(
             sb,
             "financial_reports",
-            "symbol, date, data",
+            "symbol, date, filing_date, data",
             filters=lambda q, rt=report_type: q.eq("report_type", rt).eq("period", "FY"),
             order=("date", True),
         )
+        by_sym: dict[str, list[dict]] = {}
         for r in rows:
-            sym = r["symbol"]
+            by_sym.setdefault(r["symbol"], []).append(r)
+        for sym, sym_rows in by_sym.items():
+            known = latest_fy_reports_as_of(sym_rows, as_of, max_reports=1)
+            if not known:
+                continue
             if sym not in extras:
                 extras[sym] = {}
-            if key not in extras[sym]:
-                extras[sym][key] = r.get("data") or {}
+            extras[sym][key] = known[0]
 
     for sym, reports in extras.items():
         income = reports.get("income", {})

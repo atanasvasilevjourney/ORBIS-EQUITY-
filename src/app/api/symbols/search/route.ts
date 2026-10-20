@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimitAllowed } from "@/lib/rateLimit";
 import { searchYahooSymbols } from "@/lib/yahooSearch";
 
-export const revalidate = 0;
+export const revalidate = 60;
 
 export async function GET(req: NextRequest) {
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+  if (!rateLimitAllowed(`symbols:${ip}`, 40, 60_000)) {
+    return NextResponse.json({ error: "Rate limit exceeded", hits: [] }, { status: 429 });
+  }
   const sp = req.nextUrl.searchParams;
   const q = sp.get("q") ?? "";
   const nasdaqOnly = sp.get("all") !== "1";

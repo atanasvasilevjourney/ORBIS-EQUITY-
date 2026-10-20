@@ -92,12 +92,15 @@ def backtest_top_green_weekly(
     days = [d.date() if hasattr(d, "date") else d for d in spy.index]
     days = [d for d in days if YTD_START <= d <= YTD_END]
 
+    from pipeline.strategies.costs import CostModel
+    from pipeline.strategies.execution import equal_weight_portfolio_return
+
     rets = []
     holdings: list[str] = []
+    prev_holdings: list[str] = []
     rebalance_every = 5
-    cost = cost_bps / 10_000.0
+    cost = CostModel(commission_bps=cost_bps / 2, slippage_bps=cost_bps / 2)
     for i, d in enumerate(days):
-        prev_holdings = holdings
         if i > 0 and (i % rebalance_every == 0 or not holdings):
             signal_day = days[i - 1]
             scores: list[tuple[str, int]] = []
@@ -114,32 +117,16 @@ def backtest_top_green_weekly(
             scores.sort(key=lambda x: -x[1])
             holdings = [s for s, _ in scores[:top_n]]
 
-        if not holdings:
-            rets.append(0.0)
-            continue
-
-        entered = set(holdings) - set(prev_holdings)
-        exited = set(prev_holdings) - set(holdings)
-        day_ret = []
-        for sym in holdings:
-            ohlcv = panels[sym]
-            bar = _bar_on(ohlcv, d)
-            if bar is None:
-                continue
-            if sym in entered:
-                base = float(bar["open"])
-            else:
-                ts = pd.Timestamp(d)
-                loc = int(np.where(ohlcv.index.normalize() == ts)[0][0])
-                if loc == 0:
-                    continue
-                base = float(ohlcv.iloc[loc - 1]["close"])
-            day_ret.append(float(bar["close"]) / base - 1)
-        gross = float(np.mean(day_ret)) if day_ret else 0.0
-        traded = len(entered) / max(len(holdings), 1) + (
-            len(exited) / max(len(prev_holdings), 1) if prev_holdings else 0.0
+        rets.append(
+            equal_weight_portfolio_return(
+                panels,
+                d,
+                holdings,
+                prev_holdings=prev_holdings,
+                cost=cost,
+            )
         )
-        rets.append(gross - cost * traded)
+        prev_holdings = list(holdings)
 
     s = pd.Series(rets)
     total = ((1 + s).prod() - 1) * 100

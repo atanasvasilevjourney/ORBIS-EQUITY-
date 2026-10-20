@@ -310,6 +310,12 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
+      - name: Publish donchian_vwap strategy signals
+        run: python -m pipeline.jobs.run_strategies --strategy donchian_vwap
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
       - name: Run options skew map + weekend vol
         id: skew
         continue-on-error: true

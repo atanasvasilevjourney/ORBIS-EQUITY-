@@ -164,6 +164,7 @@ def run_donchian_vwap_portfolio(
     eq_rows: list[dict] = []
 
     for i, d in enumerate(days):
+        start_holdings = list(holdings.keys())
         # exits between rebalances
         to_drop = []
         for sym in list(holdings.keys()):
@@ -231,21 +232,11 @@ def run_donchian_vwap_portfolio(
                 for sym in prev_syms - set(new_hold.keys()):
                     trails.pop(sym, None)
 
-        day_ret = 0.0
-        if holdings:
-            parts = []
-            for sym, w in holdings.items():
-                ohlcv = panels[sym]
-                ts = pd.Timestamp(d)
-                hits = ohlcv.index.normalize() == ts
-                if not hits.any():
-                    continue
-                loc = int(np.where(hits)[0][0])
-                if loc == 0:
-                    continue
-                r = float(ohlcv.iloc[loc]["close"]) / float(ohlcv.iloc[loc - 1]["close"]) - 1
-                parts.append(w * r)
-            day_ret = sum(parts) if parts else 0.0
+        from pipeline.strategies.execution import equal_weight_portfolio_return
+
+        day_ret = equal_weight_portfolio_return(
+            panels, d, list(holdings.keys()), prev_holdings=start_holdings
+        )
 
         equity *= 1 + day_ret
         eq_rows.append({"date": d, "equity": equity, "daily_return": day_ret, "names": len(holdings)})

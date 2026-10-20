@@ -1,3 +1,5 @@
+import { cachedYahooJson } from "@/lib/yahooCache";
+
 export type YahooDailyBar = {
   date: string;
   open: number;
@@ -11,13 +13,16 @@ export type YahooDailyBar = {
 export async function fetchYahooDaily(symbol: string, range = "2y"): Promise<YahooDailyBar[]> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}&includePrePost=false`;
   try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 OrbisEquity-Terminal" },
-      cache: "no-store",
-      signal: AbortSignal.timeout(12000),
+    const body = await cachedYahooJson(`daily:${symbol}:${range}`, 5 * 60_000, async () => {
+      const res = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0 OrbisEquity-Terminal" },
+        cache: "no-store",
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!res.ok) return null;
+      return res.json();
     });
-    if (!res.ok) return [];
-    const body = await res.json();
+    if (!body) return [];
     const result = body?.chart?.result?.[0];
     const ts: number[] = result?.timestamp ?? [];
     const q = result?.indicators?.quote?.[0] ?? {};
