@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { DeskPageHeader } from "@/components/ui/DeskPageHeader";
+import { InfoCallout } from "@/components/ui/InfoCallout";
+import { MetricStrip } from "@/components/ui/MetricStrip";
 import { CorrHeatmap } from "@/components/charts/CorrHeatmap";
 import { deskList, parseDesk } from "@/lib/deskPayload";
 import type { CorrMatrix } from "@/lib/corr";
@@ -35,6 +38,9 @@ type Data = {
     names: number | null;
     asOfDate: string | null;
     distressed: number;
+    zProxy?: number;
+    equalSharpe?: number | null;
+    invVol?: number | null;
     maxSharpe: number | null;
     minVol: number | null;
   } | null;
@@ -70,8 +76,8 @@ function Frontier({ pts, books }: { pts: FrontierPt[]; books: Record<string, Boo
   const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${X(p.annVol).toFixed(1)},${Y(p.annReturn).toFixed(1)}`).join(" ");
   const marks: { x: number; y: number; c: string; l: string }[] = [];
   if (books?.minVar && books.minVar.annVol != null && books.minVar.annReturn != null) marks.push({ x: books.minVar.annVol, y: books.minVar.annReturn, c: "var(--accent-info)", l: "MIN VOL" });
-  if (books?.maxSharpe && books.maxSharpe.annVol != null && books.maxSharpe.annReturn != null) marks.push({ x: books.maxSharpe.annVol, y: books.maxSharpe.annReturn, c: "var(--accent-warning)", l: "MAX SHARPE" });
-  if (books?.equal && books.equal.annVol != null && books.equal.annReturn != null) marks.push({ x: books.equal.annVol, y: books.equal.annReturn, c: "var(--text-muted)", l: "1/N" });
+  if (books?.maxSharpe && books.maxSharpe.annVol != null && books.maxSharpe.annReturn != null) marks.push({ x: books.maxSharpe.annVol, y: books.maxSharpe.annReturn, c: "var(--text-muted)", l: "IS MAX" });
+  if (books?.equal && books.equal.annVol != null && books.equal.annReturn != null) marks.push({ x: books.equal.annVol, y: books.equal.annReturn, c: "var(--accent-info)", l: "1/N" });
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-52">
       <path d={line} fill="none" stroke="var(--accent-info)" strokeWidth="1.6" />
@@ -89,7 +95,7 @@ function Frontier({ pts, books }: { pts: FrontierPt[]; books: Record<string, Boo
 export default function QuantropyPage() {
   const [d, setD] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
-  const [book, setBook] = useState<"wEqual" | "wInvVol" | "wMinVar" | "wMaxSharpe">("wMaxSharpe");
+  const [book, setBook] = useState<"wEqual" | "wInvVol" | "wMinVar" | "wMaxSharpe">("wEqual");
 
   useEffect(() => {
     fetch("/api/quantropy")
@@ -117,51 +123,38 @@ export default function QuantropyPage() {
   const alloc = d?.allocations;
   const cards = [
     { label: "NAMES", value: s?.names ?? "—", color: "" },
-    { label: "MAX SHARPE", value: s?.maxSharpe == null ? "—" : s.maxSharpe.toFixed(2), color: "var(--accent-warning)" },
-    { label: "MIN VOL", value: pct(s?.minVol), color: "var(--accent-info)" },
-    { label: "DISTRESS Z", value: s?.distressed ?? "—", color: (s?.distressed ?? 0) > 0 ? "var(--accent-bear)" : "var(--accent-bull)" },
+    { label: "EW SHARPE", value: s?.equalSharpe == null ? "—" : s.equalSharpe.toFixed(2), color: "var(--accent-info)" },
+    { label: "INV VOL", value: pct(s?.invVol), color: "var(--accent-info)" },
+    { label: "Z PROXY", value: s?.zProxy ?? "—", color: "var(--text-secondary)" },
   ];
   const bookKey = book === "wEqual" ? "equal" : book === "wInvVol" ? "invVol" : book === "wMinVar" ? "minVar" : "maxSharpe";
   const weight = (n: Name) => n[book];
 
   return (
-    <div className="px-4 py-6">
-      <div className="mb-4">
-        <h1 className="text-lg font-terminal font-bold tracking-wider" style={{ color: "var(--accent-info)" }}>
-          QUANTROPY
-        </h1>
-        <p className="text-xs text-[var(--text-secondary)]">
-          Risk, CAPM, Altman Z, Markowitz allocation — Quantropy/Matilda on the Orbis Equity book
-          {d?.lite ? " · lite correlation from prices_daily (snapshot pending)" : ""}
-        </p>
-      </div>
+    <div className="py-6">
+      <DeskPageHeader
+        badge="IN-SAMPLE"
+        title="Quantropy"
+        subtitle={`Equal-weight and inverse-vol books. Beta is versus the equal-weight peer basket. Altman Z is a ratio proxy.${
+          d?.lite ? " Lite correlation from prices_daily." : ""
+        }`}
+      />
 
-      <div className="px-4 py-3 mb-4 rounded border border-[var(--accent-warning)]/40 bg-[var(--badge-bg)] text-xs text-[var(--text-secondary)] font-terminal">
-        <span className="font-bold tracking-wider" style={{ color: "var(--accent-warning)" }}>
-          IN-SAMPLE DESK
-        </span>
-        {" · "}
-        Max-Sharpe and the efficient frontier use the same return window as the displayed book — useful for
-        relative ranking, not out-of-sample performance or live allocation. Treat weights as diagnostic, not a
-        trade signal.
-      </div>
+      <InfoCallout title="In-sample desk" variant="warning" accent="var(--accent-warning)">
+        <p>
+          Equal-weight and inverse-vol are the books on this page. Min-variance and max-Sharpe use the same
+          return window, so they stay diagnostic. Beta is versus the equal-weight peers, which include the
+          stock. The Z column is a statement proxy (assets inferred as NI/ROA). It is not a safe/distress zone.
+        </p>
+      </InfoCallout>
 
       {d?.headline && (
-        <div className="px-4 py-2 mb-4 rounded border border-[var(--border)] bg-[var(--badge-bg)] text-sm text-[var(--text-secondary)] font-terminal">
+        <div className="headline-banner mb-4">
           <span style={{ color: "var(--accent-info)" }}>Q:</span> {d.headline}
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        {cards.map((c) => (
-          <div key={c.label} className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
-            <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">{c.label}</div>
-            <div className="text-lg font-terminal font-bold mt-1" style={{ color: c.color || undefined }}>
-              {loading ? "…" : c.value}
-            </div>
-          </div>
-        ))}
-      </div>
+      <MetricStrip items={cards} columns={4} loading={loading} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] p-3">
@@ -226,7 +219,7 @@ export default function QuantropyPage() {
               <th className="text-right px-3 py-2">β</th>
               <th className="text-right px-3 py-2">α</th>
               <th className="text-right px-3 py-2">Z</th>
-              <th className="text-left px-3 py-2">ZONE</th>
+              <th className="text-left px-3 py-2">Z NOTE</th>
             </tr>
           </thead>
           <tbody>
@@ -259,8 +252,9 @@ export default function QuantropyPage() {
       </div>
 
       <p className="text-[10px] text-[var(--text-muted)] font-terminal mt-3">
-        Port of Quantropy/Matilda: Sharpe/Sortino/VaR/CVaR/max DD, CAPM vs equal-weight book, public-firm Altman Z (TA = NI/ROA; RE/TA proxied by ROA),
-        MPT long-only SLSQP. CVaR is mean of the left tail (Quantropy&apos;s published CVaR compared the tail to a positive VaR magnitude).
+        Sharpe, Sortino, VaR, CVaR, and max drawdown use the overlapping daily window. Beta and alpha are
+        versus the equal-weight peer basket. Z is labeled proxy because total assets, retained earnings, and
+        working capital are inferred. Max-Sharpe stays in the table as an in-sample diagnostic.
         Paper analytics — not a broker, not investment advice.
       </p>
     </div>

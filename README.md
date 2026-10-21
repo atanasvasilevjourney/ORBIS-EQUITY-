@@ -183,7 +183,8 @@ Port of [atanasvasilevjourney/Quantropy](https://github.com/atanasvasilevjourney
 
 - **Risk:** annual vol, Sharpe, Sortino, max drawdown, historical VaR/CVaR 5%
 - **CAPM:** alpha and beta vs the equal-weight universe
-- **Distress:** public-firm Altman Z (safe &gt; 2.99 / grey / distress &lt; 1.81)
+- **Z proxy:** Altman-shaped ratio (assets inferred as NI/ROA, retained earnings replaced by ROA). Labeled `proxy`. Manufacturing safe/grey/distress zones are not applied.
+- **Books:** equal-weight and inverse-vol. Min-variance and max-Sharpe stay in-sample diagnostics. Beta is versus the equal-weight peer basket.
 - **Allocation:** equal, inverse-vol, min-variance, max-Sharpe, Markowitz efficient frontier (long-only SLSQP)
 
 ```bash
@@ -283,7 +284,7 @@ Computed nightly by `pipeline/compute/factor_scores.py`:
 | Earnings Quality | 15% | Accruals ratio (CFO − NI) / assets |
 | Leverage | 15% | Current ratio, D/E, interest coverage |
 
-Scores are cross-sectional percentile ranks (0–100). Composite score is the weighted blend.
+Each input is cross-sectionally percentile-ranked on its own (0–100, average ranks for ties). Missing inputs stay out of that name's average and out of the peer set. A style score is the mean of its available input ranks. The composite renormalizes the style weights when a style is missing.
 
 ## API
 

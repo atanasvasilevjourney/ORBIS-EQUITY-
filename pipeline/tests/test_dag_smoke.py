@@ -88,9 +88,10 @@ class TestPipelineDAGSmoke:
                 )
 
             if module_path.startswith("pipeline.compute.") or module_path == "pipeline.ingest.prices":
-                stack.enter_context(
-                    patch.object(mod, "create_client", return_value=mock_supabase)
-                )
+                if hasattr(mod, "create_client"):
+                    stack.enter_context(
+                        patch.object(mod, "create_client", return_value=mock_supabase)
+                    )
                 stack.enter_context(
                     patch("pipeline.utils.supabase.fetch_all", return_value=[])
                 )

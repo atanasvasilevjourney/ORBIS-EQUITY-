@@ -96,9 +96,9 @@ export async function fetchCockpitDeskSummaries(sb: SupabaseClient): Promise<Coc
   const misses = rep.filter((e) => (e.surprise_pct ?? 0) < 0).length;
 
   const alloc = quant?.allocations;
-  const maxSharpe =
+  const equalSharpe =
     alloc && typeof alloc === "object" && !Array.isArray(alloc)
-      ? (alloc as { maxSharpe?: { sharpe?: number } }).maxSharpe?.sharpe ?? null
+      ? (alloc as { equal?: { sharpe?: number } }).equal?.sharpe ?? null
       : null;
 
   return {
@@ -114,7 +114,7 @@ export async function fetchCockpitDeskSummaries(sb: SupabaseClient): Promise<Coc
     analysisBuys: analysis?.buys ?? 0,
     analysisSells: analysis?.sells ?? 0,
     quantNames: quant?.names ?? 0,
-    quantSharpe: maxSharpe,
+    quantSharpe: equalSharpe,
     biasLongs: bias?.longs ?? 0,
     biasShorts: bias?.shorts ?? 0,
     cashTema: cash?.tema_slots ?? 0,

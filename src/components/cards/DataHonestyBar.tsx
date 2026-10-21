@@ -31,22 +31,42 @@ export function DataHonestyBar() {
       });
   }, []);
 
+  const live = !stale && !suppressed;
+
   return (
-    <div className="w-full bg-[var(--badge-bg)] border-b border-[var(--border)] px-4 py-1.5 text-xs font-terminal tracking-wide text-[var(--text-muted)]">
-      PRICES AS OF: {pricesAsOf} EOD &middot; EXPECT ≥ {expected} &middot; REFRESH ~19:30 UTC &middot;
-      EOD/DELAYED — NOT REAL-TIME
-      <Link href="/status" className="ml-2 text-[var(--accent-info)] hover:underline">
-        STATUS
+    <div
+      className="w-full border-b border-[var(--border)] px-3 sm:px-5 py-2 text-[11px] font-terminal tracking-wide text-[var(--text-muted)] flex flex-wrap items-center gap-x-3 gap-y-1"
+      style={{
+        background: "var(--panel-bg)",
+        backdropFilter: "blur(12px)",
+      }}
+    >
+      <span
+        className="inline-flex items-center gap-1.5"
+        title={live ? "Tape within freshness window" : "Check status"}
+      >
+        <span
+          className="w-1.5 h-1.5 rounded-full"
+          style={{
+            background: live ? "var(--accent-bull)" : "var(--accent-warning)",
+            boxShadow: live
+              ? "0 0 8px var(--accent-bull)"
+              : "0 0 8px var(--accent-warning)",
+          }}
+        />
+        EOD {pricesAsOf}
+      </span>
+      <span className="hidden sm:inline">· expect ≥ {expected}</span>
+      <span className="hidden md:inline">· refresh ~19:30 UTC</span>
+      <span className="text-[var(--text-muted)]">· delayed data</span>
+      <Link href="/status" className="text-[var(--accent-info)] hover:underline ml-auto sm:ml-0">
+        Status
       </Link>
       {stale && (
-        <span className="ml-2 text-[var(--accent-warning)] font-bold">
-          &middot; STALE TAPE
-        </span>
+        <span className="text-[var(--accent-warning)] font-semibold">Stale tape</span>
       )}
       {suppressed && (
-        <span className="ml-2 text-[var(--accent-bear)] font-bold">
-          &middot; BUY/SELL SIGNALS OFF
-        </span>
+        <span className="text-[var(--accent-bear)] font-semibold">Signals off</span>
       )}
     </div>
   );

@@ -8,6 +8,7 @@ import { PostureGauge } from "@/components/ui/PostureGauge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PostureBreakdown, type PosturePillars } from "@/components/ui/PostureBreakdown";
 import { CrossAssetStrip, type CrossAssetTile } from "@/components/dashboard/CrossAssetStrip";
+import { ChipLink, StatPill } from "@/components/ui/ChipLink";
 
 type DashData = {
   posture: number | null;
@@ -64,7 +65,64 @@ type DashData = {
   triangleBreakouts: number;
   rotateRegime: string | null;
   rotateLeading: number;
+  signalsSuppressed: boolean;
+  capital: {
+    gross: number;
+    net: number;
+    overlap: string[];
+    sleeves: { sleeve: string; gross: number; net: number; asOf: string | null; names: number }[];
+  } | null;
 };
+
+function usd0(n: number): string {
+  const sign = n < 0 ? "-" : "";
+  return `${sign}$${Math.abs(Math.round(n)).toLocaleString("en-US")}`;
+}
+
+function CapitalStrip({
+  capital,
+  loading,
+}: {
+  capital: DashData["capital"];
+  loading: boolean;
+}) {
+  const open = (capital?.sleeves ?? []).filter((s) => s.names > 0);
+  return (
+    <div className="glass-panel px-5 py-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="text-[10px] font-terminal tracking-widest text-[var(--text-muted)]">
+          PAPER CAPITAL · FOUR SLEEVES
+        </div>
+        <div className="text-xs font-terminal">
+          <span className="text-[var(--text-muted)]">GROSS </span>
+          <span className="font-bold">{loading || !capital ? "—" : usd0(capital.gross)}</span>
+          <span className="text-[var(--text-muted)]"> · NET </span>
+          <span className="font-bold">{loading || !capital ? "—" : usd0(capital.net)}</span>
+          <span className="text-[var(--text-muted)]"> · OVERLAP </span>
+          <span className="font-bold">{loading || !capital ? "—" : capital.overlap.length}</span>
+        </div>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-terminal text-[var(--text-secondary)]">
+        {(capital?.sleeves ?? []).map((sleeve) => (
+          <span key={sleeve.sleeve}>
+            {sleeve.sleeve} {sleeve.names} · {usd0(sleeve.net)} · {sleeve.asOf ?? "no run"}
+          </span>
+        ))}
+      </div>
+      {capital && capital.overlap.length > 0 && (
+        <div className="mt-1 text-[10px] font-terminal text-[var(--text-muted)]">
+          Held in more than one sleeve: {capital.overlap.slice(0, 12).join(", ")}
+          {capital.overlap.length > 12 ? ` +${capital.overlap.length - 12}` : ""}
+        </div>
+      )}
+      {!loading && capital && open.length === 0 && (
+        <div className="mt-1 text-[10px] font-terminal text-[var(--text-muted)]">
+          No open paper notional. Each sleeve still assumes its own $100k if a later run fills it.
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Home() {
   const [d, setD] = useState<DashData | null>(null);
@@ -121,6 +179,8 @@ export default function Home() {
           triangleBreakouts: desks.triangleBreakouts ?? 0,
           rotateRegime: dash.rotation?.regime ?? null,
           rotateLeading: dash.rotation?.leading ?? 0,
+          signalsSuppressed: !!dash.signalsSuppressed,
+          capital: dash.capital ?? null,
         });
       })
       .catch(() => setError(true))
@@ -154,7 +214,7 @@ export default function Home() {
               analysisBuys: analysis?.summary?.buys ?? 0,
               analysisSells: analysis?.summary?.sells ?? 0,
               quantNames: quant?.summary?.names ?? 0,
-              quantSharpe: quant?.summary?.maxSharpe ?? null,
+              quantSharpe: quant?.summary?.equalSharpe ?? null,
               biasLongs: bias?.summary?.longs ?? 0,
               biasShorts: bias?.summary?.shorts ?? 0,
               cashTema: cash?.summary?.temaSlots ?? 0,
@@ -175,25 +235,34 @@ export default function Home() {
   const regions = Object.entries(d?.regionBreadth ?? {});
 
   return (
-    <div className="px-4 py-6 space-y-4">
-      {/* Brand strip — keep first viewport focused */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="py-6 space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3 glass-panel px-5 py-4">
         <div>
           <h1
-            className="text-2xl md:text-3xl font-terminal font-bold tracking-wider"
-            style={{ color: "var(--accent-info)" }}
+            className="font-display text-2xl md:text-3xl font-semibold tracking-tight"
+            style={{
+              background: "var(--gradient-brand)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+            }}
           >
-            ORBIS EQUITY
+            Market cockpit
           </h1>
-          <p className="text-xs text-[var(--text-secondary)] mt-1">
-            Equity Swing Terminal — Free Data, Honest Signals, Global Coverage
+          <p className="text-sm text-[var(--text-secondary)] mt-1">
+            Equity swing terminal — honest signals, global coverage, paper desks
           </p>
         </div>
         <div className="text-right font-terminal text-[10px] text-[var(--text-muted)] tracking-wider">
           <div>AS OF {d?.asOfDate ?? "—"} EOD</div>
+          {d?.signalsSuppressed && (
+            <div className="mt-0.5 font-bold" style={{ color: "var(--accent-bear)" }}>BUY/SELL SIGNALS OFF</div>
+          )}
           <div className="mt-0.5">PRESS ⌘K TO JUMP</div>
         </div>
       </div>
+
+      <CapitalStrip capital={d?.capital ?? null} loading={loading} />
 
       {error && (
         <EmptyState
@@ -398,17 +467,13 @@ export default function Home() {
         <ModulePanel title="WATCHLIST MOVERS" badge="HOT" accent="var(--module-1)" source="MODULE 1">
           <div className="flex flex-wrap gap-2">
             {d!.watchlistMovers.map((m) => (
-              <Link
-                key={m.symbol}
-                href={`/ticker/${m.symbol}`}
-                className="px-2 py-1 rounded border border-[var(--panel-border)] text-xs font-terminal hover:border-[var(--accent-info)]"
-              >
+              <ChipLink key={m.symbol} href={`/ticker/${m.symbol}`}>
                 <span className="font-bold">{m.symbol}</span>
-                <span className="text-[var(--text-muted)] ml-2">O {m.orbisScore ?? "—"}</span>
-                <span className="ml-2" style={{ color: "var(--accent-bull)" }}>
+                <span className="text-[var(--text-muted)]">O {m.orbisScore ?? "—"}</span>
+                <span style={{ color: "var(--accent-bull)" }}>
                   {m.dayPct != null ? `+${m.dayPct.toFixed(1)}%` : ""}
                 </span>
-              </Link>
+              </ChipLink>
             ))}
           </div>
         </ModulePanel>
@@ -420,37 +485,23 @@ export default function Home() {
           <div className="flex flex-wrap gap-2">
             {regions.length > 0
               ? regions.map(([region, val]) => (
-                  <div
+                  <StatPill
                     key={region}
-                    className="px-3 py-2 rounded border border-[var(--panel-border)] font-terminal text-xs"
-                  >
-                    <span className="text-[var(--text-muted)] tracking-wider mr-2">
-                      {region.toUpperCase()}
-                    </span>
-                    <span
-                      style={{
-                        color:
-                          val >= 55
-                            ? "var(--accent-bull)"
-                            : val <= 45
-                              ? "var(--accent-bear)"
-                              : "var(--text-primary)",
-                      }}
-                    >
-                      {typeof val === "number" ? val.toFixed(0) : val}
-                    </span>
-                  </div>
+                    label={region.toUpperCase()}
+                    value={typeof val === "number" ? val.toFixed(0) : val}
+                    valueColor={
+                      val >= 55
+                        ? "var(--accent-bull)"
+                        : val <= 45
+                          ? "var(--accent-bear)"
+                          : "var(--text-primary)"
+                    }
+                  />
                 ))
               : (
                 <>
-                  <div className="px-3 py-2 rounded border border-[var(--panel-border)] font-terminal text-xs">
-                    <span className="text-[var(--text-muted)] mr-2">LEAD</span>
-                    <span style={{ color: "var(--accent-bull)" }}>{d?.bestSector}</span>
-                  </div>
-                  <div className="px-3 py-2 rounded border border-[var(--panel-border)] font-terminal text-xs">
-                    <span className="text-[var(--text-muted)] mr-2">LAG</span>
-                    <span style={{ color: "var(--accent-bear)" }}>{d?.worstSector}</span>
-                  </div>
+                  <StatPill label="LEAD" value={d?.bestSector ?? "—"} valueColor="var(--accent-bull)" />
+                  <StatPill label="LAG" value={d?.worstSector ?? "—"} valueColor="var(--accent-bear)" />
                 </>
               )}
           </div>
@@ -461,7 +512,8 @@ export default function Home() {
         <button
           type="button"
           onClick={() => setShowDesks((v) => !v)}
-          className="text-xs font-terminal px-3 py-1.5 rounded border border-[var(--panel-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+          className="sleeve-tab text-[var(--text-secondary)]"
+          data-active={showDesks}
         >
           {showDesks ? "Hide module desks" : "Show all module desks"}
         </button>
@@ -545,7 +597,7 @@ export default function Home() {
             subtitle: "In-sample MPT · diagnostic only", accent: "var(--module-4)", source: "QUANT",
             metrics: [
               { label: "NAMES", value: d?.quantNames ? String(d.quantNames) : "—" },
-              { label: "MAX SH", value: d?.quantSharpe == null ? "—" : d.quantSharpe.toFixed(2), color: "var(--accent-warning)" },
+              { label: "EW SH", value: d?.quantSharpe == null ? "—" : d.quantSharpe.toFixed(2), color: "var(--accent-info)" },
               { label: "SAMPLE", value: "IS", color: "var(--accent-warning)" },
             ],
           },
@@ -595,14 +647,14 @@ export default function Home() {
             ],
           },
         ] as const).map((m) => (
-          <Link key={m.badge} href={m.href} className="block group">
+          <Link key={m.badge} href={m.href} className="block group module-desk-card">
             <ModulePanel
               title={m.title}
               badge={m.badge}
               subtitle={m.subtitle}
               accent={m.accent}
               source={m.source}
-              className="h-full transition-opacity group-hover:opacity-95"
+              className="h-full"
             >
               <div className="grid grid-cols-3 gap-2">
                 {m.metrics.map((metric) => (

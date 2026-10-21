@@ -18,9 +18,12 @@ export function DeskUniverseStrip() {
   const { visible, hiddenCount } = splitDeskChipPreview(symbols);
 
   return (
-    <div className="sticky top-0 z-40 w-full border-b border-[var(--border)] bg-[var(--surface)]">
+    <div
+      className="w-full border-b border-[var(--border)]"
+      style={{ background: "var(--panel-bg)", backdropFilter: "blur(10px)" }}
+    >
       <div
-        className="w-full px-4 py-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[10px] font-terminal"
+        className="mx-auto max-w-[1600px] px-3 sm:px-5 py-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[10px] font-terminal"
         data-universe-desk={desk}
       >
         <span className="text-[var(--text-muted)] uppercase tracking-wide shrink-0 w-full sm:w-auto">

@@ -21,16 +21,22 @@ for (const path of [...PAGES, ...EXTRA_SMOKE_PAGES]) {
 }
 
 test("nav links traverse all dashboard pages", async ({ page }) => {
-  // Wide enough that overflow nav links (e.g. EARNINGS) stay clickable in CI.
+  // Wide enough for the desktop pill nav. Secondary desks live under MORE.
+  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1600, height: 900 });
   await page.goto("/");
 
   for (const path of PAGES.slice(1)) {
-    const link = page.locator(`nav a[href="${path}"]`).first();
-    await expect(link).toBeVisible();
-    await link.scrollIntoViewIfNeeded();
-    await link.click();
-    await expect(page).toHaveURL(new RegExp(`${path.replace("/", "\\/")}(\\?|$)`));
+    const pattern = new RegExp(`${path.replace("/", "\\/")}(\\?|$)`);
+    await expect(async () => {
+      const link = page.locator(`nav a[href="${path}"]`).first();
+      if (!(await link.isVisible())) {
+        await page.getByRole("button", { name: /MORE/ }).click();
+      }
+      await expect(link).toBeVisible();
+      await link.click();
+      await expect(page).toHaveURL(pattern);
+    }).toPass({ timeout: 15_000 });
   }
 });
 

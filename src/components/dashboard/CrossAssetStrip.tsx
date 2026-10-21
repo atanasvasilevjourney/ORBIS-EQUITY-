@@ -29,7 +29,7 @@ export function CrossAssetStrip({ tiles }: { tiles: CrossAssetTile[] }) {
     );
   }
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1">
+    <div className="flex gap-2 overflow-x-auto pb-1 snap-x snap-mandatory">
       {tiles.map((t) => {
         const color =
           (t.dayPct ?? 0) > 0
@@ -38,18 +38,21 @@ export function CrossAssetStrip({ tiles }: { tiles: CrossAssetTile[] }) {
               ? "var(--accent-bear)"
               : "var(--text-secondary)";
         return (
-          <div
-            key={t.symbol}
-            className="shrink-0 min-w-[7rem] px-2 py-2 rounded border border-[var(--panel-border)] bg-[var(--surface-alt)]"
-          >
-            <div className="text-[10px] font-terminal text-[var(--text-muted)]">{t.label}</div>
+          <div key={t.symbol} className="glass-metric shrink-0 min-w-[7.5rem] snap-start text-left !p-2.5">
+            <div className="text-[10px] font-terminal text-[var(--text-muted)] truncate">{t.label}</div>
             <div className="font-terminal font-bold text-sm">{t.symbol}</div>
-            <div className="text-xs font-terminal" style={{ color }}>
+            <div className="text-xs font-terminal tabular-nums" style={{ color }}>
               {t.dayPct == null ? "—" : `${t.dayPct > 0 ? "+" : ""}${t.dayPct.toFixed(2)}%`}
             </div>
             {t.spark.length > 1 && (
-              <svg viewBox="0 0 64 24" className="w-full h-6 mt-1">
-                <path d={sparkPath(t.spark)} fill="none" stroke={color} strokeWidth="1.2" />
+              <svg viewBox="0 0 64 24" className="w-full h-6 mt-1 opacity-90">
+                <path
+                  d={sparkPath(t.spark)}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth="1.4"
+                  style={{ filter: "drop-shadow(0 0 3px currentColor)" }}
+                />
               </svg>
             )}
           </div>

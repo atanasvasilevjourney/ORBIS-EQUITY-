@@ -4,6 +4,7 @@ import { fetchAll } from "@/lib/supabase/paginate";
 import { fetchLitePrices, LIQUID_NAMES } from "@/lib/liteDeskApi";
 import { orbisScore } from "@/lib/orbisScore";
 import { fetchCockpitDeskSummaries } from "@/lib/cockpitDeskSummaries";
+import { combineCapital, legsFromBooks } from "@/lib/capitalBook";
 import { evaluateFreshness } from "@/lib/freshness";
 
 export const revalidate = 900;
@@ -16,6 +17,80 @@ const CROSS_ASSET_META: { symbol: string; label: string }[] = [
   { symbol: "GLD", label: "Gold" },
   { symbol: "TLT", label: "Long bond" },
 ];
+
+function latestAsOf(rows: { asof_date?: string | null }[]): string | null {
+  const dates = rows
+    .map((row) => row.asof_date)
+    .filter((d): d is string => typeof d === "string" && d.length > 0)
+    .sort();
+  return dates.at(-1) ?? null;
+}
+
+async function fetchCapitalBook(sb: ReturnType<typeof createServerClient>) {
+  const [loop, loopRuns, orb, orbRuns, cash, cashRuns, rotate, rotateRuns] = await Promise.all([
+    fetchAll<{ symbol: string; side: string | null; shares: number | null; last: number | null }>(
+      sb,
+      "paper_book",
+      "symbol, side, shares, last"
+    ),
+    fetchAll<{ asof_date: string | null }>(sb, "paper_loop_runs", "asof_date"),
+    fetchAll<{
+      symbol: string;
+      status: string | null;
+      shares: number | null;
+      last_px: number | null;
+      entry: number | null;
+    }>(sb, "orb_watch", "symbol, status, shares, last_px, entry"),
+    fetchAll<{ asof_date: string | null }>(sb, "orb_runs", "asof_date"),
+    fetchAll<{
+      symbol: string;
+      in_tema_book: boolean | null;
+      tema_side: string | null;
+      tema_notional: number | null;
+      in_carver_book: boolean | null;
+      carver_side: string | null;
+      carver_notional: number | null;
+    }>(
+      sb,
+      "perp_names",
+      "symbol, in_tema_book, tema_side, tema_notional, in_carver_book, carver_side, carver_notional"
+    ),
+    fetchAll<{ asof_date: string | null }>(sb, "perp_runs", "asof_date"),
+    fetchAll<{ symbol: string; side: string | null; notional: number | null }>(
+      sb,
+      "sector_rotation_carver",
+      "symbol, side, notional"
+    ),
+    fetchAll<{ asof_date: string | null }>(sb, "sector_rotation_runs", "asof_date"),
+  ]);
+
+  return combineCapital(
+    legsFromBooks({
+      loopAsOf: latestAsOf(loopRuns),
+      loop,
+      orbAsOf: latestAsOf(orbRuns),
+      orb: orb.map((row) => ({
+        symbol: row.symbol,
+        status: row.status,
+        shares: row.shares,
+        last: row.last_px,
+        entry: row.entry,
+      })),
+      cashAsOf: latestAsOf(cashRuns),
+      cash: cash.map((row) => ({
+        symbol: row.symbol,
+        inTema: !!row.in_tema_book,
+        temaSide: row.tema_side,
+        temaNotional: row.tema_notional,
+        inCarver: !!row.in_carver_book,
+        carverSide: row.carver_side,
+        carverNotional: row.carver_notional,
+      })),
+      rotateAsOf: latestAsOf(rotateRuns),
+      rotate,
+    })
+  );
+}
 
 function crossAssetTiles(
   prices: { symbol: string; date: string; close: number }[]
@@ -138,20 +213,23 @@ export async function GET() {
         orbisScore: orbisScore(r.quality_rank, null),
       }));
 
-    const [crossPrices, desks] = await Promise.all([
+    const [crossPrices, desks, capital] = await Promise.all([
       fetchLitePrices(sb, [
         ...CROSS_ASSET_META.map((c) => c.symbol),
         ...LIQUID_NAMES.slice(0, 4),
       ]),
       fetchCockpitDeskSummaries(sb),
+      fetchCapitalBook(sb),
     ]);
 
-    const stale = evaluateFreshness(brief?.asof_date).stale;
+    const fresh = evaluateFreshness(brief?.asof_date);
 
     return NextResponse.json({
       asOfDate: brief?.asof_date ?? null,
       briefText: brief?.brief ?? null,
-      stale,
+      stale: fresh.stale,
+      signalsSuppressed: fresh.signalsSuppressed,
+      capital,
       posture: inputs.posture_score ?? null,
       postureLabel: inputs.posture_label ?? null,
       posturePillars: posturePillars ?? null,

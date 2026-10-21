@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { DeskPageHeader } from "@/components/ui/DeskPageHeader";
+import { MetricStrip } from "@/components/ui/MetricStrip";
 
 type HealthRow = {
   symbol: string;
@@ -50,30 +52,24 @@ export default function HealthPage() {
   }, []);
 
   return (
-    <div className="px-4 py-6">
-      <div className="mb-4">
-        <h1 className="text-lg font-terminal font-bold tracking-wider" style={{ color: "var(--accent-info)" }}>
-          HEALTH SECTOR
-        </h1>
-        <p className="text-xs text-[var(--text-secondary)]">
-          Health Care universe — factor scores, F-Score, and watchlist bias (fundamentals only)
-        </p>
-      </div>
+    <div className="py-6">
+      <DeskPageHeader
+        badge="SECTOR DESK"
+        title="Health Care"
+        subtitle="Factor scores, F-Score, and watchlist bias — fundamentals only"
+      />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
-        <div className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
-          <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">HEALTH NAMES</div>
-          <div className="text-xl font-terminal font-bold mt-1">
-            {loading ? "…" : d?.summary?.healthNames ?? "—"}
-          </div>
-        </div>
-      </div>
+      <MetricStrip
+        items={[{ label: "HEALTH NAMES", value: d?.summary?.healthNames ?? "—" }]}
+        columns={4}
+        loading={loading}
+      />
 
       <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">
         HEALTH-SECTOR FUNDAMENTALS
       </h2>
-      <div className="overflow-x-auto rounded border border-[var(--border)]">
-        <table className="w-full text-sm font-terminal">
+      <div className="desk-table-wrap">
+        <table className="desk-table">
           <thead>
             <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
               <th className="text-left px-3 py-2">TICKER</th>

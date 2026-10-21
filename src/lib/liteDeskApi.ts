@@ -135,7 +135,10 @@ export async function liteQuantPayload(sb: SupabaseClient) {
       runId: null,
       lastRunAt: null,
       distressed: 0,
-      maxSharpe: lite.names[0]?.sharpe ?? null,
+      zProxy: 0,
+      equalSharpe: null,
+      invVol: null,
+      maxSharpe: null,
       minVol: lite.names.length
         ? Math.min(...lite.names.map((n) => n.annVol ?? Infinity))
         : null,

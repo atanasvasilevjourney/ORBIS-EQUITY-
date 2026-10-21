@@ -48,6 +48,19 @@ LIQUID = [
 ]
 
 
+def paper_shares(entry: float, equity: float = EQUITY, frac: float = RISK_FRAC) -> int | None:
+    """Notional shares: floor((equity × frac) / price). This is not a risk budget."""
+    if entry is None or entry <= 0:
+        return None
+    shares = math.floor((equity * frac) / entry)
+    return shares if shares >= 1 else None
+
+
+def or_bracket(entry: float, or_range: float) -> tuple[float, float]:
+    """Stop and target one opening-range width from the entry."""
+    return entry - or_range, entry + or_range
+
+
 def _sb():
     url = os.getenv("SUPABASE_URL", "")
     key = os.getenv("SUPABASE_SERVICE_KEY", "")
@@ -261,13 +274,11 @@ def run() -> dict:
         stop = None
         tp = None
         if status == "BREAKOUT" and entry and or_range and or_range > 0:
-            shares = math.floor((EQUITY * RISK_FRAC) / entry)
-            if shares < 1:
+            shares = paper_shares(entry)
+            if shares is None:
                 status = "NO_BREAK"
-                shares = None
             else:
-                stop = entry - or_range
-                tp = entry + or_range
+                stop, tp = or_bracket(entry, or_range)
                 orders.append({
                     "id": f"{run_id}-{sym}",
                     "run_id": run_id,

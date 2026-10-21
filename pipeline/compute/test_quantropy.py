@@ -1,7 +1,9 @@
 import unittest
 from datetime import date, datetime, timedelta, timezone
 
-from pipeline.compute.quantropy import _align_returns, _as_iso_date
+import numpy as np
+
+from pipeline.compute.quantropy import _align_returns, _as_iso_date, altman_z, usable_return_matrix
 
 
 def _series(start: date, n: int, px0: float = 100.0) -> list[tuple[object, float]]:
@@ -64,6 +66,40 @@ class AlignReturnsTests(unittest.TestCase):
         symbols, rets = _align_returns({"AAA": a, "BBB": b}, min_obs=60, max_names=40)
         self.assertEqual(set(symbols), {"AAA", "BBB"})
         self.assertGreaterEqual(rets.shape[0], 60)
+
+
+class AltmanProxyTests(unittest.TestCase):
+    def test_zone_is_proxy_not_a_distress_label(self):
+        z, zone = altman_z({
+            "net_income": 10,
+            "roa": 0.05,
+            "operating_income": 12,
+            "revenue": 100,
+            "market_cap": 200,
+            "debt_to_assets": 0.4,
+            "current_ratio": 1.5,
+        })
+        self.assertIsNotNone(z)
+        self.assertGreater(z, 0)
+        self.assertEqual(zone, "proxy")
+
+    def test_missing_inputs_stay_missing(self):
+        self.assertEqual(altman_z({"net_income": 10}), (None, None))
+
+
+class UsableReturnTests(unittest.TestCase):
+    def test_non_finite_session_is_dropped_not_zeroed(self):
+        clean = np.tile(np.array([[0.01, -0.02]]), (60, 1))
+        spiked = np.vstack([clean, np.array([[np.nan, 0.5]])])
+        out = usable_return_matrix(spiked, min_obs=60)
+        self.assertIsNotNone(out)
+        self.assertEqual(out.shape, (60, 2))
+        self.assertTrue(np.all(np.isfinite(out)))
+        self.assertNotIn(0.5, out[:, 1].tolist())
+
+    def test_too_few_clean_sessions_returns_none(self):
+        rets = np.array([[0.01, np.nan], [0.02, 0.02]])
+        self.assertIsNone(usable_return_matrix(rets, min_obs=60))
 
 
 if __name__ == "__main__":

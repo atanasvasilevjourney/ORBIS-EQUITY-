@@ -100,8 +100,13 @@ export async function GET() {
 
     const fresh = evaluateFreshness(latest.asof_date);
     const suppress = fresh.signalsSuppressed;
-    const distressed = names.filter((n) => n.altmanZone === "distress").length;
     const alloc = latest.allocations && typeof latest.allocations === "object" ? latest.allocations : {};
+    const booksAlloc = alloc as {
+      equal?: { sharpe?: number };
+      invVol?: { annVol?: number };
+      minVar?: { annVol?: number };
+      maxSharpe?: { sharpe?: number };
+    };
     const corr = parseCorr((alloc as { corr?: unknown }).corr);
     const books = { ...alloc };
     delete (books as { corr?: unknown }).corr;
@@ -112,9 +117,12 @@ export async function GET() {
         asOfDate: latest.asof_date,
         runId: latest.run_id,
         lastRunAt: latest.computed_at,
-        distressed,
-        maxSharpe: (alloc as { maxSharpe?: { sharpe?: number } }).maxSharpe?.sharpe ?? null,
-        minVol: (alloc as { minVar?: { annVol?: number } }).minVar?.annVol ?? null,
+        distressed: names.filter((n) => n.altmanZone === "distress").length,
+        zProxy: names.filter((n) => n.altmanZ != null).length,
+        equalSharpe: booksAlloc.equal?.sharpe ?? null,
+        invVol: booksAlloc.invVol?.annVol ?? null,
+        maxSharpe: booksAlloc.maxSharpe?.sharpe ?? null,
+        minVol: booksAlloc.minVar?.annVol ?? null,
       },
       names,
       allocations: books,

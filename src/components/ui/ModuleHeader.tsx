@@ -9,7 +9,7 @@ type ModuleHeaderProps = {
   children?: ReactNode;
 };
 
-/** Shared page header for each module — accent bar + provenance. */
+/** Desk page header — aligned with 2026 glass terminal system. */
 export function ModuleHeader({
   module,
   title,
@@ -19,33 +19,39 @@ export function ModuleHeader({
   children,
 }: ModuleHeaderProps) {
   return (
-    <div className="mb-4">
-      <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
-        <div className="flex items-start gap-3">
+    <header className="mb-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
           <span
-            className="mt-1 w-1.5 h-10 rounded-full shrink-0"
-            style={{ background: accent }}
-            aria-hidden
-          />
-          <div>
-            <div className="text-[10px] font-terminal tracking-widest text-[var(--text-muted)]">
-              {module}
-            </div>
-            <h1 className="text-xl font-terminal font-bold tracking-wide">{title}</h1>
-            {description && (
-              <p className="text-xs text-[var(--text-secondary)] mt-0.5 max-w-2xl">
-                {description}
-              </p>
-            )}
-          </div>
+            className="inline-block mb-2 px-2 py-0.5 text-[9px] font-terminal tracking-[0.2em] rounded-full border"
+            style={{ borderColor: accent, color: accent }}
+          >
+            {module}
+          </span>
+          <h1
+            className="font-display text-2xl md:text-[1.75rem] font-semibold tracking-tight leading-tight"
+            style={{
+              background: "var(--gradient-brand)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+            }}
+          >
+            {title}
+          </h1>
+          {description && (
+            <p className="text-sm text-[var(--text-secondary)] mt-1.5 max-w-3xl leading-relaxed">
+              {description}
+            </p>
+          )}
         </div>
         {source && (
-          <span className="text-[10px] font-terminal tracking-wider text-[var(--text-muted)] uppercase border border-[var(--panel-border)] rounded px-2 py-1">
+          <span className="text-[10px] font-terminal tracking-wider text-[var(--text-muted)] uppercase glass-panel px-3 py-1.5 shrink-0">
             {source}
           </span>
         )}
       </div>
-      {children}
-    </div>
+      {children && <div className="mt-4">{children}</div>}
+    </header>
   );
 }

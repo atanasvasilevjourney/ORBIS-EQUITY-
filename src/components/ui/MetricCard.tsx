@@ -21,9 +21,7 @@ export function MetricCard({
 }: MetricCardProps) {
   const pct = bar != null ? Math.max(0, Math.min(100, bar)) : null;
   return (
-    <div
-      className={`p-3 rounded border border-[var(--panel-border)] bg-[var(--panel-bg)] ${className}`}
-    >
+    <div className={`glass-metric ${className}`}>
       <div className="text-[9px] font-terminal tracking-widest text-[var(--text-muted)]">
         {label}
       </div>

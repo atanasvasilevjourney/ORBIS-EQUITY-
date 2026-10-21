@@ -169,7 +169,7 @@ export default function ScreenerPage() {
         : "var(--text-primary)";
 
   return (
-    <div className="px-4 py-6 space-y-4">
+    <div className="py-6 space-y-4">
       <FocusUniverseModuleBanner allowIndexDesk />
 
       <ModuleHeader
@@ -254,9 +254,9 @@ export default function ScreenerPage() {
           chartTitle="CHART · EMA RIBBON"
           workspaceMinHeight={640}
           list={
-            <div className="overflow-x-auto">
+            <div className="desk-table-wrap">
               <MultiSortBar levels={levels} labels={SCREENER_SORT_LABELS} onClear={clearSort} />
-              <table className="w-full text-sm font-terminal">
+              <table className="desk-table">
                 <thead className="sticky top-0 z-10">
                   <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--panel-border)] bg-[var(--panel-header)]">
                     <SortableTh columnKey="symbol" label="TICKER" levels={levels} onSort={onHeaderClick} />

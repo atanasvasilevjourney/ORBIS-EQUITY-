@@ -107,20 +107,32 @@ npm run test:e2e
 
 ### API (Vitest)
 
+There are 25 route handlers under `src/app/api/`. These have a Vitest file:
+
 | Route | Tests |
 |-------|-------|
 | `/api/screener` | Filters, limit cap, error handling |
 | `/api/summary` | Breadth stats, stale detection |
 | `/api/fundamentals` | Row flattening, sector list |
 | `/api/fundamentals/[ticker]` | Ticker validation, report trends |
+| `/api/fundamentals/screener` | Screener payload |
 | `/api/earnings-news` | Earnings + news payload |
 | `/api/ticker/[ticker]` | Detail payload, 404/500 paths |
+| `/api/ema200` | Watchlist payload |
+| `/api/skew` | Skew payload |
+| `/api/quantropy` | Empty desk, no lite recompute |
+| `/api/rotate` | Empty desk, no lite recompute |
+
+These routes have no route test yet: `/api/dashboard`, `/api/loop`, `/api/orb`, `/api/cash`, `/api/perps`, `/api/analysis`, `/api/bias`, `/api/health`, `/api/triangle`, `/api/chart/[ticker]`, `/api/status`, `/api/symbols/search`, `/api/universe/export`, `/api/ticker/[ticker]/prices`.
+
+Score math is covered in Python (`test_factor_scores`, `test_quantropy` alignment / Z proxy / clean returns, `test_weekend_vol`, `test_orb_brackets`) and in `src/lib/__tests__/capitalBook.test.ts`.
 
 - **Location:** `src/app/api/__tests__/`
 
 ### UI (Playwright)
 
-- Dashboard, screener, fundamentals, health, earnings-news pages load
+Smoke loads `/`, `/screener`, `/triangle`, `/ema200`, `/fundamentals`, `/fundamentals/screener`, `/health`, `/earnings-news`.
+Paper desks (`/loop`, `/orb`, `/skew`, `/analysis`, `/bias`, `/cash`, `/rotate`, `/quantropy`, `/status`) are not in that smoke list.
 - **Location:** `e2e/`
 
 ## Success Criteria
@@ -128,7 +140,7 @@ npm run test:e2e
 | Layer | Green condition |
 |-------|-----------------|
 | Pipeline unit | `pytest pipeline/tests` passes |
-| API | `npm test` passes; all 7 routes covered |
+| API | `npm test` passes; covered routes stay green. New score math needs a unit test before a new page-load test. |
 | UI smoke | Playwright e2e passes (or computerUse confirms pages load) |
 | Review | bugbot reports no unresolved P0 issues |
 | CI | `test.yml` green on PR branch |
