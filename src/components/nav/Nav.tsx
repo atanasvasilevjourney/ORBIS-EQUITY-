@@ -5,22 +5,22 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ThemeToggle } from "@/components/cards/ThemeToggle";
 const NAV_LINKS = [
-  { href: "/screener", label: "WATCHLIST" },
-  { href: "/ema200", label: "EMA200" },
-  { href: "/loop", label: "LOOP" },
-  { href: "/orb", label: "ORB" },
-  { href: "/skew", label: "SKEW" },
-  { href: "/analysis", label: "ANALYZE" },
-  { href: "/bias", label: "BIAS" },
-  { href: "/triangle", label: "TRI" },
-  { href: "/cash", label: "CASH" },
-  { href: "/rotate", label: "ROTATE" },
-  { href: "/quantropy", label: "QUANT" },
-  { href: "/fundamentals", label: "FUNDAMENTALS" },
-  { href: "/fundamentals/screener", label: "FA SCR" },
-  { href: "/health", label: "HEALTH" },
-  { href: "/earnings-news", label: "EARNINGS" },
-  { href: "/status", label: "STATUS" },
+  { href: "/screener", label: "WATCHLIST", title: "Watchlist screener" },
+  { href: "/ema200", label: "EMA200", title: "Watchlist only — EMA200 failed the event study" },
+  { href: "/loop", label: "LOOP", title: "Production paper book" },
+  { href: "/orb", label: "ORB", title: "Research sleeve" },
+  { href: "/skew", label: "SKEW", title: "Research sleeve" },
+  { href: "/analysis", label: "ANALYZE", title: "Research sleeve" },
+  { href: "/bias", label: "BIAS", title: "Research sleeve" },
+  { href: "/triangle", label: "TRI", title: "Research sleeve" },
+  { href: "/cash", label: "CASH", title: "Research sleeve" },
+  { href: "/rotate", label: "ROTATE", title: "Research sleeve" },
+  { href: "/quantropy", label: "QUANT", title: "In-sample analytics" },
+  { href: "/fundamentals", label: "FUNDAMENTALS", title: "Factor ranks" },
+  { href: "/fundamentals/screener", label: "FA SCR", title: "Factor screener" },
+  { href: "/health", label: "HEALTH", title: "Health Care factor view" },
+  { href: "/earnings-news", label: "EARNINGS", title: "Earnings and news" },
+  { href: "/status", label: "STATUS", title: "Pipeline status" },
 ];
 
 export function Nav() {
@@ -56,6 +56,7 @@ export function Nav() {
                 <Link
                   key={l.href}
                   href={l.href}
+                  title={l.title}
                   className={`px-3 py-1.5 text-xs font-terminal rounded transition-colors ${
                     isActive
                       ? "bg-[var(--badge-bg)] text-[var(--accent-info)]"
@@ -136,6 +137,7 @@ export function Nav() {
               <Link
                 key={l.href}
                 href={l.href}
+                title={l.title}
                 onClick={() => setMobileOpen(false)}
                 className={`block px-3 py-2 text-xs font-terminal rounded transition-colors ${
                   isActive

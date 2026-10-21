@@ -6,6 +6,7 @@ import { Nav } from "@/components/nav/Nav";
 import { CommandPalette } from "@/components/command/CommandPalette";
 import { DeskUniverseShell } from "@/components/universe/DeskUniverseShell";
 import { DeskUniverseStrip } from "@/components/universe/DeskUniverseStrip";
+import { SleevePosture } from "@/components/nav/SleevePosture";
 
 export const metadata: Metadata = {
   title: "Orbis Equity Terminal",
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Nav />
             <DataHonestyBar />
             <DeskUniverseStrip />
+            <SleevePosture />
             <main className="mx-auto max-w-[1600px]">{children}</main>
             <CommandPalette />
           </DeskUniverseShell>
