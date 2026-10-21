@@ -6,11 +6,10 @@ file drop, no Flask. Paper analytics only.
 
   Risk      vol, Sharpe, Sortino, max DD, historical VaR/CVaR (Quantropy
             `risk_quantification.py`, corrected CVaR tail)
-  CAPM      alpha/beta vs equal-weight universe (lite FactorModels.CAPM)
-  Distress  public-firm Altman Z from snapshot ratios (Quantropy
-            `financial_distress_models.altman_z_score`)
-  Alloc     equal, inverse-vol, min-variance, max-Sharpe, efficient frontier
-            (Quantropy `ModernPortfolioTheory`, long-only, weights sum to 1)
+  CAPM      alpha/beta vs the equal-weight peer basket (the stock is in the basket)
+  Z proxy   Altman-shaped ratio from snapshot fields. Not a distress zone.
+  Alloc     equal and inverse-vol are the books. Min-variance and max-Sharpe
+            stay in-sample diagnostics (long-only SLSQP, weights sum to 1).
 
 Usage:
     python -m pipeline.compute.quantropy
@@ -89,11 +88,23 @@ def capm_alpha_beta(r: np.ndarray, mkt: np.ndarray) -> tuple[float, float]:
     return float(coef[0] * PERIOD), float(coef[1])
 
 
-def altman_z(fund: dict) -> tuple[float | None, str | None]:
-    """Public-firm Altman Z from snapshot fields.
+def usable_return_matrix(rets: np.ndarray, min_obs: int = MIN_OBS) -> np.ndarray | None:
+    """Drop sessions with any non-finite return. Never replace those sessions with 0."""
+    if rets.ndim != 2 or rets.shape[0] == 0 or rets.shape[1] == 0:
+        return None
+    clean = rets[np.all(np.isfinite(rets), axis=1)]
+    if clean.shape[0] < min_obs:
+        return None
+    return clean
 
-    TA inferred from NI / ROA. Zones match Quantropy's manufacturing table:
-    safe > 2.99, distress < 1.81, else grey.
+
+def altman_z(fund: dict) -> tuple[float | None, str | None]:
+    """Ratio proxy in the shape of public-firm Altman Z.
+
+    Total assets are inferred as NI / ROA. Retained earnings are replaced by
+    ROA. Current liabilities are inferred as TA / (current ratio + 1), which
+    is not the statement identity. The manufacturing safe/grey/distress zones
+    are not applied: the label is always ``proxy`` when a number is produced.
     """
     ni = fund.get("net_income")
     roa = fund.get("roa")
@@ -122,13 +133,7 @@ def altman_z(fund: dict) -> tuple[float | None, str | None]:
         d = 1.0 / max(float(da or 0.5), 0.05)
     e = (float(rev) / ta) if rev else 0.0
     z = 1.2 * a + 1.4 * b + 3.3 * c + 0.6 * d + 1.0 * e
-    if z > 2.99:
-        zone = "safe"
-    elif z < 1.81:
-        zone = "distress"
-    else:
-        zone = "grey"
-    return float(z), zone
+    return float(z), "proxy"
 
 
 def _portfolio_stats(weights: np.ndarray, mu: np.ndarray, cov: np.ndarray) -> dict:
@@ -295,10 +300,27 @@ def run() -> dict:
             logger.exception("quantropy_runs write skipped")
         return {"run_id": run_id, "names": 0, "headline": headline, "books": {}}
 
-    finite_rows = np.all(np.isfinite(rets), axis=1)
-    rets_mpt = rets[finite_rows] if int(finite_rows.sum()) >= MIN_OBS else rets
-    if not np.all(np.isfinite(rets_mpt)):
-        rets_mpt = np.where(np.isfinite(rets), rets, 0.0)
+    rets_mpt = usable_return_matrix(rets)
+    if rets_mpt is None:
+        headline = (
+            f"{today.isoformat()} Quantropy empty — "
+            f"clean overlap under {MIN_OBS} sessions "
+            "(non-finite returns dropped, not zero-filled)"
+        )
+        logger.warning("%s", headline)
+        try:
+            sb.table("quantropy_runs").upsert({
+                "run_id": run_id,
+                "asof_date": today.isoformat(),
+                "names": 0,
+                "headline": headline,
+                "allocations": {},
+                "frontier": [],
+                "computed_at": datetime.now(timezone.utc).isoformat(),
+            }).execute()
+        except Exception:
+            logger.exception("quantropy_runs write skipped")
+        return {"run_id": run_id, "names": 0, "headline": headline, "books": {}}
 
     mkt = rets_mpt.mean(axis=1)
     mu = rets_mpt.mean(axis=0) * PERIOD
@@ -329,8 +351,8 @@ def run() -> dict:
     books = {
         "equal": {**_portfolio_stats(w_eq, mu, cov), "label": "Equally weighted"},
         "invVol": {**_portfolio_stats(w_iv, mu, cov), "label": "Inverse volatility"},
-        "minVar": {**_portfolio_stats(w_mv, mu, cov), "label": "Min variance (MPT)"},
-        "maxSharpe": {**_portfolio_stats(w_ms, mu, cov), "label": "Max Sharpe (MPT)"},
+        "minVar": {**_portfolio_stats(w_mv, mu, cov), "label": "Min variance (in-sample)"},
+        "maxSharpe": {**_portfolio_stats(w_ms, mu, cov), "label": "Max Sharpe (in-sample)"},
     }
     for k, b in books.items():
         b["annReturn"] = round(b["annReturn"], 6)
@@ -377,12 +399,12 @@ def run() -> dict:
             "computed_at": datetime.now(timezone.utc).isoformat(),
         })
 
-    distressed = sum(1 for r in rows if r["altman_zone"] == "distress")
+    z_proxy = sum(1 for r in rows if r["altman_zone"] == "proxy")
     headline = (
         f"{today.isoformat()} · {len(rows)} names · "
-        f"max-Sharpe {books['maxSharpe']['sharpe']:.2f} · "
-        f"min-vol {books['minVar']['annVol']*100:.1f}% · "
-        f"{distressed} distress Z"
+        f"equal-weight Sharpe {books['equal']['sharpe']:.2f} · "
+        f"inv-vol {books['invVol']['annVol']*100:.1f}% · "
+        f"Z proxy on {z_proxy} names (not a distress zone)"
     )
     sb.table("quantropy_runs").upsert({
         "run_id": run_id,
