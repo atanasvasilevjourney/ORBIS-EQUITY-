@@ -2,6 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { DeskPageHeader } from "@/components/ui/DeskPageHeader";
+import { InfoCallout } from "@/components/ui/InfoCallout";
+import { MetricStrip } from "@/components/ui/MetricStrip";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 import { CanaryBoard } from "@/components/charts/CanaryBoard";
 import { CorrHeatmap } from "@/components/charts/CorrHeatmap";
 import { RotationRRG } from "@/components/rotate/RotationRRG";
@@ -383,31 +387,27 @@ export default function RotatePage() {
   }
 
   return (
-    <div className="px-4 py-6">
-      <div className="mb-4">
-        <h1 className="text-lg font-terminal font-bold tracking-wider" style={{ color: "var(--accent-info)" }}>
-          MACRO → SECTOR → SUB-SECTOR → ASSET · CARVER DCA
-        </h1>
-        <p className="text-xs text-[var(--text-secondary)]">
-          Canaries decide WHERE, the nest decides WHICH sleeve, Carver D-rungs size HOW MUCH as DCA on the bigger trend · paper only
-        </p>
-      </div>
+    <div className="py-6">
+      <DeskPageHeader
+        badge="MACRO DESK"
+        title="Sector rotation"
+        subtitle="Canaries → sectors → sub-sectors → Carver DCA rungs. Paper only — not investment advice."
+      />
 
-      <div className="px-4 py-3 mb-4 rounded border border-[var(--border)] bg-[var(--badge-bg)] text-xs text-[var(--text-secondary)] font-terminal space-y-1">
+      <InfoCallout title="FLOW">
         <p>
-          <span style={{ color: "var(--accent-info)" }}>FLOW:</span>{" "}
           Click a sector to open its sub-sectors, then a sleeve. TEMA-MACD is the WHEN. Carver D1–D4 are discrete
           partials unlocked by the parent-sector EWMAC (|f| 5 / 10 / 15 / 20). Those rungs rotate into the leading
           sub-sector and its top names (Strategy 19-lite). Isolated from the CASH TEMA/Carver book.
         </p>
         <p>
           ADD = DCA onto the bigger trend. ROTATE = the same rungs belong to a hotter sleeve. ALIGNED = group trend
-          matches the canary regime. Not investment advice.
+          matches the canary regime.
         </p>
-      </div>
+      </InfoCallout>
 
       {d?.headline && (
-        <div className="px-4 py-2 mb-4 rounded border border-[var(--border)] bg-[var(--card-bg)] text-sm text-[var(--text-secondary)] font-terminal">
+        <div className="headline-banner mb-4">
           <span style={{ color: "var(--accent-info)" }}>ROTATE:</span> {d.headline}
         </div>
       )}
@@ -438,18 +438,9 @@ export default function RotatePage() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-        {cards.map((c) => (
-          <div key={c.label} className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
-            <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">{c.label}</div>
-            <div className="text-lg font-terminal font-bold mt-1" style={{ color: c.color || undefined }}>
-              {loading ? "…" : c.value}
-            </div>
-          </div>
-        ))}
-      </div>
+      <MetricStrip items={cards} columns={5} loading={loading} />
 
-      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">1 · MACRO CONTEXT · CANARY RATIOS</h2>
+      <SectionLabel>1 · Macro context · Canary ratios</SectionLabel>
       <div className="mb-4">
         {loading ? (
           <p className="text-xs text-[var(--text-muted)] font-terminal px-3 py-8 text-center">Loading canaries…</p>

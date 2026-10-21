@@ -24,8 +24,8 @@ export function ModulePanel({
 }: ModulePanelProps) {
   return (
     <section
-      className={`flex flex-col rounded border bg-[var(--panel-bg)] overflow-hidden ${className}`}
-      style={{ borderColor: "var(--panel-border)" }}
+      className={`flex flex-col glass-panel overflow-hidden ${className}`}
+      style={{ boxShadow: `inset 0 2px 0 0 ${accent}, var(--shadow-panel)` }}
     >
       <header
         className="flex items-center justify-between gap-3 px-3 py-2 border-b"
@@ -47,7 +47,7 @@ export function ModulePanel({
                   {badge}
                 </span>
               )}
-              <h2 className="text-xs font-terminal font-semibold tracking-wider truncate">
+              <h2 className="text-sm font-display font-semibold tracking-tight truncate">
                 {title}
               </h2>
             </div>

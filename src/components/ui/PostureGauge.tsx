@@ -35,6 +35,7 @@ export function PostureGauge({ value, label, size = 160 }: PostureGaugeProps) {
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={`${filled} ${circ}`}
+          style={{ filter: "drop-shadow(0 0 6px currentColor)" }}
         />
         <text
           x={cx}

@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { DeskPageHeader } from "@/components/ui/DeskPageHeader";
+import { MetricStrip } from "@/components/ui/MetricStrip";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 import { parseDesk, pickNamed } from "@/lib/deskPayload";
 
 type Bar = { t: string; o: number; h: number; l: number; c: number; tag: string };
@@ -121,36 +124,25 @@ export default function OrbPage() {
   ];
 
   return (
-    <div className="px-4 py-6">
-      <div className="mb-4">
-        <h1 className="text-lg font-terminal font-bold tracking-wider" style={{ color: "var(--accent-warning)" }}>
-          OPENING RANGE BREAKOUT
-        </h1>
-        <p className="text-xs text-[var(--text-secondary)]">
-          Premarket/open gappers · 15-minute OR · long-only 1R bracket (paper)
-        </p>
-      </div>
+    <div className="py-6">
+      <DeskPageHeader
+        badge="INTRADAY DESK"
+        accent="var(--accent-warning)"
+        title="Opening range breakout"
+        subtitle="Premarket/open gappers · 15-minute OR · long-only 1R bracket (paper)"
+      />
 
       {d?.headline && (
-        <div className="px-4 py-2 mb-4 rounded border border-[var(--border)] bg-[var(--badge-bg)] text-sm text-[var(--text-secondary)] font-terminal">
+        <div className="headline-banner mb-4">
           <span style={{ color: "var(--accent-warning)" }}>ORB:</span> {d.headline}
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-        {cards.map((c) => (
-          <div key={c.label} className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
-            <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">{c.label}</div>
-            <div className="text-lg font-terminal font-bold mt-1" style={{ color: c.color || undefined }}>
-              {loading ? "…" : c.value}
-            </div>
-          </div>
-        ))}
-      </div>
+      <MetricStrip items={cards} columns={5} loading={loading} />
 
-      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">GAPPER WATCH · ORB STRATEGY</h2>
-      <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
-        <table className="w-full text-sm font-terminal">
+      <SectionLabel>Gapper watch · ORB strategy</SectionLabel>
+      <div className="desk-table-wrap mb-6">
+        <table className="desk-table">
           <thead>
             <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
               <th className="text-left px-3 py-2">TICKER</th>

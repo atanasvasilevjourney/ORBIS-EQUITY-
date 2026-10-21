@@ -6,7 +6,6 @@ import { Nav } from "@/components/nav/Nav";
 import { CommandPalette } from "@/components/command/CommandPalette";
 import { DeskUniverseShell } from "@/components/universe/DeskUniverseShell";
 import { DeskUniverseStrip } from "@/components/universe/DeskUniverseStrip";
-import { SleevePosture } from "@/components/nav/SleevePosture";
 
 export const metadata: Metadata = {
   title: "Orbis Equity Terminal",
@@ -23,18 +22,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Outfit:wght@500;600;700&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-screen antialiased">
+      <body className="app-shell min-h-screen antialiased">
         <ThemeProvider>
           <DeskUniverseShell>
             <Nav />
             <DataHonestyBar />
             <DeskUniverseStrip />
-            <SleevePosture />
-            <main className="mx-auto max-w-[1600px]">{children}</main>
+            <main className="page-enter mx-auto max-w-[1600px] px-3 sm:px-5 pb-10">{children}</main>
             <CommandPalette />
           </DeskUniverseShell>
         </ThemeProvider>

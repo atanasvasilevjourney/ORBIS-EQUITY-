@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { DeskPageHeader } from "@/components/ui/DeskPageHeader";
+import { InfoCallout } from "@/components/ui/InfoCallout";
+import { MetricStrip } from "@/components/ui/MetricStrip";
 import { CorrHeatmap } from "@/components/charts/CorrHeatmap";
 import { deskList, parseDesk } from "@/lib/deskPayload";
 import type { CorrMatrix } from "@/lib/corr";
@@ -128,43 +131,30 @@ export default function QuantropyPage() {
   const weight = (n: Name) => n[book];
 
   return (
-    <div className="px-4 py-6">
-      <div className="mb-4">
-        <h1 className="text-lg font-terminal font-bold tracking-wider" style={{ color: "var(--accent-info)" }}>
-          QUANTROPY
-        </h1>
-        <p className="text-xs text-[var(--text-secondary)]">
-          Equal-weight and inverse-vol books. Beta is versus the equal-weight peer basket. Altman Z is a ratio proxy, not a distress zone.
-          {d?.lite ? " · lite correlation from prices_daily (snapshot pending)" : ""}
-        </p>
-      </div>
+    <div className="py-6">
+      <DeskPageHeader
+        badge="IN-SAMPLE"
+        title="Quantropy"
+        subtitle={`Equal-weight and inverse-vol books. Beta is versus the equal-weight peer basket. Altman Z is a ratio proxy.${
+          d?.lite ? " Lite correlation from prices_daily." : ""
+        }`}
+      />
 
-      <div className="px-4 py-3 mb-4 rounded border border-[var(--accent-warning)]/40 bg-[var(--badge-bg)] text-xs text-[var(--text-secondary)] font-terminal">
-        <span className="font-bold tracking-wider" style={{ color: "var(--accent-warning)" }}>
-          IN-SAMPLE DESK
-        </span>
-        {" · "}
-        Equal-weight and inverse-vol are the books on this page. Min-variance and max-Sharpe use the same
-        return window, so they are in-sample diagnostics. Beta is versus the equal-weight peers, which include
-        the stock. The Z column is a statement proxy (assets inferred as NI/ROA). It is not a safe/distress zone.
-      </div>
+      <InfoCallout title="In-sample desk" variant="warning" accent="var(--accent-warning)">
+        <p>
+          Equal-weight and inverse-vol are the books on this page. Min-variance and max-Sharpe use the same
+          return window, so they stay diagnostic. Beta is versus the equal-weight peers, which include the
+          stock. The Z column is a statement proxy (assets inferred as NI/ROA). It is not a safe/distress zone.
+        </p>
+      </InfoCallout>
 
       {d?.headline && (
-        <div className="px-4 py-2 mb-4 rounded border border-[var(--border)] bg-[var(--badge-bg)] text-sm text-[var(--text-secondary)] font-terminal">
+        <div className="headline-banner mb-4">
           <span style={{ color: "var(--accent-info)" }}>Q:</span> {d.headline}
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        {cards.map((c) => (
-          <div key={c.label} className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
-            <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">{c.label}</div>
-            <div className="text-lg font-terminal font-bold mt-1" style={{ color: c.color || undefined }}>
-              {loading ? "…" : c.value}
-            </div>
-          </div>
-        ))}
-      </div>
+      <MetricStrip items={cards} columns={4} loading={loading} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] p-3">

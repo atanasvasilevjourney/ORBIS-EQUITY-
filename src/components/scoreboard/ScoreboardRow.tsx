@@ -70,7 +70,7 @@ export function ScoreboardRow({
       onClick={() => onSelect?.(row.symbol)}
       className={`border-b border-[var(--border)] hover:bg-[var(--surface-alt)] transition-colors cursor-pointer ${
         noRadar ? "opacity-60" : ""
-      } ${selected ? "bg-[var(--badge-bg)]" : ""}`}
+      } ${selected ? "bg-[rgba(56,189,248,0.08)] ring-1 ring-inset ring-[var(--accent-info)]/30" : ""}`}
     >
       <td className="px-3 py-2.5">
         <Link
