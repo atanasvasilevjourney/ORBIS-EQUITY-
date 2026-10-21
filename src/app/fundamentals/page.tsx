@@ -265,7 +265,7 @@ export default function FundamentalsPage() {
       </div>
 
       <p className="text-xs text-[var(--text-muted)] mt-3 font-terminal">
-        Factor scores are cross-sectional percentile ranks (0-100). Composite = 25% value + 25% quality + 20% growth + 15% earnings quality + 15% leverage.
+        Each input is percentile-ranked on its own (0-100, ties averaged). A style score averages the inputs that exist. Composite = 25% value + 25% quality + 20% growth + 15% earnings quality + 15% leverage, renormalized when a style is missing.
       </p>
     </div>
   );
