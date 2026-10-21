@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ThemeToggle } from "@/components/cards/ThemeToggle";
@@ -34,6 +34,11 @@ export function Nav() {
   const [search, setSearch] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+
+  useEffect(() => {
+    setMoreOpen(false);
+    setMobileOpen(false);
+  }, [pathname]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,19 +75,21 @@ export function Nav() {
               EQUITY
             </span>
           </Link>
-          <div className="hidden lg:flex items-center gap-0.5 overflow-x-auto max-w-[42rem]">
-            {NAV_PRIMARY.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                title={l.title}
-                className="nav-link-pill"
-                data-active={isActive(l.href)}
-              >
-                {l.label}
-              </Link>
-            ))}
-            <div className="relative">
+          <div className="hidden lg:flex items-center gap-0.5 min-w-0">
+            <div className="flex items-center gap-0.5 overflow-x-auto max-w-[36rem]">
+              {NAV_PRIMARY.map((l) => (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  title={l.title}
+                  className="nav-link-pill"
+                  data-active={isActive(l.href)}
+                >
+                  {l.label}
+                </Link>
+              ))}
+            </div>
+            <div className="relative shrink-0">
               <button
                 type="button"
                 onClick={() => setMoreOpen((v) => !v)}
@@ -93,21 +100,22 @@ export function Nav() {
               </button>
               {moreOpen && (
                 <div
-                  className="absolute left-0 top-full mt-1 py-2 px-1 min-w-[11rem] glass-panel z-50 grid gap-0.5"
+                  className="absolute left-0 top-full z-50 pt-1"
                   onMouseLeave={() => setMoreOpen(false)}
                 >
-                  {NAV_MORE.map((l) => (
-                    <Link
-                      key={l.href}
-                      href={l.href}
-                      title={l.title}
-                      onClick={() => setMoreOpen(false)}
-                      className="nav-link-pill block text-left"
-                      data-active={isActive(l.href)}
-                    >
-                      {l.label}
-                    </Link>
-                  ))}
+                  <div className="py-2 px-1 min-w-[11rem] glass-panel grid gap-0.5">
+                    {NAV_MORE.map((l) => (
+                      <Link
+                        key={l.href}
+                        href={l.href}
+                        title={l.title}
+                        className="nav-link-pill block text-left"
+                        data-active={isActive(l.href)}
+                      >
+                        {l.label}
+                      </Link>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -172,7 +180,6 @@ export function Nav() {
               key={l.href}
               href={l.href}
               title={l.title}
-              onClick={() => setMobileOpen(false)}
               className="nav-link-pill block"
               data-active={isActive(l.href)}
             >
