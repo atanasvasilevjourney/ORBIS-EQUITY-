@@ -2,6 +2,8 @@
 
   Universe   active LOOP-tradable members
   Entry      On-list watchlist names (state=1), rank ≥ 60, positive day % and rel volume
+             Ranked by 63-session relative strength vs the tradable universe when
+             the tape is long enough; otherwise by quality rank
   Gate       posture ≥ 50 and SPY regime buys_allowed (SMA200 + vol)
   Exit       Down day (state=-1); rotate out when dropped from top basket on rebalance
   Size       Equal weight, max 8 names, max 2 / sector
@@ -32,6 +34,7 @@ from pipeline.compute.donchian_vwap import (
 from pipeline.compute.loop_order_economics import next_session_open, order_economics
 from pipeline.compute.loop_xs_selection import select_xs_targets, xs_hard_exit
 from pipeline.compute.market_regime import regime_signal
+from pipeline.compute.relative_strength import RS_LOOKBACK, rs_percentiles_from_frames
 from pipeline.universe_filters import is_loop_tradable, is_pharma_stock
 from pipeline.utils.supabase import fetch_all
 
@@ -40,7 +43,9 @@ load_dotenv(".env.local")
 logger = logging.getLogger(__name__)
 
 POSTURE_ENTRY_MIN = 50
-PRICE_HISTORY_DAYS = 90
+# 63-session relative strength needs lookback+1 bars. 220 calendar days
+# covers that plus holidays; 90 calendar days does not.
+PRICE_HISTORY_DAYS = 220
 
 
 def _sb():
@@ -176,6 +181,9 @@ def _run(sb, run) -> None:
                 if len(frame):
                     last_close[sym] = float(frame.iloc[-1]["close"])
 
+    peer_frames = {sym: frame for sym, frame in px_by_sym.items() if sym in uni}
+    rs_map = rs_percentiles_from_frames(peer_frames, lookback=RS_LOOKBACK, as_of=today)
+
     note(
         "INFO",
         f"XS start · ${EQUITY:,.0f} · {len(book_rows)} open · posture {posture} · "
@@ -254,7 +262,15 @@ def _run(sb, run) -> None:
         elif not buys_allowed:
             note("WARN", "Regime gate off — skip rebalance entries")
         else:
-            enriched = [{**r, "symbol": r["symbol"]} for r in radar_rows if r.get("symbol") in uni]
+            enriched = []
+            for row in radar_rows:
+                sym = row.get("symbol")
+                if sym not in uni:
+                    continue
+                tagged = dict(row)
+                if sym in rs_map:
+                    tagged["rs_pct"] = rs_map[sym]
+                enriched.append(tagged)
             target_syms = select_xs_targets(enriched, sym_sector)
             note("INFO", f"XS rebalance target ({len(target_syms)}): {target_syms}")
 
@@ -307,7 +323,9 @@ def _run(sb, run) -> None:
                 continue
             rad = radar_by_sym.get(sym) or {}
             rank = int(rad.get("quality_rank") or 0)
-            reason = f"XS rank {rank} · {rad.get('entry_timing') or 'watch'}"
+            rs = rs_map.get(sym)
+            rs_bit = f" · RS {rs:.0f}" if rs is not None else ""
+            reason = f"XS rank {rank}{rs_bit} · {rad.get('entry_timing') or 'watch'}"
             sector = u.get("sector") or "Unknown"
             if sym in surviving and surviving[sym]["shares"] == shares:
                 continue
@@ -366,6 +384,8 @@ def _run(sb, run) -> None:
             "maxPerSector": MAX_PER_SECTOR,
             "rebalanceDays": REBALANCE_DAYS,
             "minRank": 60,
+            "rsLookback": RS_LOOKBACK,
+            "rsCoverage": len(rs_map),
             "regimeGate": True,
             "buysAllowed": buys_allowed,
             "regime": regime,
