@@ -12,9 +12,25 @@ nightly Optuna.
 | Regime | Trade with structure | **Market:** SPY SMA200 + vol pctl (`market_regime`); **Ticker:** dual-KAMA + EWMAC + **ADX** |
 | Momentum | Move has legs | `z_mom`, `f_ewmac` |
 | Vol / risk | Risk governor | **ATR×2.5 stop + 1.25% equity risk sizing** (`atr_risk`) |
-| Relative strength | Rank vs universe | **Not yet** — highest priority gap |
+| Relative strength | Rank vs universe | **XS sleeve** — 63-session total return, cross-sectional percentile (`pipeline/compute/relative_strength.py`). Donchian LOOP is unchanged. |
 | Entry | Timing | ATR compression breakout + volume; **too_late / wait_pullback** vetoes |
 | Exit | Hold winners | Prefer **SMA20 wide trail** (+ BE@+3%, 2-loss cooldown); else exit-on-RED |
+
+## Relative strength (XS sleeve)
+
+`pipeline/compute/relative_strength.py` ranks each tradable name by its
+63-session total return against the rest of the LOOP universe.
+
+- Percentile uses average rank. The strongest name in a set of two or more is 100.
+- A one-name universe scores 50 (no peers).
+- Bars after `as_of` are dropped. Short histories are omitted, not filled.
+- `select_xs_targets` leads with `rs_pct` when any eligible row has it. Names
+  without a percentile sort after measured names. If nobody has `rs_pct`, the
+  old quality-rank order is unchanged.
+- Nightly `portfolio_loop_xs` writes the percentile into the entry reason
+  (`RS 88`) and stores `rsLookback` / `rsCoverage` on the run harness.
+- Quality rank, GREEN state, posture, and the SPY regime gate still decide
+  eligibility. Relative strength only orders the book.
 
 ## Dual-KAMA regime
 

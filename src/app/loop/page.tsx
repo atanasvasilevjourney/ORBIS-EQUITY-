@@ -252,7 +252,9 @@ export default function LoopPage() {
                 <th className="text-right">ENTRY</th>
                 <th className="text-right">LAST</th>
                 <th className="text-right">RANK</th>
+                <th className="text-left">SECTOR</th>
                 <th className="text-right">P&amp;L</th>
+                <th className="text-left">REASON</th>
               </tr>
             ) : (
               <tr>
@@ -277,7 +279,7 @@ export default function LoopPage() {
             ) : sleeve === "xs" ? (
               !xs?.book?.length ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)] text-xs leading-relaxed">
+                  <td colSpan={10} className="px-3 py-8 text-center text-[var(--text-muted)] text-xs leading-relaxed">
                     No XS positions. Run nightly <code className="text-[var(--accent-info)]">portfolio_loop_xs</code> after migration 033.
                   </td>
                 </tr>
@@ -296,7 +298,9 @@ export default function LoopPage() {
                       <td className="px-3 py-2 text-right">{px(r.entry)}</td>
                       <td className="px-3 py-2 text-right">{px(r.last)}</td>
                       <td className="px-3 py-2 text-right">{r.rank ?? "—"}</td>
+                      <td className="px-3 py-2 text-xs">{r.sector ?? "—"}</td>
                       <td className="px-3 py-2 text-right font-bold" style={{ color: pnlColor }}>{usd(r.unrealizedPnlUsd, 0)}</td>
+                      <td className="px-3 py-2 text-xs text-[var(--text-secondary)]">{r.reason ?? "—"}</td>
                     </tr>
                   );
                 })
@@ -569,7 +573,13 @@ export default function LoopPage() {
 
       {sleeve === "xs" && (
         <p className="text-[10px] text-[var(--text-muted)] font-terminal mt-3">
-          XS sleeve: top watchlist names · SPY regime gate · down-day exits · paper only. Compare to Donchian before any promotion.
+          XS sleeve: eligible watchlist names ranked by{" "}
+          {Number(
+            (xs?.harness as { config?: { rsLookback?: number } } | null | undefined)?.config
+              ?.rsLookback ?? 63
+          )}
+          -session relative strength versus the tradable universe, then quality rank.
+          SPY regime gate and down-day exits. Paper only — compare with Donchian before any promotion.
         </p>
       )}
     </div>

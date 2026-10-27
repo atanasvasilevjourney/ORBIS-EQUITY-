@@ -20,3 +20,52 @@ def test_select_respects_sector_cap():
 def test_hard_exit_on_down_day():
     assert xs_hard_exit({"state": -1}) is not None
     assert xs_hard_exit({"state": 1}) is None
+
+
+def test_select_prefers_relative_strength_over_quality_rank():
+    rows = [
+        {
+            "symbol": "WEAK",
+            "state": 1,
+            "quality_rank": 99,
+            "z_mom": 5,
+            "f_ewmac": 3,
+            "convergence_count": 5,
+            "rs_pct": 12,
+        },
+        {
+            "symbol": "STRONG",
+            "state": 1,
+            "quality_rank": 61,
+            "z_mom": 1,
+            "f_ewmac": 0.2,
+            "convergence_count": 1,
+            "rs_pct": 96,
+        },
+    ]
+    sector = {"WEAK": "Tech", "STRONG": "Energy"}
+    assert select_xs_targets(rows, sector, top_n=1) == ["STRONG"]
+
+
+def test_missing_rs_sorts_after_measured_names():
+    rows = [
+        {
+            "symbol": "NORANK",
+            "state": 1,
+            "quality_rank": 99,
+            "z_mom": 5,
+            "f_ewmac": 3,
+            "convergence_count": 5,
+        },
+        {
+            "symbol": "MEASURED",
+            "state": 1,
+            "quality_rank": 61,
+            "z_mom": 1,
+            "f_ewmac": 0.2,
+            "convergence_count": 1,
+            "rs_pct": 40,
+        },
+    ]
+    sector = {"NORANK": "Tech", "MEASURED": "Energy"}
+    assert select_xs_targets(rows, sector, top_n=2) == ["MEASURED", "NORANK"]

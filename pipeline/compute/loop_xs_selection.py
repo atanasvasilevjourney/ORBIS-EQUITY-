@@ -29,26 +29,44 @@ def select_xs_targets(
     max_per_sector: int = MAX_PER_SECTOR,
     min_rank: int = MIN_RANK,
 ) -> list[str]:
-    """Rank by quality_rank, convergence_count, relative volume (f_ewmac)."""
-    cands: list[tuple[str, int, int, float]] = []
+    """Rank the eligible book.
+
+    When any survivor carries ``rs_pct`` (63-session cross-sectional
+    percentile), that score leads. Names without a percentile sort last.
+    With no relative-strength field at all, order stays quality rank,
+    then convergence, then relative volume (``f_ewmac``).
+    """
+    cands: list[tuple[str, int, int, float, float | None]] = []
     for row in radar_rows:
         sym = row.get("symbol")
         if not sym or sym not in sym_sector:
             continue
         if not xs_eligible(row, min_rank=min_rank):
             continue
+        raw_rs = row.get("rs_pct")
+        rs = None if raw_rs is None else float(raw_rs)
         cands.append(
             (
                 sym,
                 int(row.get("quality_rank") or 0),
                 int(row.get("convergence_count") or 0),
                 float(row.get("f_ewmac") or 0),
+                rs,
             )
         )
-    cands.sort(key=lambda x: (-x[1], -x[2], -x[3], x[0]))
+    any_rs = any(rs is not None for *_, rs in cands)
+
+    def _key(item: tuple[str, int, int, float, float | None]):
+        sym, rank, conv, ewmac, rs = item
+        if any_rs:
+            rs_key = -1.0 if rs is None else -float(rs)
+            return (rs_key, -rank, -conv, -ewmac, sym)
+        return (-rank, -conv, -ewmac, sym)
+
+    cands.sort(key=_key)
     sector_count: dict[str, int] = defaultdict(int)
     out: list[str] = []
-    for sym, _, _, _ in cands:
+    for sym, _, _, _, _ in cands:
         sec = sym_sector.get(sym) or "Unknown"
         if sector_count[sec] >= max_per_sector:
             continue
