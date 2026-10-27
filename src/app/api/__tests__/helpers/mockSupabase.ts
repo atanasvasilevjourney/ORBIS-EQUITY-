@@ -16,8 +16,6 @@ function buildChain(getResult: (from?: number, to?: number, select?: string) => 
     "in",
     "order",
     "limit",
-    "single",
-    "maybeSingle",
   ];
 
   for (const method of methods) {
@@ -27,6 +25,16 @@ function buildChain(getResult: (from?: number, to?: number, select?: string) => 
   let rangeFrom = 0;
   let rangeTo: number | undefined;
   let selectCols = "";
+  let singleRow = false;
+
+  chain.single = () => {
+    singleRow = true;
+    return chain;
+  };
+  chain.maybeSingle = () => {
+    singleRow = true;
+    return chain;
+  };
 
   chain.select = (cols?: string) => {
     selectCols = cols ?? "";
@@ -42,7 +50,14 @@ function buildChain(getResult: (from?: number, to?: number, select?: string) => 
   chain.then = (
     onFulfilled?: (value: QueryResult) => unknown,
     onRejected?: (reason: unknown) => unknown
-  ) => Promise.resolve(getResult(rangeFrom, rangeTo, selectCols)).then(onFulfilled, onRejected);
+  ) => {
+    const result = getResult(rangeFrom, rangeTo, selectCols);
+    const resolved =
+      singleRow && Array.isArray(result.data)
+        ? { ...result, data: (result.data as unknown[])[0] ?? null }
+        : result;
+    return Promise.resolve(resolved).then(onFulfilled, onRejected);
+  };
 
   return chain;
 }

@@ -122,8 +122,13 @@ There are 25 route handlers under `src/app/api/`. These have a Vitest file:
 | `/api/skew` | Skew payload |
 | `/api/quantropy` | Empty desk, no lite recompute |
 | `/api/rotate` | Empty desk, no lite recompute |
+| `/api/dashboard` | Breadth, capital sleeves, 500 on client failure |
+| `/api/loop` | Empty desk, Donchian book + XS sleeve, 500 |
+| `/api/orb` | Empty desk, breakout row, client failure degrades to empty |
+| `/api/health` | Health Care filter, 500 |
+| `/api/status` | Latest pipeline module, 500 |
 
-These routes have no route test yet: `/api/dashboard`, `/api/loop`, `/api/orb`, `/api/cash`, `/api/perps`, `/api/analysis`, `/api/bias`, `/api/health`, `/api/triangle`, `/api/chart/[ticker]`, `/api/status`, `/api/symbols/search`, `/api/universe/export`, `/api/ticker/[ticker]/prices`.
+These routes have no route test yet: `/api/cash`, `/api/perps`, `/api/analysis`, `/api/bias`, `/api/triangle`, `/api/chart/[ticker]`, `/api/symbols/search`, `/api/universe/export`, `/api/ticker/[ticker]/prices`.
 
 Score math is covered in Python (`test_factor_scores`, `test_quantropy` alignment / Z proxy / clean returns, `test_weekend_vol`, `test_orb_brackets`) and in `src/lib/__tests__/capitalBook.test.ts`.
 
@@ -132,7 +137,7 @@ Score math is covered in Python (`test_factor_scores`, `test_quantropy` alignmen
 ### UI (Playwright)
 
 Smoke loads `/`, `/screener`, `/triangle`, `/ema200`, `/fundamentals`, `/fundamentals/screener`, `/health`, `/earnings-news`.
-Paper desks (`/loop`, `/orb`, `/skew`, `/analysis`, `/bias`, `/cash`, `/rotate`, `/quantropy`, `/status`) are not in that smoke list.
+Paper desks (`/loop`, `/orb`, `/skew`, `/analysis`, `/bias`, `/cash`, `/rotate`, `/quantropy`, `/status`) load in `e2e/paper-desks.spec.ts`, including the LOOP sleeve toggle.
 - **Location:** `e2e/`
 
 ## Success Criteria
