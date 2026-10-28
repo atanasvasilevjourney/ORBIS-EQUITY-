@@ -10,7 +10,8 @@ import { useDeskUniverseUi } from "@/components/universe/deskUniverseUiContext";
 
 export function DeskUniverseStrip() {
   const pathname = usePathname();
-  const showIndexDesks = pathname.startsWith("/ema200") || pathname.startsWith("/screener");
+  const showIndexDesks =
+    pathname.startsWith("/ema200") || pathname.startsWith("/screener") || pathname.startsWith("/trade");
   const { desk, symbols, setDesk, isWatchlist } = useFocusUniverse();
   const { openDrawer, showFirstAddNudge, acceptFirstAddNudge, dismissFirstAddNudgeUi } =
     useDeskUniverseUi();

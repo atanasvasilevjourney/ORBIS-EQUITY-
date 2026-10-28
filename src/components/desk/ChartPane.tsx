@@ -7,8 +7,11 @@ import {
   type Candle,
   type ChartLevel,
   type ChartSegment,
+  type CrosshairBar,
   type SwingEmaLines,
 } from "@/components/chart/TradingChart";
+import { TosQuoteStrip } from "@/components/desk/TosQuoteStrip";
+import type { ScreenerRow } from "@/components/scoreboard/ScoreboardRow";
 
 type ChartPayload = {
   candles: Candle[];
@@ -31,6 +34,9 @@ type Props = {
   levels?: ChartLevel[];
   segments?: ChartSegment[];
   toolbarExtra?: ReactNode;
+  /** TOS-style quote + crosshair strip above the chart */
+  quoteRow?: ScreenerRow | null;
+  showQuoteStrip?: boolean;
 };
 
 export function ChartPane({
@@ -43,9 +49,12 @@ export function ChartPane({
   levels = [],
   segments = [],
   toolbarExtra,
+  quoteRow = null,
+  showQuoteStrip = false,
 }: Props) {
   const [chart, setChart] = useState<ChartPayload | null>(null);
   const [loading, setLoading] = useState(false);
+  const [crosshair, setCrosshair] = useState<CrosshairBar | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [fillHeight, setFillHeight] = useState(520);
 
@@ -67,6 +76,7 @@ export function ChartPane({
     }
     const ac = new AbortController();
     setLoading(true);
+    setCrosshair(null);
     fetch(`/api/chart/${symbol}?interval=${interval}`, { signal: ac.signal })
       .then(async (r) => {
         if (!r.ok) throw new Error("chart");
@@ -120,7 +130,19 @@ export function ChartPane({
           </div>
         )}
         {toolbarExtra}
+        {showQuoteStrip && (
+          <span className="ml-auto text-[10px] text-[var(--text-muted)] hidden lg:inline">
+            ↑↓ symbol · D daily · 5 intraday
+          </span>
+        )}
       </div>
+      {showQuoteStrip && (
+        <TosQuoteStrip
+          row={quoteRow}
+          crosshair={crosshair}
+          interval={chart?.interval ?? interval}
+        />
+      )}
       <div ref={bodyRef} className="flex-1 min-h-0 overflow-hidden bg-[var(--card-bg)]">
         {loading && !chart?.candles?.length ? (
           <div
@@ -139,6 +161,7 @@ export function ChartPane({
             segments={segments}
             levels={levels}
             height={chartHeight}
+            onCrosshairBar={showQuoteStrip ? setCrosshair : undefined}
           />
         )}
       </div>

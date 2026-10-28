@@ -35,6 +35,14 @@ export type SwingEmaLines = {
   ema200High?: (number | null)[];
 };
 
+export type CrosshairBar = {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number;
+};
+
 type Props = {
   candles: Candle[];
   sma?: (number | null)[];
@@ -48,6 +56,8 @@ type Props = {
   /** Pattern geometry (triangle legs, channels) drawn as line series. */
   segments?: ChartSegment[];
   height?: number;
+  /** Fired on crosshair move (TOS-style OHLC readout). */
+  onCrosshairBar?: (bar: CrosshairBar | null) => void;
 };
 
 function cssVar(name: string, fallback: string) {
@@ -81,7 +91,11 @@ export function TradingChart({
   levels,
   segments,
   height = 420,
+  onCrosshairBar,
 }: Props) {
+  const crosshairCbRef = useRef(onCrosshairBar);
+  crosshairCbRef.current = onCrosshairBar;
+
   const wrap = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof import("lightweight-charts").createChart> | null>(null);
   const seriesRef = useRef<ReturnType<
@@ -279,6 +293,33 @@ export function TradingChart({
 
       chart.timeScale().fitContent();
       setChartReady((n) => n + 1);
+
+      if (crosshairCbRef.current) {
+        chart.subscribeCrosshairMove((param) => {
+          const cb = crosshairCbRef.current;
+          if (!cb) return;
+          if (!param.time) {
+            cb(null);
+            return;
+          }
+          const data = param.seriesData.get(candleSeries) as
+            | { open?: number; high?: number; low?: number; close?: number }
+            | undefined;
+          if (!data || data.open == null) {
+            cb(null);
+            return;
+          }
+          const idx = candles.findIndex((c) => c.time === param.time);
+          const vol = idx >= 0 ? candles[idx].volume : undefined;
+          cb({
+            open: data.open,
+            high: data.high ?? data.open,
+            low: data.low ?? data.open,
+            close: data.close ?? data.open,
+            volume: vol,
+          });
+        });
+      }
 
       ro = new ResizeObserver(() => {
         if (!chartRef.current || !wrap.current) return;
