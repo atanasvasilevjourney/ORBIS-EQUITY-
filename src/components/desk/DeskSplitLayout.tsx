@@ -13,6 +13,8 @@ type Props = {
   chart: React.ReactNode;
   /** Height of the split workspace (list + chart scroll inside). */
   workspaceMinHeight?: number;
+  /** thinkorswim-style layout button labels */
+  variant?: "default" | "tos";
 };
 
 function ModeButton({
@@ -50,7 +52,12 @@ export function DeskSplitLayout({
   list,
   chart,
   workspaceMinHeight = 560,
+  variant = "default",
 }: Props) {
+  const splitLabel = variant === "tos" ? "FLEX" : "SPLIT";
+  const listLabel = variant === "tos" ? "LIST" : "LIST";
+  const chartLabel = variant === "tos" ? "CHARTS" : "CHART";
+  const splitTitle = variant === "tos" ? "MarketWatch + Charts (thinkorswim flex)" : "Watchlist + chart (TC2000 style)";
   useEffect(() => {
     if (mode !== "chart") return;
     const onKey = (e: KeyboardEvent) => {
@@ -65,24 +72,26 @@ export function DeskSplitLayout({
       <span className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest mr-2">LAYOUT</span>
       <ModeButton
         active={mode === "split"}
-        label="SPLIT"
-        title="Watchlist + chart (TC2000 style)"
+        label={splitLabel}
+        title={splitTitle}
         onClick={() => onModeChange("split")}
       />
       <ModeButton
         active={mode === "list"}
-        label="LIST"
-        title="Full-width watchlist for reading"
+        label={listLabel}
+        title="Full-width MarketWatch"
         onClick={() => onModeChange("list")}
       />
       <ModeButton
         active={mode === "chart"}
-        label="CHART"
+        label={chartLabel}
         title="Full-screen chart (Esc to exit)"
         onClick={() => onModeChange("chart")}
       />
       {mode === "chart" && (
-        <span className="text-[10px] text-[var(--text-muted)] ml-auto">Esc · SPLIT to restore</span>
+        <span className="text-[10px] text-[var(--text-muted)] ml-auto">
+          Esc · {variant === "tos" ? "FLEX" : "SPLIT"} to restore
+        </span>
       )}
     </div>
   );

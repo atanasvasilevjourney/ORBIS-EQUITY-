@@ -7,7 +7,8 @@ import { ThemeToggle } from "@/components/cards/ThemeToggle";
 
 const NAV_PRIMARY = [
   { href: "/", label: "COCKPIT", title: "Market cockpit" },
-  { href: "/screener", label: "WATCHLIST", title: "Watchlist screener" },
+  { href: "/trade", label: "TRADE", title: "MarketWatch + Charts (thinkorswim-style)" },
+  { href: "/screener", label: "WATCHLIST", title: "Watchlist screener (TC2000 layout)" },
   { href: "/loop", label: "LOOP", title: "Production paper book" },
   { href: "/rotate", label: "ROTATE", title: "Research sleeve" },
   { href: "/quantropy", label: "QUANT", title: "In-sample analytics" },

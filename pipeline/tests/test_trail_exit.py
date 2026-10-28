@@ -1,5 +1,8 @@
 """Tests for SMA20 trail + cooldown."""
-from pipeline.compute.trail_exit import CooldownTracker, TrailState
+import numpy as np
+
+from pipeline.compute.loop_xs_selection import xs_trail_exit
+from pipeline.compute.trail_exit import CooldownTracker, TrailState, replay_wide_stop
 
 
 def test_trail_moves_to_breakeven_then_sma():
@@ -27,6 +30,21 @@ def test_cooldown_skips_after_two_losses():
     assert not cd.on_entry_attempt()
     # Subsequent allowed
     assert cd.on_entry_attempt()
+
+
+def test_replay_exits_a_giveback_and_ignores_a_red_day_before_the_trail():
+    climb = np.linspace(100.0, 130.0, 30)
+    closes = np.concatenate([climb, [128.0, 90.0]])
+    highs = closes.copy()
+    sma = np.concatenate([np.full(19, np.nan), np.convolve(closes, np.ones(20) / 20, mode="valid")])
+    # A single down close while the trail is still inactive does not arm a stop.
+    early_stop = replay_wide_stop(100.0, [101.0], [99.0], [np.nan])
+    assert xs_trail_exit(99.0, early_stop) is None
+    stop = replay_wide_stop(100.0, highs[:-1], closes[:-1], sma[:-1])
+    assert stop > 100.0
+    assert xs_trail_exit(float(closes[-2]), stop) is None
+    crashed = replay_wide_stop(100.0, highs, closes, sma)
+    assert xs_trail_exit(float(closes[-1]), crashed) is not None
 
 
 def test_cooldown_resets_on_win():

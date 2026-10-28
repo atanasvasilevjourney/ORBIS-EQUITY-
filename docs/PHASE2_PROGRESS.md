@@ -39,7 +39,9 @@
 
 ## Shipped (relative strength on the XS sleeve)
 
-- **`pipeline/compute/relative_strength.py`** — 63-session cross-sectional percentile. No look-ahead past `as_of`.
-- **`portfolio_loop_xs`** ranks rebalance targets by that percentile and records `rsLookback` / `rsCoverage` on the harness.
-- LOOP UI XS book shows sector, reason, and the lookback used.
+- **`pipeline/compute/relative_strength.py`** — 63-session sector residual. SPY aligns the calendar. No look-ahead past `as_of`.
+- The residual sort turns on only when coverage is at least 80%. Otherwise the gapper list remains the fallback.
+- A +4% day breaks ties. A down close does not sell. Exits are the wide SMA20 trail or the 5-session rebalance.
+- `paper_book_xs.n` is the percentile the desk shows as RS.
+- **`pipeline/compute/rs_lookback.py`** scores lookbacks 42 / 63 / 126 with and without a 21-session skip. Production stays at 63 / skip 0 until that gate names a winner.
 - Migration numeric prefixes are guarded in `pipeline/tests/test_migration_versions.py` (known historical collisions stay frozen).

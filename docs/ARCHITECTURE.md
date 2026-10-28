@@ -31,7 +31,7 @@ Nightly order is `.github/workflows/nightly-pipeline.yml`: universe and prices, 
 | Book | Engine | What it trades on paper |
 |------|--------|-------------------------|
 | Donchian LOOP | `pipeline.compute.portfolio_loop` | Close above the prior 55-day Donchian high and 20-day VWAP. Equal weight, sector caps. |
-| XS watchlist | `pipeline.compute.portfolio_loop_xs` | GREEN names with rank ≥ 60, ordered by 63-session relative strength versus the tradable universe. Same caps. SPY regime gate. |
+| XS watchlist | `pipeline.compute.portfolio_loop_xs` | Sector-residual 63-session strength when coverage is at least 80%. A +4% day breaks ties. Wide trail or 5-session rebalance. SPY regime gate. |
 
 They write different tables (`paper_*` vs `paper_*_xs`). The XS sleeve does not resize the Donchian book.
 
