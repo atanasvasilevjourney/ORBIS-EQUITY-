@@ -72,8 +72,9 @@ test("xs sleeve shows the relative-strength reason", async ({ page }) => {
               entry: 100,
               last: 110,
               sector: "Technology",
-              reason: "XS rank 70 · RS 88 · watch",
+              reason: "Sector RS 88 · +4% day",
               rank: 70,
+              rsPct: 88,
               unrealizedPnlUsd: 50,
               daysHeld: 3,
               openedAt: "2026-10-26",
@@ -91,8 +92,10 @@ test("xs sleeve shows the relative-strength reason", async ({ page }) => {
   await xs.click();
   await expect(page.getByRole("link", { name: "NVDA" })).toBeVisible();
   await expect(page.getByText("Technology")).toBeVisible();
-  await expect(page.getByText("XS rank 70 · RS 88 · watch")).toBeVisible();
-  await expect(page.getByText(/63\s*-session relative strength/)).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "RS" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "88", exact: true })).toBeVisible();
+  await expect(page.getByText("Sector RS 88 · +4% day")).toBeVisible();
+  await expect(page.getByText(/63\s*-session residual strength/)).toBeVisible();
   if (process.env.WALKTHROUGH_SHOT) {
     await page.screenshot({ path: process.env.WALKTHROUGH_SHOT, fullPage: true });
   }

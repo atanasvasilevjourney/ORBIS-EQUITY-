@@ -12,25 +12,26 @@ nightly Optuna.
 | Regime | Trade with structure | **Market:** SPY SMA200 + vol pctl (`market_regime`); **Ticker:** dual-KAMA + EWMAC + **ADX** |
 | Momentum | Move has legs | `z_mom`, `f_ewmac` |
 | Vol / risk | Risk governor | **ATR×2.5 stop + 1.25% equity risk sizing** (`atr_risk`) |
-| Relative strength | Rank vs universe | **XS sleeve** — 63-session total return, cross-sectional percentile (`pipeline/compute/relative_strength.py`). Donchian LOOP is unchanged. |
+| Relative strength | Rank vs universe | **XS sleeve** — 63-session sector residual (`pipeline/compute/relative_strength.py`). A +4% day breaks ties. Donchian LOOP is unchanged. |
 | Entry | Timing | ATR compression breakout + volume; **too_late / wait_pullback** vetoes |
 | Exit | Hold winners | Prefer **SMA20 wide trail** (+ BE@+3%, 2-loss cooldown); else exit-on-RED |
 
 ## Relative strength (XS sleeve)
 
-`pipeline/compute/relative_strength.py` ranks each tradable name by its
-63-session total return against the rest of the LOOP universe.
+`pipeline/compute/relative_strength.py` scores each tradable name by its
+63-session return minus the equal-weight return of its sector. SPY aligns the
+calendar. Subtracting SPY alone does not reorder names that share those dates.
 
-- Percentile uses average rank. The strongest name in a set of two or more is 100.
-- A one-name universe scores 50 (no peers).
-- Bars after `as_of` are dropped. Short histories are omitted, not filled.
-- `select_xs_targets` leads with `rs_pct` when any eligible row has it. Names
-  without a percentile sort after measured names. If nobody has `rs_pct`, the
-  old quality-rank order is unchanged.
-- Nightly `portfolio_loop_xs` writes the percentile into the entry reason
-  (`RS 88`) and stores `rsLookback` / `rsCoverage` on the run harness.
-- Quality rank, GREEN state, posture, and the SPY regime gate still decide
-  eligibility. Relative strength only orders the book.
+- The percentile leads the XS sort only when at least 80% of the in-universe
+  rows have a score. Below that, the sleeve falls back to the +4% gapper list.
+- A +4% day with 2× volume (`state == 1`) breaks ties. It does not decide eligibility
+  once coverage is wide enough.
+- A down close does not sell. Exits are the wide SMA20 trail, or leaving the
+  top basket on the 5-session rebalance.
+- `paper_book_xs.n` stores the percentile. The desk shows it as RS.
+- Lookbacks 42 / 63 / 126, each with and without a 21-session skip, are scored
+  by `pipeline.compute.rs_lookback.evaluate_rs_lookbacks`. Production stays at
+  63 / skip 0 until that gate returns a winner. Donchian LOOP is a separate book.
 
 ## Dual-KAMA regime
 

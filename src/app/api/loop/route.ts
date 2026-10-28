@@ -325,6 +325,7 @@ export async function GET() {
         sector: string | null;
         reason: string | null;
         rank: number | null;
+        rsPct: number | null;
         unrealizedPnlUsd: number | null;
         daysHeld: number | null;
         openedAt: string | null;
@@ -365,6 +366,7 @@ export async function GET() {
             sector: r.sector,
             reason: r.reason,
             rank: r.rank,
+            rsPct: r.n,
             unrealizedPnlUsd: r.unrealized_pnl_usd,
             daysHeld: r.days_held,
             openedAt: r.opened_at,

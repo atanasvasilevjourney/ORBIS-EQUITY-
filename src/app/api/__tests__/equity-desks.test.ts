@@ -278,10 +278,10 @@ describe("GET /api/loop", () => {
               entry: 100,
               last: 110,
               stop: null,
-              n: null,
+              n: 88,
               risk_usd: null,
               sector: "Technology",
-              reason: "XS rank 70 · RS 88 · watch",
+              reason: "Sector RS 88 · +4% day",
               rank: 70,
               breakout: null,
               green: null,
@@ -307,7 +307,8 @@ describe("GET /api/loop", () => {
     );
     expect(body.xs.summary.runId).toBe("xs-1");
     expect(body.xs.book[0].ticker).toBe("NVDA");
-    expect(body.xs.book[0].reason).toMatch(/RS 88/);
+    expect(body.xs.book[0].reason).toMatch(/Sector RS 88/);
+    expect(body.xs.book[0].rsPct).toBe(88);
     expect(body.xs.harness.config.rsLookback).toBe(63);
   });
 

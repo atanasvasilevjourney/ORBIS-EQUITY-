@@ -9,6 +9,7 @@ Design notes from their iteration log:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Sequence
 
 import numpy as np
 
@@ -49,6 +50,26 @@ class TrailState:
             self.current_sl = max(self.current_sl, new_sl)
 
         return self.current_sl
+
+
+def replay_wide_stop(
+    entry: float,
+    highs: Sequence[float],
+    closes: Sequence[float],
+    sma20: Sequence[float],
+) -> float:
+    """Replay the wide trail across a hold. Returns the stop after the last bar."""
+    if entry <= 0:
+        return 0.0
+    state = TrailState(entry_price=float(entry), current_sl=0.0, peak_price=float(entry))
+    stop = 0.0
+    for high, close, sma in zip(highs, closes, sma20):
+        if not np.isfinite(close):
+            continue
+        bar_high = float(high) if np.isfinite(high) else float(close)
+        bar_sma = float(sma) if np.isfinite(sma) else 0.0
+        stop = state.update(bar_high, float(close), bar_sma)
+    return float(stop)
 
 
 @dataclass
