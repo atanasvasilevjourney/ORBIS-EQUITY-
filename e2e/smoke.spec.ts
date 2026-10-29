@@ -1,9 +1,11 @@
 import { test, expect } from "@playwright/test";
 
-/** Core routes exercised in smoke (subset of primary nav). */
-const PAGES = ["/", "/screener", "/triangle", "/ema200", "/fundamentals", "/health", "/earnings-news"];
-/** Linked from fundamentals module, not top nav. */
-const EXTRA_SMOKE_PAGES = ["/fundamentals/screener"];
+/** Core routes exercised in smoke (primary nav + a few module desks). */
+const PAGES = ["/", "/trade", "/screener", "/loop", "/fundamentals", "/health", "/earnings-news"];
+/** Linked from fundamentals module or MORE menu, not all in the top pill row. */
+const EXTRA_SMOKE_PAGES = ["/fundamentals/screener", "/triangle", "/ema200"];
+/** Primary nav pills (desktop); traversed in order in the nav walk test. */
+const PRIMARY_NAV_PAGES = ["/trade", "/screener", "/loop", "/fundamentals"];
 
 for (const path of [...PAGES, ...EXTRA_SMOKE_PAGES]) {
   test(`page ${path} loads without error`, async ({ page }) => {
@@ -26,7 +28,7 @@ test("nav links traverse all dashboard pages", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 900 });
   await page.goto("/");
 
-  for (const path of PAGES.slice(1)) {
+  for (const path of PRIMARY_NAV_PAGES) {
     const pattern = new RegExp(`${path.replace("/", "\\/")}(\\?|$)`);
     await expect(async () => {
       const link = page.locator(`nav a[href="${path}"]`).first();
@@ -34,6 +36,7 @@ test("nav links traverse all dashboard pages", async ({ page }) => {
         await page.getByRole("button", { name: /MORE/ }).click();
       }
       await expect(link).toBeVisible();
+      await link.scrollIntoViewIfNeeded();
       await link.click();
       await expect(page).toHaveURL(pattern);
     }).toPass({ timeout: 15_000 });
