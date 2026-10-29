@@ -294,33 +294,6 @@ export function TradingChart({
       chart.timeScale().fitContent();
       setChartReady((n) => n + 1);
 
-      if (crosshairCbRef.current) {
-        chart.subscribeCrosshairMove((param) => {
-          const cb = crosshairCbRef.current;
-          if (!cb) return;
-          if (!param.time) {
-            cb(null);
-            return;
-          }
-          const data = param.seriesData.get(candleSeries) as
-            | { open?: number; high?: number; low?: number; close?: number }
-            | undefined;
-          if (!data || data.open == null) {
-            cb(null);
-            return;
-          }
-          const idx = candles.findIndex((c) => c.time === param.time);
-          const vol = idx >= 0 ? candles[idx].volume : undefined;
-          cb({
-            open: data.open,
-            high: data.high ?? data.open,
-            low: data.low ?? data.open,
-            close: data.close ?? data.open,
-            volume: vol,
-          });
-        });
-      }
-
       ro = new ResizeObserver(() => {
         if (!chartRef.current || !wrap.current) return;
         const w = wrap.current.clientWidth;
@@ -346,6 +319,40 @@ export function TradingChart({
       seriesRef.current = null;
     };
   }, [candles, sma, swing, vwapSession, vwapAnchored, segments, height, theme]);
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    const series = seriesRef.current;
+    if (!chart || !series || chartReady === 0 || !crosshairCbRef.current) return;
+
+    const handler = (param: import("lightweight-charts").MouseEventParams) => {
+      const cb = crosshairCbRef.current;
+      if (!cb) return;
+      if (!param.time) {
+        cb(null);
+        return;
+      }
+      const raw = param.seriesData.get(series) as
+        | { open?: number; high?: number; low?: number; close?: number }
+        | undefined;
+      if (!raw || raw.open == null) {
+        cb(null);
+        return;
+      }
+      const idx = candles.findIndex((c) => c.time === param.time);
+      const vol = idx >= 0 ? candles[idx].volume : undefined;
+      cb({
+        open: raw.open,
+        high: raw.high ?? raw.open,
+        low: raw.low ?? raw.open,
+        close: raw.close ?? raw.open,
+        volume: vol,
+      });
+    };
+
+    chart.subscribeCrosshairMove(handler);
+    return () => chart.unsubscribeCrosshairMove(handler);
+  }, [chartReady, candles]);
 
   useEffect(() => {
     const series = seriesRef.current;

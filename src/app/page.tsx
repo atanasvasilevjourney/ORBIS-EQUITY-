@@ -523,8 +523,8 @@ export default function Home() {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {([
           {
-            href: "/screener", title: "WATCHLIST", badge: "MODULE 1",
-            subtitle: "Day strength and relative volume — scan only", accent: "var(--module-1)", source: "EOD",
+            href: "/trade", title: "TRADE", badge: "MODULE 1",
+            subtitle: "thinkorswim-style MarketWatch + Charts (scan only)", accent: "var(--module-1)", source: "EOD",
             metrics: [
               { label: "POSTURE", value: d?.posture ?? "—", color: postureColor },
               { label: "ON LIST", value: d?.breadth ? d.breadth.greens : "—", color: "var(--accent-bull)" },
