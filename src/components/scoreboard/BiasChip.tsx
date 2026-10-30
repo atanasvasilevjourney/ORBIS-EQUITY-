@@ -23,7 +23,7 @@ export function BiasChip({ state, rank, entryTiming }: BiasChipProps) {
 
   return (
     <span
-      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-terminal font-semibold"
+      className="inline-flex items-center gap-1.5 whitespace-nowrap px-2 py-0.5 rounded text-xs font-terminal font-semibold"
       style={{ backgroundColor: `color-mix(in srgb, ${color} 15%, transparent)`, color }}
     >
       {label} {rank}

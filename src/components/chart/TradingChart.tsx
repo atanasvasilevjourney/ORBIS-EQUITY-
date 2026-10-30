@@ -55,7 +55,10 @@ type Props = {
   levels: ChartLevel[];
   /** Pattern geometry (triangle legs, channels) drawn as line series. */
   segments?: ChartSegment[];
+  /** Fixed pane height. Ignored when `fill` is set. */
   height?: number;
+  /** Size from the parent instead of a fixed pixel height. */
+  fill?: boolean;
   /** Fired on crosshair move (TOS-style OHLC readout). */
   onCrosshairBar?: (bar: CrosshairBar | null) => void;
 };
@@ -91,6 +94,7 @@ export function TradingChart({
   levels,
   segments,
   height = 420,
+  fill = false,
   onCrosshairBar,
 }: Props) {
   const crosshairCbRef = useRef(onCrosshairBar);
@@ -112,12 +116,12 @@ export function TradingChart({
 
     setChartReady(0);
     let disposed = false;
-    let ro: ResizeObserver | null = null;
     let raf = 0;
 
     const mount = async () => {
       const width = el.clientWidth;
-      if (width < 8) {
+      const paneHeight = el.clientHeight;
+      if (width < 8 || paneHeight < 8) {
         raf = requestAnimationFrame(() => void mount());
         return;
       }
@@ -138,24 +142,26 @@ export function TradingChart({
       const bg = cssVar("--card-bg", "#0d1117");
 
       const chart = createChart(el, {
-        width: el.clientWidth,
-        height,
+        autoSize: true,
+        width,
+        height: paneHeight,
         layout: {
           background: { type: ColorType.Solid, color: bg },
           textColor: text,
           fontFamily: "JetBrains Mono, monospace",
-          fontSize: 11,
+          fontSize: 12,
         },
         grid: {
           vertLines: { color: grid },
           horzLines: { color: grid },
         },
         crosshair: { mode: CrosshairMode.Normal },
-        rightPriceScale: { borderColor: grid },
+        rightPriceScale: { borderColor: grid, minimumWidth: 68 },
         timeScale: {
           borderColor: grid,
           timeVisible: typeof candles[0].time === "number",
           secondsVisible: false,
+          rightOffset: 4,
         },
       });
       chartRef.current = chart;
@@ -293,13 +299,6 @@ export function TradingChart({
 
       chart.timeScale().fitContent();
       setChartReady((n) => n + 1);
-
-      ro = new ResizeObserver(() => {
-        if (!chartRef.current || !wrap.current) return;
-        const w = wrap.current.clientWidth;
-        if (w >= 8) chartRef.current.resize(w, height);
-      });
-      ro.observe(el);
     };
 
     void mount();
@@ -307,7 +306,6 @@ export function TradingChart({
     return () => {
       disposed = true;
       if (raf) cancelAnimationFrame(raf);
-      ro?.disconnect();
       if (seriesRef.current) {
         for (const pl of priceLinesRef.current) {
           seriesRef.current.removePriceLine(pl as never);
@@ -318,7 +316,7 @@ export function TradingChart({
       chartRef.current = null;
       seriesRef.current = null;
     };
-  }, [candles, sma, swing, vwapSession, vwapAnchored, segments, height, theme]);
+  }, [candles, sma, swing, vwapSession, vwapAnchored, segments, theme]);
 
   useEffect(() => {
     const chart = chartRef.current;
@@ -388,12 +386,15 @@ export function TradingChart({
     })();
   }, [levelsSig, levels, candles.length, theme, chartReady]);
 
+  const frameStyle = fill ? undefined : { height };
+  const frameClass = fill ? "h-full w-full min-h-0 min-w-0" : "w-full min-w-0";
+
   if (candles.length < 2) {
     return (
-      <div className="flex items-center justify-center text-xs font-terminal text-[var(--text-muted)]" style={{ height }}>
+      <div className={`flex items-center justify-center text-xs font-terminal text-[var(--text-muted)] ${frameClass}`} style={frameStyle}>
         No candles
       </div>
     );
   }
-  return <div ref={wrap} className="w-full min-w-0" style={{ height }} />;
+  return <div ref={wrap} className={frameClass} style={frameStyle} />;
 }

@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="h-dvh overflow-hidden" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -26,13 +26,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body className="app-shell min-h-screen antialiased">
+      <body className="app-shell flex h-dvh min-h-0 flex-col overflow-hidden antialiased">
         <ThemeProvider>
           <DeskUniverseShell>
             <Nav />
             <DataHonestyBar />
             <DeskUniverseStrip />
-            <main className="page-enter mx-auto max-w-[1600px] px-3 sm:px-5 pb-10">{children}</main>
+            <main className="page-enter mx-auto flex w-full min-h-0 max-w-[1600px] flex-1 flex-col overflow-x-hidden overflow-y-auto px-3 sm:px-4">
+              {children}
+            </main>
             <CommandPalette />
           </DeskUniverseShell>
         </ThemeProvider>

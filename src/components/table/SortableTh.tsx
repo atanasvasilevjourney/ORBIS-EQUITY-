@@ -7,6 +7,7 @@ type Props<K extends string> = {
   label: string;
   levels: SortLevel<K>[];
   align?: "left" | "right";
+  className?: string;
   onSort: (key: K, shiftKey: boolean) => void;
 };
 
@@ -15,6 +16,7 @@ export function SortableTh<K extends string>({
   label,
   levels,
   align = "left",
+  className = "",
   onSort,
 }: Props<K>) {
   const idx = levels.findIndex((l) => l.key === columnKey);
@@ -22,9 +24,9 @@ export function SortableTh<K extends string>({
   const dir: SortDir | null = active ? levels[idx].dir : null;
   return (
     <th
-      className={`px-3 py-2 cursor-pointer hover:text-[var(--text-primary)] select-none ${
+      className={`px-3 py-2 cursor-pointer hover:text-[var(--text-primary)] select-none whitespace-nowrap ${
         align === "right" ? "text-right" : "text-left"
-      } ${active ? "text-[var(--accent-info)]" : ""}`}
+      } ${active ? "text-[var(--accent-info)]" : ""} ${className}`}
       onClick={(e) => onSort(columnKey, e.shiftKey)}
       title={active ? "Click to flip · Shift+click to add tie-breaker" : "Click to sort · Shift+click multi-sort"}
     >

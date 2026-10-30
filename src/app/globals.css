@@ -11,7 +11,9 @@ body {
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   background: var(--gradient-mesh), var(--surface);
   background-attachment: fixed;
 }
@@ -73,6 +75,23 @@ body {
 
   .desk-table td {
     @apply px-3 py-2;
+  }
+
+  /* Split desk: keep columns on one line so 100% zoom does not wrap chips or clip tickers. */
+  .desk-table-fit {
+    @apply w-max min-w-full;
+  }
+
+  .desk-table-fit thead tr {
+    letter-spacing: 0.06em;
+    font-size: 11px;
+  }
+
+  .desk-table-fit th,
+  .desk-table-fit td {
+    white-space: nowrap;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
   }
 
   .sleeve-tab {
