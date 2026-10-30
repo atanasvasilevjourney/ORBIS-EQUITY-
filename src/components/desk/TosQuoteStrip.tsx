@@ -48,7 +48,7 @@ export function TosQuoteStrip({ row, crosshair, interval }: Props) {
   const vol = crosshair?.volume;
 
   return (
-    <div className="px-3 py-2 border-b border-[var(--border)] bg-[var(--surface-alt)] flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-terminal">
+    <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--border)] bg-[var(--surface-alt)] px-3 py-1.5 text-[11px] font-terminal">
       <span className="font-bold text-[var(--text-primary)]">{row.symbol}</span>
       <span className="text-[var(--text-muted)] truncate max-w-[140px] hidden sm:inline">{row.companyName}</span>
       <span>

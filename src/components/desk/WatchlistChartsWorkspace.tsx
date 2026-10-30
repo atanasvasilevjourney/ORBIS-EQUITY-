@@ -5,9 +5,6 @@ import { ScoreboardRow, type ScreenerRow } from "@/components/scoreboard/Scorebo
 import { MultiSortBar } from "@/components/table/MultiSortBar";
 import { SortableTh } from "@/components/table/SortableTh";
 import { useMultiSort } from "@/hooks/useMultiSort";
-import { ModuleHeader } from "@/components/ui/ModuleHeader";
-import { ModulePanel } from "@/components/ui/ModulePanel";
-import { MetricCard } from "@/components/ui/MetricCard";
 import { FilterChip } from "@/components/ui/FilterChip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FocusUniverseModuleBanner } from "@/components/universe/FocusUniverseModuleBanner";
@@ -189,52 +186,56 @@ export function WatchlistChartsWorkspace({ variant = "tc2000" }: Props) {
   const chartTitle = isTos ? "CHARTS" : "CHART · EMA RIBBON";
 
   return (
-    <div className="py-6 space-y-4">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden py-2">
       <FocusUniverseModuleBanner allowIndexDesk />
 
-      <ModuleHeader
-        module="MODULE 1"
-        title={isTos ? "TRADE" : "WATCHLIST"}
-        description={
-          isTos
-            ? "thinkorswim-style flex: MarketWatch left, Charts right with quote strip and crosshair OHLC. ↑↓ change symbol; D daily; 5 five-minute. Scan only — no live order entry."
-            : "TC2000-style split: watchlist left, chart right. ⛶ FULL or LAYOUT → CHART for chart-only; LIST for full-width reading. Click column headers to sort; shift+click multi-sort. Scan only — orders come from other modules."
-        }
-        source="EOD PRICES"
-        accent="var(--module-1)"
-      />
-
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-        <MetricCard
-          label="POSTURE"
-          value={summary?.posture ?? "—"}
-          sub={summary?.postureLabel ?? undefined}
-          color={postureColor}
-          bar={typeof summary?.posture === "number" ? summary.posture : undefined}
-          barColor={postureColor}
-        />
-        <MetricCard
-          label="ADVANCERS"
-          value={summary?.breadth?.advancersPct != null ? `${summary.breadth.advancersPct}%` : "—"}
-          sub={summary?.breadth ? `${summary.breadth.total} names` : undefined}
-          color="var(--accent-bull)"
-          bar={summary?.breadth?.advancersPct}
-          barColor="var(--accent-bull)"
-        />
-        <MetricCard label="ON LIST" value={summary?.breadth?.greens ?? "—"} sub="Day + volume" color="var(--accent-bull)" />
-        <MetricCard label="BEST" value={summary?.bestSector ?? "—"} sub="Avg day" color="var(--accent-bull)" />
-        <MetricCard label="WORST" value={summary?.worstSector ?? "—"} sub="Avg day" color="var(--accent-bear)" />
+      <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-x-4 gap-y-1">
+        <h1 className="font-display text-lg font-semibold tracking-tight text-[var(--text-primary)]">
+          {isTos ? "TRADE" : "WATCHLIST"}
+        </h1>
+        <p
+          className="min-w-0 text-[11px] font-terminal text-[var(--text-muted)]"
+          title={
+            isTos
+              ? "MarketWatch left, chart right. ↑↓ symbol, D daily, 5 five-minute. Scan only."
+              : "Watchlist left, chart right. FULL for chart-only. Scan only."
+          }
+        >
+          {isTos ? "MarketWatch + chart · ↑↓ · D / 5" : "Scan + chart · click headers to sort"}
+        </p>
+        <div className="ml-auto flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-terminal">
+          <span>
+            <span className="text-[var(--text-muted)]">POSTURE </span>
+            <span style={{ color: postureColor }}>{summary?.posture ?? "—"}</span>
+          </span>
+          <span>
+            <span className="text-[var(--text-muted)]">ADV </span>
+            <span className="text-[var(--accent-bull)]">
+              {summary?.breadth?.advancersPct != null ? `${summary.breadth.advancersPct}%` : "—"}
+            </span>
+          </span>
+          <span>
+            <span className="text-[var(--text-muted)]">ON LIST </span>
+            <span className="text-[var(--accent-bull)]">{summary?.breadth?.greens ?? "—"}</span>
+          </span>
+          <span className="hidden sm:inline">
+            <span className="text-[var(--text-muted)]">BEST </span>
+            <span className="text-[var(--accent-bull)]">{summary?.bestSector ?? "—"}</span>
+          </span>
+          <span className="hidden md:inline">
+            <span className="text-[var(--text-muted)]">WORST </span>
+            <span className="text-[var(--accent-bear)]">{summary?.worstSector ?? "—"}</span>
+          </span>
+        </div>
       </div>
 
       {summary?.briefText && (
-        <ModulePanel title="SESSION BRIEF" badge="AI" accent="var(--module-1)" source="RULE-BASED">
-          <p className="text-sm font-terminal text-[var(--text-secondary)] leading-relaxed">
-            {summary.briefText}
-          </p>
-        </ModulePanel>
+        <p className="shrink-0 truncate text-[11px] font-terminal text-[var(--text-secondary)]" title={summary.briefText}>
+          {summary.briefText}
+        </p>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-2">
         {DIRECTION_FILTERS.map((f) => (
           <FilterChip
             key={f.key}
@@ -263,7 +264,7 @@ export function WatchlistChartsWorkspace({ variant = "tc2000" }: Props) {
         ))}
       </div>
 
-      <p className="text-[10px] font-terminal text-[var(--text-muted)]">
+      <p className="shrink-0 text-[11px] font-terminal text-[var(--text-muted)]">
         {sortedRows.length} names · {summary?.asOfDate ?? "—"} EOD · selected {selectedRow?.symbol ?? "—"}
       </p>
 
@@ -276,34 +277,40 @@ export function WatchlistChartsWorkspace({ variant = "tc2000" }: Props) {
           variant={isTos ? "tos" : "default"}
           listTitle={listTitle}
           chartTitle={chartTitle}
-          workspaceMinHeight={640}
+          fit
           list={
-            <div className="desk-table-wrap">
+            <div className="min-w-0">
               <MultiSortBar levels={levels} labels={SCREENER_SORT_LABELS} onClear={clearSort} />
-              <table className="desk-table">
-                <thead className="sticky top-0 z-10">
-                  <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--panel-border)] bg-[var(--panel-header)]">
-                    <SortableTh columnKey="symbol" label="TICKER" levels={levels} onSort={onHeaderClick} />
+              <table className="desk-table desk-table-fit">
+                <thead className="sticky top-0 z-20">
+                  <tr className="border-b border-[var(--panel-border)] bg-[var(--panel-header)] text-[var(--text-muted)]">
+                    <SortableTh
+                      columnKey="symbol"
+                      label="TICKER"
+                      levels={levels}
+                      onSort={onHeaderClick}
+                      className="sticky left-0 z-30 bg-[var(--panel-header)]"
+                    />
                     <th className="text-left px-3 py-2">STATUS</th>
                     <SortableTh columnKey="orbisScore" label="ORBIS" levels={levels} align="right" onSort={onHeaderClick} />
                     <SortableTh columnKey="dayPct" label="DAY" levels={levels} align="right" onSort={onHeaderClick} />
                     <SortableTh columnKey="relVolume" label="REL VOL" levels={levels} align="right" onSort={onHeaderClick} />
                     <SortableTh columnKey="pctFromHigh" label="OFF HIGH" levels={levels} align="right" onSort={onHeaderClick} />
-                    <SortableTh columnKey="sector" label="SECTOR" levels={levels} onSort={onHeaderClick} />
                     <SortableTh columnKey="price" label="LAST" levels={levels} align="right" onSort={onHeaderClick} />
-                    <th className="text-left px-3 py-2">BADGES</th>
+                    <SortableTh columnKey="sector" label="SECTOR" levels={levels} onSort={onHeaderClick} />
+                    {layoutMode === "list" && <th className="text-left px-3 py-2">BADGES</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={9} className="px-3 py-8 text-center text-[var(--text-muted)]">
+                      <td colSpan={layoutMode === "list" ? 9 : 8} className="px-3 py-8 text-center text-[var(--text-muted)]">
                         Loading scoreboard…
                       </td>
                     </tr>
                   ) : sortedRows.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-3 py-4">
+                      <td colSpan={layoutMode === "list" ? 9 : 8} className="px-3 py-4">
                         <EmptyState
                           title="No names on this scan"
                           detail="On list needs a day of at least +4% and volume at least 2× the prior 50-day average. Switch to All to see every name sorted by distance from the session high."
@@ -317,6 +324,9 @@ export function WatchlistChartsWorkspace({ variant = "tc2000" }: Props) {
                         row={r}
                         selected={selectedRow?.symbol === r.symbol}
                         onSelect={setSelected}
+                        showCompany={layoutMode === "list"}
+                        showBadges={layoutMode === "list"}
+                        stickySymbol
                       />
                     ))
                   )}
@@ -330,8 +340,7 @@ export function WatchlistChartsWorkspace({ variant = "tc2000" }: Props) {
               companyName={selectedRow?.companyName}
               interval={chartInterval}
               onIntervalChange={setChartInterval}
-              fill={layoutMode === "chart"}
-              height={layoutMode === "chart" ? undefined : 520}
+              fill
               showQuoteStrip={isTos}
               quoteRow={selectedRow}
             />

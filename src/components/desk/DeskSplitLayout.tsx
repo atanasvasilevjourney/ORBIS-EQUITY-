@@ -11,8 +11,13 @@ type Props = {
   chartTitle?: string;
   list: React.ReactNode;
   chart: React.ReactNode;
-  /** Height of the split workspace (list + chart scroll inside). */
+  /** Height of the split workspace (list + chart scroll inside). Ignored when `fit` is set. */
   workspaceMinHeight?: number;
+  /**
+   * Fill the parent instead of a fixed pixel height.
+   * Keeps MarketWatch and the chart inside the window at 100% zoom.
+   */
+  fit?: boolean;
   /** thinkorswim-style layout button labels */
   variant?: "default" | "tos";
 };
@@ -52,6 +57,7 @@ export function DeskSplitLayout({
   list,
   chart,
   workspaceMinHeight = 560,
+  fit = false,
   variant = "default",
 }: Props) {
   const splitLabel = variant === "tos" ? "FLEX" : "SPLIT";
@@ -67,8 +73,12 @@ export function DeskSplitLayout({
     return () => window.removeEventListener("keydown", onKey);
   }, [mode, onModeChange]);
 
+  const frameClass = fit
+    ? "h-full min-h-0 flex-1"
+    : "";
+
   const toolbar = (
-    <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-[var(--border)] bg-[var(--panel-header)]">
+    <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-2 border-b border-[var(--border)] bg-[var(--panel-header)] px-3 py-2">
       <span className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest mr-2">LAYOUT</span>
       <ModeButton
         active={mode === "split"}
@@ -107,34 +117,43 @@ export function DeskSplitLayout({
 
   if (mode === "list") {
     return (
-      <div className="rounded border border-[var(--border)] bg-[var(--card-bg)] flex flex-col" style={{ minHeight: workspaceMinHeight }}>
+      <div
+        className={`flex flex-col overflow-hidden rounded border border-[var(--border)] bg-[var(--card-bg)] ${frameClass}`}
+        style={fit ? undefined : { minHeight: workspaceMinHeight }}
+      >
         {toolbar}
-        <div className="px-3 py-1 text-[10px] font-terminal text-[var(--text-muted)] tracking-widest border-b border-[var(--border)]">
+        <div className="shrink-0 border-b border-[var(--border)] px-3 py-1 text-[10px] font-terminal tracking-widest text-[var(--text-muted)]">
           {listTitle}
         </div>
-        <div className="flex-1 min-h-0 overflow-auto">{list}</div>
+        <div className="min-h-0 min-w-0 flex-1 overflow-auto">{list}</div>
       </div>
     );
   }
 
   return (
     <div
-      className="rounded border border-[var(--border)] bg-[var(--card-bg)] flex flex-col min-h-0"
-      style={{ minHeight: workspaceMinHeight }}
+      className={`flex min-h-0 min-w-0 flex-col overflow-hidden rounded border border-[var(--border)] bg-[var(--card-bg)] ${frameClass}`}
+      style={fit ? undefined : { minHeight: workspaceMinHeight }}
     >
       {toolbar}
       <div
-        className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(280px,38%)_1fr]"
-        style={{ minHeight: workspaceMinHeight - 44 }}
+        className={`grid min-h-0 min-w-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(16rem,40%)_minmax(0,1fr)] ${
+          fit ? "grid-rows-[minmax(0,40%)_minmax(0,1fr)] lg:grid-rows-1" : ""
+        }`}
+        style={fit ? undefined : { minHeight: workspaceMinHeight - 44 }}
       >
-        <div className="flex flex-col min-h-0 border-b lg:border-b-0 lg:border-r border-[var(--border)] max-h-[45vh] lg:max-h-none">
-          <div className="px-3 py-1 text-[10px] font-terminal text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)] shrink-0">
+        <div
+          className={`flex min-h-0 min-w-0 flex-col overflow-hidden border-b border-[var(--border)] lg:border-b-0 lg:border-r ${
+            fit ? "" : "max-h-[45vh] lg:max-h-none"
+          }`}
+        >
+          <div className="shrink-0 border-b border-[var(--border)] bg-[var(--surface-alt)] px-3 py-1 text-[10px] font-terminal tracking-widest text-[var(--text-muted)]">
             {listTitle}
           </div>
-          <div className="flex-1 min-h-0 overflow-auto">{list}</div>
+          <div className="min-h-0 min-w-0 flex-1 overflow-auto">{list}</div>
         </div>
-        <div className="flex flex-col min-h-0 min-h-[320px] lg:min-h-0">
-          <div className="px-3 py-1 text-[10px] font-terminal text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)] shrink-0 flex items-center justify-between gap-2">
+        <div className={`flex min-h-0 min-w-0 flex-col overflow-hidden ${fit ? "" : "min-h-[320px] lg:min-h-0"}`}>
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] bg-[var(--surface-alt)] px-3 py-1 text-[10px] font-terminal tracking-widest text-[var(--text-muted)]">
             <span>{chartTitle}</span>
             <button
               type="button"
@@ -145,7 +164,7 @@ export function DeskSplitLayout({
               ⛶ FULL
             </button>
           </div>
-          <div className="flex-1 min-h-0">{chart}</div>
+          <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{chart}</div>
         </div>
       </div>
     </div>

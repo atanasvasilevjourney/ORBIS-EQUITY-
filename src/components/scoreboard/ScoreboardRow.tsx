@@ -52,10 +52,19 @@ export function ScoreboardRow({
   row,
   selected,
   onSelect,
+  showCompany = true,
+  showBadges = true,
+  stickySymbol = false,
 }: {
   row: ScreenerRow;
   selected?: boolean;
   onSelect?: (symbol: string) => void;
+  /** Hide the company name so the split pane fits at 100% zoom. */
+  showCompany?: boolean;
+  /** Badge chips are wide; the full-width list shows them, the split pane does not. */
+  showBadges?: boolean;
+  /** Keep the ticker visible while the rest of the row scrolls sideways. */
+  stickySymbol?: boolean;
 }) {
   const noRadar = row.hasTrendRadar === false;
   const dayPct = row.dayPct ?? row.zMom;
@@ -68,19 +77,32 @@ export function ScoreboardRow({
   return (
     <tr
       onClick={() => onSelect?.(row.symbol)}
-      className={`border-b border-[var(--border)] hover:bg-[var(--surface-alt)] transition-colors cursor-pointer ${
+      className={`group border-b border-[var(--border)] hover:bg-[var(--surface-alt)] transition-colors cursor-pointer ${
         noRadar ? "opacity-60" : ""
       } ${selected ? "bg-[rgba(56,189,248,0.08)] ring-1 ring-inset ring-[var(--accent-info)]/30" : ""}`}
     >
-      <td className="px-3 py-2.5">
+      <td
+        className={`px-3 py-2.5 ${
+          stickySymbol
+            ? `sticky left-0 z-10 ${
+                selected
+                  ? "bg-[color-mix(in_srgb,var(--accent-info)_12%,var(--card-bg))]"
+                  : "bg-[var(--card-bg)] group-hover:bg-[var(--surface-alt)]"
+              }`
+            : ""
+        }`}
+      >
         <Link
           href={`/ticker/${row.symbol}`}
-          className="hover:text-[var(--accent-info)] transition-colors"
+          title={row.companyName}
+          className="hover:text-[var(--accent-info)] transition-colors whitespace-nowrap"
           onClick={(e) => e.stopPropagation()}
         >
           <span className="font-semibold">{row.symbol}</span>
         </Link>
-        <span className="text-[var(--text-muted)] ml-2 text-xs hidden lg:inline">{row.companyName}</span>
+        {showCompany && (
+          <span className="text-[var(--text-muted)] ml-2 text-xs hidden xl:inline">{row.companyName}</span>
+        )}
       </td>
       <td className="px-3 py-2.5">
         {noRadar ? (
@@ -108,8 +130,11 @@ export function ScoreboardRow({
       <td className="px-3 py-2.5 text-right font-terminal text-xs" style={{ color: offHigh >= -1 ? "var(--accent-bull)" : "" }}>
         {formatSigned(offHigh, 1, "%")}
       </td>
-      <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs truncate max-w-[9rem]" title={row.sector}>{sectorLabel}</td>
       <td className="px-3 py-2.5 text-right font-terminal text-xs">{formatPrice(row.price)}</td>
+      <td className="px-3 py-2.5 text-xs text-[var(--text-secondary)]" title={row.sector}>
+        <div className="max-w-[8rem] truncate">{sectorLabel}</div>
+      </td>
+      {showBadges && (
       <td className="px-3 py-2.5">
         <div className="flex gap-1">
           {flip && (
@@ -129,6 +154,7 @@ export function ScoreboardRow({
           )}
         </div>
       </td>
+      )}
     </tr>
   );
 }

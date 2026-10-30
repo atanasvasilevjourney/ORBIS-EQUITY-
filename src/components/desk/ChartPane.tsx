@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   TradingChart,
@@ -55,20 +55,6 @@ export function ChartPane({
   const [chart, setChart] = useState<ChartPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [crosshair, setCrosshair] = useState<CrosshairBar | null>(null);
-  const bodyRef = useRef<HTMLDivElement>(null);
-  const [fillHeight, setFillHeight] = useState(520);
-
-  useEffect(() => {
-    if (!fill || !bodyRef.current) return;
-    const el = bodyRef.current;
-    const ro = new ResizeObserver(() => {
-      setFillHeight(Math.max(280, el.clientHeight));
-    });
-    ro.observe(el);
-    setFillHeight(Math.max(280, el.clientHeight));
-    return () => ro.disconnect();
-  }, [fill]);
-
   useEffect(() => {
     if (!symbol) {
       setChart(null);
@@ -88,12 +74,12 @@ export function ChartPane({
     return () => ac.abort();
   }, [symbol, interval]);
 
-  const chartHeight = fill ? fillHeight : (height ?? 480);
+  const chartBoxStyle = fill || height == null ? undefined : { height };
 
   if (!symbol) {
     return (
       <div
-        className="flex items-center justify-center text-xs font-terminal text-[var(--text-muted)] border border-dashed border-[var(--border)] rounded bg-[var(--surface-alt)] h-full min-h-[200px]"
+        className="flex h-full min-h-[160px] items-center justify-center rounded border border-dashed border-[var(--border)] bg-[var(--surface-alt)] text-xs font-terminal text-[var(--text-muted)]"
         style={height != null ? { minHeight: height } : undefined}
       >
         Select a ticker from the watchlist
@@ -102,8 +88,8 @@ export function ChartPane({
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-[var(--border)] bg-[var(--surface-alt)] shrink-0">
+    <div className={`flex min-h-0 min-w-0 flex-col ${fill ? "h-full min-h-0 flex-1" : ""}`}>
+      <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-2 border-b border-[var(--border)] bg-[var(--surface-alt)] px-3 py-2">
         <Link href={`/ticker/${symbol}?swing=1`} className="font-terminal font-bold text-[var(--accent-info)] hover:underline">
           {symbol}
         </Link>
@@ -143,27 +129,29 @@ export function ChartPane({
           interval={chart?.interval ?? interval}
         />
       )}
-      <div ref={bodyRef} className="flex-1 min-h-0 overflow-hidden bg-[var(--card-bg)]">
-        {loading && !chart?.candles?.length ? (
-          <div
-            className="flex items-center justify-center text-xs font-terminal text-[var(--text-muted)] h-full"
-            style={height != null ? { height: chartHeight } : { minHeight: 320 }}
-          >
-            Loading chart…
-          </div>
-        ) : (
-          <TradingChart
-            candles={chart?.candles ?? []}
-            sma={chart?.interval === "1d" ? chart?.sma20 : undefined}
-            swing={chart?.interval === "1d" ? chart?.swing : undefined}
-            vwapSession={chart?.interval === "5m" ? chart?.vwapSession : undefined}
-            vwapAnchored={chart?.interval === "5m" ? chart?.vwapAnchored : undefined}
-            segments={segments}
-            levels={levels}
-            height={chartHeight}
-            onCrosshairBar={showQuoteStrip ? setCrosshair : undefined}
-          />
-        )}
+      <div
+        className={`relative min-h-0 min-w-0 overflow-hidden bg-[var(--card-bg)] ${fill ? "flex-1" : ""}`}
+        style={chartBoxStyle}
+      >
+        <div className="absolute inset-0">
+          {loading && !chart?.candles?.length ? (
+            <div className="flex h-full items-center justify-center text-xs font-terminal text-[var(--text-muted)]">
+              Loading chart…
+            </div>
+          ) : (
+            <TradingChart
+              candles={chart?.candles ?? []}
+              sma={chart?.interval === "1d" ? chart?.sma20 : undefined}
+              swing={chart?.interval === "1d" ? chart?.swing : undefined}
+              vwapSession={chart?.interval === "5m" ? chart?.vwapSession : undefined}
+              vwapAnchored={chart?.interval === "5m" ? chart?.vwapAnchored : undefined}
+              segments={segments}
+              levels={levels}
+              fill
+              onCrosshairBar={showQuoteStrip ? setCrosshair : undefined}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
