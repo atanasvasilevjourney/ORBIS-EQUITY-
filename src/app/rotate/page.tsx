@@ -11,6 +11,7 @@ import { CorrHeatmap } from "@/components/charts/CorrHeatmap";
 import { RotationRRG } from "@/components/rotate/RotationRRG";
 import { SectorRankList } from "@/components/dashboard/MarketRotationTracker";
 import { DeskWidget } from "@/components/ui/DeskWidget";
+import { CarverBoard } from "@/components/dashboard/CarverBoard";
 import { deskList, parseDesk } from "@/lib/deskPayload";
 import type { CorrMatrix } from "@/lib/corr";
 
@@ -626,7 +627,23 @@ export default function RotatePage() {
         </table>
       </div>
 
-      <h2 id="carver" className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">
+      <div id="carver">
+        <CarverBoard
+          mode="dca"
+          rows={sleeveCarver.map((row) => ({
+            ticker: row.ticker,
+            name: `${row.sector} → ${row.industry}`,
+            forecast: row.forecast,
+            parentForecast: row.parentForecast,
+            side: row.side,
+            action: row.action,
+            notional: row.notional,
+            weight: row.weight,
+            rungs: row.rungs,
+          }))}
+        />
+      </div>
+      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">
         4 · CARVER DCA · {path.toUpperCase()} · D-RUNGS ON THE BIGGER TREND
       </h2>
       <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">

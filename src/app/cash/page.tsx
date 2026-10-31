@@ -8,6 +8,7 @@ import { MetricStrip } from "@/components/ui/MetricStrip";
 import { FilterChip } from "@/components/ui/FilterChip";
 import { TemaRibbon } from "@/components/charts/TemaRibbon";
 import { CashBookBoard } from "@/components/dashboard/CashBookBoard";
+import { CarverBoard } from "@/components/dashboard/CarverBoard";
 import { deskList, parseDesk } from "@/lib/deskPayload";
 import { temaTape, type TemaBar, type TemaReadout } from "@/lib/tema";
 
@@ -308,6 +309,21 @@ export default function CashPage() {
           </tbody>
         </table>
       </div>
+
+      <CarverBoard
+        mode="cash"
+        onPick={setVizTicker}
+        rows={(d?.carverBook ?? []).map((row) => ({
+          ticker: row.ticker,
+          name: row.companyName,
+          last: row.last,
+          forecast: row.carverForecast,
+          side: row.carverSide,
+          notional: row.carverNotional,
+          fast: row.carverEwmacFast,
+          slow: row.carverEwmacSlow,
+        }))}
+      />
 
       <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">CARVER BOOK · EWMAC + DD SCALAR · CASH SHARES · {s?.regime ?? "—"}</h2>
       <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
