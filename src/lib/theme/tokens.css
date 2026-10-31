@@ -1,42 +1,53 @@
-/* Orbis Equity — 2026 terminal tokens (NEON default + PAPER) */
+/* Orbis Equity — flat desk tokens (NEON default + PAPER) */
+
+:root {
+  --dot-qqq: #3b82f6;
+  --dot-iwm: #a78bfa;
+  --dot-spy: #f59e0b;
+  --dot-amzn: #f59e0b;
+  --dot-googl: #3b82f6;
+  --dot-meta: #c084fc;
+  --dot-msft: #22c55e;
+}
 
 :root,
 [data-theme="neon"] {
-  --surface: #06080c;
-  --surface-alt: #0c1018;
-  --text-primary: #f0f4f8;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --accent-bull: #34d399;
-  --accent-bear: #fb7185;
-  --accent-neutral: #64748b;
-  --accent-info: #38bdf8;
-  --accent-warning: #fbbf24;
-  --accent-desk: #fbbf24;
-  --accent-warn: #fbbf24;
-  --border: rgba(148, 163, 184, 0.12);
-  --card-bg: rgba(15, 23, 42, 0.55);
-  --badge-bg: rgba(30, 41, 59, 0.65);
+  --surface: #07080b;
+  --surface-alt: #101218;
+  --text-primary: #f4f5f7;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --accent-bull: #22c55e;
+  --accent-bear: #ef4444;
+  --accent-neutral: #71717a;
+  --accent-info: #60a5fa;
+  --accent-warning: #f59e0b;
+  --accent-desk: #f59e0b;
+  --accent-warn: #f59e0b;
+  --border: rgba(255, 255, 255, 0.06);
+  --card-bg: #16181f;
+  --badge-bg: #1c1f27;
+  --quote-bg: #1a1d25;
+  --track: #2c303a;
+  --nav-active-bg: rgba(255, 255, 255, 0.07);
 
-  --panel-bg: rgba(12, 18, 28, 0.72);
-  --panel-header: rgba(15, 23, 42, 0.85);
-  --panel-border: rgba(56, 189, 248, 0.14);
-  --panel-grid: rgba(30, 41, 59, 0.5);
-  --gauge-track: rgba(51, 65, 85, 0.8);
-  --module-1: #38bdf8;
-  --module-2: #34d399;
-  --module-3: #fbbf24;
+  --panel-bg: #12141a;
+  --panel-header: #16181f;
+  --panel-border: rgba(255, 255, 255, 0.07);
+  --panel-grid: rgba(255, 255, 255, 0.04);
+  --gauge-track: #2c303a;
+  --module-1: #60a5fa;
+  --module-2: #22c55e;
+  --module-3: #f59e0b;
   --module-4: #a78bfa;
 
-  --glass-blur: 16px;
-  --radius-panel: 14px;
+  --glass-blur: 0px;
+  --radius-panel: 16px;
   --radius-pill: 999px;
-  --shadow-glow: 0 0 40px rgba(56, 189, 248, 0.08);
-  --shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.45);
-  --gradient-brand: linear-gradient(135deg, #38bdf8 0%, #a78bfa 50%, #34d399 100%);
-  --gradient-mesh: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(56, 189, 248, 0.15), transparent),
-    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(167, 139, 250, 0.1), transparent),
-    radial-gradient(ellipse 50% 30% at 0% 100%, rgba(52, 211, 153, 0.06), transparent);
+  --shadow-glow: none;
+  --shadow-panel: none;
+  --gradient-brand: linear-gradient(135deg, #60a5fa 0%, #a78bfa 55%, #22c55e 100%);
+  --gradient-mesh: none;
 }
 
 [data-theme="paper"] {
@@ -53,11 +64,14 @@
   --accent-desk: #d97706;
   --accent-warn: #d97706;
   --border: rgba(15, 23, 42, 0.08);
-  --card-bg: rgba(255, 255, 255, 0.85);
-  --badge-bg: rgba(241, 245, 249, 0.95);
+  --card-bg: #ffffff;
+  --badge-bg: #f1f5f9;
+  --quote-bg: #f8fafc;
+  --track: #e2e8f0;
+  --nav-active-bg: rgba(15, 23, 42, 0.06);
 
-  --panel-bg: rgba(255, 255, 255, 0.92);
-  --panel-header: rgba(248, 250, 252, 0.98);
+  --panel-bg: #ffffff;
+  --panel-header: #f8fafc;
   --panel-border: rgba(15, 23, 42, 0.1);
   --panel-grid: #e2e8f0;
   --gauge-track: #e2e8f0;
@@ -66,11 +80,11 @@
   --module-3: #d97706;
   --module-4: #7c3aed;
 
-  --glass-blur: 12px;
-  --radius-panel: 14px;
+  --glass-blur: 0px;
+  --radius-panel: 16px;
   --radius-pill: 999px;
-  --shadow-glow: 0 0 32px rgba(2, 132, 199, 0.06);
-  --shadow-panel: 0 4px 20px rgba(15, 23, 42, 0.06);
+  --shadow-glow: none;
+  --shadow-panel: none;
   --gradient-brand: linear-gradient(135deg, #0284c7 0%, #7c3aed 50%, #059669 100%);
   --gradient-mesh: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(2, 132, 199, 0.08), transparent),
     radial-gradient(ellipse 60% 40% at 100% 0%, rgba(124, 58, 237, 0.05), transparent);

@@ -5,6 +5,7 @@ export type CrossAssetTile = {
   label: string;
   last: number | null;
   dayPct: number | null;
+  asOf?: string | null;
   spark: number[];
 };
 

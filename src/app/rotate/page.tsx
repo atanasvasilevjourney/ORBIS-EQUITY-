@@ -9,6 +9,8 @@ import { SectionLabel } from "@/components/ui/SectionLabel";
 import { CanaryBoard } from "@/components/charts/CanaryBoard";
 import { CorrHeatmap } from "@/components/charts/CorrHeatmap";
 import { RotationRRG } from "@/components/rotate/RotationRRG";
+import { SectorRankList } from "@/components/dashboard/MarketRotationTracker";
+import { DeskWidget } from "@/components/ui/DeskWidget";
 import { deskList, parseDesk } from "@/lib/deskPayload";
 import type { CorrMatrix } from "@/lib/corr";
 
@@ -439,6 +441,26 @@ export default function RotatePage() {
       </div>
 
       <MetricStrip items={cards} columns={5} loading={loading} />
+
+      {!loading && (d?.sectors?.length ?? 0) > 0 && (
+        <DeskWidget
+          title="Sector rotation"
+          className="mb-6"
+          menu={[{ href: "/", label: "Market cockpit" }]}
+          footer={
+            <>
+              <span>4-week relative strength</span>
+              <span>Click a row to open that sleeve</span>
+            </>
+          }
+        >
+          <SectorRankList
+            sectors={(d?.sectors ?? []).map((row) => ({ name: row.name, rs4w: row.rs4w, score: row.score }))}
+            selected={sector}
+            onSelect={pickSector}
+          />
+        </DeskWidget>
+      )}
 
       <SectionLabel>1 · Macro context · Canary ratios</SectionLabel>
       <div className="mb-4">

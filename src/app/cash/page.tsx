@@ -7,6 +7,7 @@ import { InfoCallout } from "@/components/ui/InfoCallout";
 import { MetricStrip } from "@/components/ui/MetricStrip";
 import { FilterChip } from "@/components/ui/FilterChip";
 import { TemaRibbon } from "@/components/charts/TemaRibbon";
+import { CashBookBoard } from "@/components/dashboard/CashBookBoard";
 import { deskList, parseDesk } from "@/lib/deskPayload";
 import { temaTape, type TemaBar, type TemaReadout } from "@/lib/tema";
 
@@ -198,6 +199,17 @@ export default function CashPage() {
       )}
 
       <MetricStrip items={cards} columns={5} loading={loading} />
+
+      <CashBookBoard
+        names={(d?.temaBook ?? []).map((row) => ({
+          ticker: row.ticker,
+          companyName: row.companyName,
+          last: row.last,
+          notional: row.temaNotional,
+          side: row.temaSide,
+        }))}
+        onPick={setVizTicker}
+      />
 
       <div className="mb-4 flex flex-wrap gap-2">
         {chips.map((t) => (
