@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
-import { fetchLitePrices, LIQUID_NAMES } from "@/lib/liteDeskApi";
+import { fetchLitePrices } from "@/lib/liteDeskApi";
+import {
+  finiteOrNull,
+  SCOREBOARD_SYMBOLS,
+  scoreboardName,
+  sessionMove,
+} from "@/lib/rotationDesk";
 import { orbisScore } from "@/lib/orbisScore";
 import { fetchCockpitDeskSummaries } from "@/lib/cockpitDeskSummaries";
 import { combineCapital, legsFromBooks } from "@/lib/capitalBook";
@@ -92,31 +98,53 @@ async function fetchCapitalBook(sb: ReturnType<typeof createServerClient>) {
   );
 }
 
-function crossAssetTiles(
-  prices: { symbol: string; date: string; close: number }[]
-): { symbol: string; label: string; last: number | null; dayPct: number | null; spark: number[] }[] {
+function seriesBySymbol(prices: { symbol: string; date: string; close: number }[]) {
   const bySym = new Map<string, { date: string; close: number }[]>();
   for (const p of prices) {
     const list = bySym.get(p.symbol) ?? [];
     list.push({ date: p.date, close: p.close });
     bySym.set(p.symbol, list);
   }
+  return bySym;
+}
+
+function crossAssetTiles(
+  prices: { symbol: string; date: string; close: number }[]
+): { symbol: string; label: string; last: number | null; dayPct: number | null; asOf: string | null; spark: number[] }[] {
+  const bySym = seriesBySymbol(prices);
   return CROSS_ASSET_META.map(({ symbol, label }) => {
-    const series = (bySym.get(symbol) ?? []).sort((a, b) => a.date.localeCompare(b.date));
-    if (series.length < 2) {
-      return { symbol, label, last: series.at(-1)?.close ?? null, dayPct: null, spark: series.map((s) => s.close) };
-    }
-    const prev = series[series.length - 2].close;
-    const last = series[series.length - 1].close;
-    const dayPct = prev > 0 ? ((last / prev - 1) * 100) : null;
+    const series = [...(bySym.get(symbol) ?? [])].sort((a, b) => a.date.localeCompare(b.date));
+    const move = sessionMove(series);
     return {
       symbol,
       label,
-      last,
-      dayPct,
+      last: move.last,
+      dayPct: move.dayPct,
+      asOf: move.asOf,
       spark: series.slice(-20).map((s) => s.close),
     };
   }).filter((t) => t.spark.length > 0);
+}
+
+function scoreboardTiles(
+  prices: { symbol: string; date: string; close: number }[],
+  names: Map<string, string | null>,
+  yields: Map<string, { fcf: number | null; earnings: number | null }>
+) {
+  const bySym = seriesBySymbol(prices);
+  return SCOREBOARD_SYMBOLS.map((symbol) => {
+    const move = sessionMove(bySym.get(symbol) ?? []);
+    const fund = yields.get(symbol);
+    return {
+      symbol,
+      name: scoreboardName(symbol, names.get(symbol)),
+      last: move.last,
+      dayPct: move.dayPct,
+      fcfYield: fund?.fcf ?? null,
+      earningsYield: fund?.earnings ?? null,
+      asOf: move.asOf,
+    };
+  });
 }
 
 export async function GET() {
@@ -213,13 +241,23 @@ export async function GET() {
         orbisScore: orbisScore(r.quality_rank, null),
       }));
 
-    const [crossPrices, desks, capital] = await Promise.all([
-      fetchLitePrices(sb, [
-        ...CROSS_ASSET_META.map((c) => c.symbol),
-        ...LIQUID_NAMES.slice(0, 4),
-      ]),
+    const tapeSymbols = [...CROSS_ASSET_META.map((c) => c.symbol), ...SCOREBOARD_SYMBOLS];
+    const [crossPrices, desks, capital, scoreNames, scoreFunds] = await Promise.all([
+      fetchLitePrices(sb, tapeSymbols),
       fetchCockpitDeskSummaries(sb),
       fetchCapitalBook(sb),
+      fetchAll<{ symbol: string; company_name: string | null }>(
+        sb,
+        "universe_members",
+        "symbol, company_name",
+        (q) => q.in("symbol", [...SCOREBOARD_SYMBOLS])
+      ).catch(() => []),
+      fetchAll<{ symbol: string; fcf_yield: number | null; earnings_yield: number | null }>(
+        sb,
+        "fundamentals_snapshot",
+        "symbol, fcf_yield, earnings_yield",
+        (q) => q.in("symbol", [...SCOREBOARD_SYMBOLS])
+      ).catch(() => []),
     ]);
 
     const fresh = evaluateFreshness(brief?.asof_date);
@@ -250,6 +288,16 @@ export async function GET() {
       worstSector: breadthRaw?.worst_sector ?? null,
       regionBreadth: inputs.region_breadth ?? {},
       crossAsset: crossAssetTiles(crossPrices),
+      scoreboard: scoreboardTiles(
+        crossPrices,
+        new Map(scoreNames.map((row) => [row.symbol, row.company_name])),
+        new Map(
+          scoreFunds.map((row) => [
+            row.symbol,
+            { fcf: finiteOrNull(row.fcf_yield), earnings: finiteOrNull(row.earnings_yield) },
+          ])
+        )
+      ),
       rotation: {
         regime: latestRun?.regime ?? null,
         headline: latestRun?.headline ?? null,

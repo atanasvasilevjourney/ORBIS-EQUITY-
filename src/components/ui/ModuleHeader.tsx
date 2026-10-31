@@ -28,15 +28,7 @@ export function ModuleHeader({
           >
             {module}
           </span>
-          <h1
-            className="font-display text-2xl md:text-[1.75rem] font-semibold tracking-tight leading-tight"
-            style={{
-              background: "var(--gradient-brand)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
-            }}
-          >
+          <h1 className="font-display text-2xl md:text-[1.75rem] font-semibold tracking-tight leading-tight text-[var(--text-primary)]">
             {title}
           </h1>
           {description && (

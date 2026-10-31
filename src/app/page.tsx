@@ -7,7 +7,9 @@ import { MetricCard } from "@/components/ui/MetricCard";
 import { PostureGauge } from "@/components/ui/PostureGauge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PostureBreakdown, type PosturePillars } from "@/components/ui/PostureBreakdown";
-import { CrossAssetStrip, type CrossAssetTile } from "@/components/dashboard/CrossAssetStrip";
+import type { CrossAssetTile } from "@/components/dashboard/CrossAssetStrip";
+import { MarketRotationTracker } from "@/components/dashboard/MarketRotationTracker";
+import { TapeScoreboard, type ScoreboardName } from "@/components/dashboard/TapeScoreboard";
 import { ChipLink, StatPill } from "@/components/ui/ChipLink";
 
 type DashData = {
@@ -33,6 +35,7 @@ type DashData = {
   asOfDate: string | null;
   regionBreadth: Record<string, number>;
   crossAsset: CrossAssetTile[];
+  scoreboard: ScoreboardName[];
   rotation: {
     regime: string | null;
     headline: string | null;
@@ -152,6 +155,7 @@ export default function Home() {
           asOfDate: dash.asOfDate ?? null,
           regionBreadth: dash.regionBreadth ?? {},
           crossAsset: dash.crossAsset ?? [],
+          scoreboard: dash.scoreboard ?? [],
           rotation: dash.rotation ?? { regime: null, headline: null, leading: 0, sectors: [] },
           watchlistMovers: dash.watchlistMovers ?? [],
           fundCount: f.count ?? 0,
@@ -236,17 +240,9 @@ export default function Home() {
 
   return (
     <div className="py-6 space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3 glass-panel px-5 py-4">
+      <div className="flex flex-wrap items-end justify-between gap-3 px-1">
         <div>
-          <h1
-            className="font-display text-2xl md:text-3xl font-semibold tracking-tight"
-            style={{
-              background: "var(--gradient-brand)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
-            }}
-          >
+          <h1 className="font-display text-xl font-semibold tracking-tight text-[var(--text-primary)]">
             Market cockpit
           </h1>
           <p className="text-sm text-[var(--text-secondary)] mt-1">
@@ -261,6 +257,29 @@ export default function Home() {
           <div className="mt-0.5">PRESS ⌘K TO JUMP</div>
         </div>
       </div>
+
+      {loading ? (
+        <div className="space-y-4">
+          <div className="desk-widget h-80 animate-pulse" />
+          <div className="desk-widget h-72 animate-pulse" />
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <MarketRotationTracker
+            quotes={(d?.crossAsset ?? []).map((tile) => ({
+              symbol: tile.symbol,
+              label: tile.label,
+              last: tile.last,
+              dayPct: tile.dayPct,
+              asOf: tile.asOf,
+            }))}
+            sectors={d?.rotation?.sectors ?? []}
+            asOf={d?.asOfDate}
+            unavailable={error || !d}
+          />
+          <TapeScoreboard names={d?.scoreboard ?? []} unavailable={error || !d} />
+        </div>
+      )}
 
       <CapitalStrip capital={d?.capital ?? null} loading={loading} />
 
@@ -410,56 +429,6 @@ export default function Home() {
               />
             </div>
           )}
-        </ModulePanel>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-3">
-        <ModulePanel
-          title="CROSS-ASSET"
-          badge="TAPE"
-          accent="var(--module-4)"
-          source="PRICES · EOD"
-          className="xl:col-span-5"
-        >
-          <CrossAssetStrip tiles={d?.crossAsset ?? []} />
-        </ModulePanel>
-        <ModulePanel
-          title="LEADERSHIP & ROTATION"
-          badge="SECTORS"
-          accent="var(--module-2)"
-          source={d?.rotation?.regime ?? "ROTATE"}
-          className="xl:col-span-7"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <span className="text-xs font-terminal text-[var(--text-secondary)]">
-              {d?.rotation?.headline ?? "Sector tape from latest rotation run"}
-            </span>
-            <Link href="/rotate" className="text-[10px] font-terminal text-[var(--accent-info)] hover:underline">
-              Open rotation desk →
-            </Link>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs font-terminal">
-              <thead>
-                <tr className="text-[10px] text-[var(--text-muted)] border-b border-[var(--border)]">
-                  <th className="text-left py-1">SECTOR</th>
-                  <th className="text-left py-1">LABEL</th>
-                  <th className="text-right py-1">RS 4W</th>
-                  <th className="text-right py-1">IMPULSE</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(d?.rotation?.sectors ?? []).slice(0, 8).map((s) => (
-                  <tr key={s.name} className="border-b border-[var(--border)]">
-                    <td className="py-1.5">{s.name}</td>
-                    <td className="py-1.5 text-[var(--text-muted)]">{s.label ?? "—"}</td>
-                    <td className="py-1.5 text-right">{s.rs4w == null ? "—" : `${(s.rs4w * 100).toFixed(1)}%`}</td>
-                    <td className="py-1.5 text-right">{s.impulse == null ? "—" : `${(s.impulse * 100).toFixed(1)}%`}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         </ModulePanel>
       </div>
 

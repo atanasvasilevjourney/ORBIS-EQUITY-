@@ -24,13 +24,12 @@ export function ModulePanel({
 }: ModulePanelProps) {
   return (
     <section
-      className={`flex flex-col glass-panel overflow-hidden ${className}`}
-      style={{ boxShadow: `inset 0 2px 0 0 ${accent}, var(--shadow-panel)` }}
+      className={`desk-widget flex flex-col overflow-hidden ${className}`}
+      style={{ boxShadow: `inset 0 2px 0 0 ${accent}` }}
     >
       <header
-        className="flex items-center justify-between gap-3 px-3 py-2 border-b"
+        className="flex items-center justify-between gap-3 px-4 py-3 border-b"
         style={{
-          background: "var(--panel-header)",
           borderColor: "var(--panel-border)",
         }}
       >
@@ -65,7 +64,7 @@ export function ModulePanel({
           {actions}
         </div>
       </header>
-      <div className="flex-1 p-3">{children}</div>
+      <div className="flex-1 p-4">{children}</div>
     </section>
   );
 }

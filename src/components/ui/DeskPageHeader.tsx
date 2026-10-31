@@ -26,15 +26,7 @@ export function DeskPageHeader({
             {badge}
           </span>
         )}
-        <h1
-          className="font-display text-2xl md:text-3xl font-semibold tracking-tight"
-          style={{
-            background: "var(--gradient-brand)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
-          }}
-        >
+        <h1 className="font-display text-2xl md:text-3xl font-semibold tracking-tight text-[var(--text-primary)]">
           {title}
         </h1>
         {subtitle && (
