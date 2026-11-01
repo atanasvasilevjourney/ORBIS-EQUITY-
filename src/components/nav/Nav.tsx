@@ -23,6 +23,7 @@ const NAV_MORE = [
   { href: "/bias", label: "BIAS", title: "Research sleeve" },
   { href: "/triangle", label: "TRI", title: "Research sleeve" },
   { href: "/cash", label: "CASH", title: "Research sleeve" },
+  { href: "/factors", label: "FACTORS", title: "Factor investing desk" },
   { href: "/fundamentals/screener", label: "FA SCR", title: "Factor screener" },
   { href: "/health", label: "HEALTH", title: "Health Care factor view" },
   { href: "/earnings-news", label: "EARNINGS", title: "Earnings and news" },

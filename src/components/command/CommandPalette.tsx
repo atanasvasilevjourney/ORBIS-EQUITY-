@@ -21,6 +21,7 @@ const STATIC_ITEMS: PaletteItem[] = [
   { id: "ema200", label: "EMA200", hint: "EMA", href: "/ema200", group: "Navigate" },
   { id: "triangle", label: "Triangle Breakout", hint: "TRI", href: "/triangle", group: "Navigate" },
   { id: "fundamentals", label: "Fundamentals", hint: "FA", href: "/fundamentals", group: "Navigate" },
+  { id: "factors", label: "Factor Investing", hint: "FACT", href: "/factors", group: "Navigate" },
   { id: "fund-screener", label: "Fundamental Screener", hint: "FSCR", href: "/fundamentals/screener", group: "Navigate" },
   { id: "health", label: "Health Sector", hint: "HC", href: "/health", group: "Navigate" },
   { id: "earnings", label: "Earnings & News", hint: "ERN", href: "/earnings-news", group: "Navigate" },
