@@ -510,6 +510,15 @@ export default function Home() {
             ],
           },
           {
+            href: "/factors", title: "FACTOR INVESTING", badge: "MODULE 2A",
+            subtitle: "Style sleeves, leaders & sector breadth", accent: "var(--module-2)", source: "FACTOR DESK",
+            metrics: [
+              { label: "AVG COMP", value: loading ? "…" : d?.avgComposite != null ? Math.round(d.avgComposite) : "—", color: "var(--accent-info)" },
+              { label: "COMP 70+", value: loading ? "…" : d?.highComposite ?? 0, color: "var(--accent-bull)" },
+              { label: "STYLES", value: "5" },
+            ],
+          },
+          {
             href: "/loop", title: "LOOP TERMINAL", badge: "MODULE 4",
             subtitle: "Breakout portfolio harness", accent: "var(--module-1)", source: "PAPER BOOK",
             metrics: [
