@@ -16,6 +16,33 @@ vi.mock("@/lib/liteDeskApi", () => ({
   LIQUID_NAMES: ["AAPL", "MSFT", "NVDA", "AMZN"],
 }));
 
+vi.mock("@/lib/marketTapeFill", () => ({
+  fillMissingTape: async (
+    prices: { symbol: string; date: string; close: number }[],
+    symbols: string[]
+  ) => {
+    const have = new Set(prices.map((row) => row.symbol));
+    const extra = symbols
+      .filter((symbol) => !have.has(symbol) && (symbol === "QQQ" || symbol === "IWM"))
+      .flatMap((symbol) => [
+        { symbol, date: "2026-10-29", close: 100 },
+        { symbol, date: "2026-10-30", close: symbol === "QQQ" ? 96.41 : 101.65 },
+      ]);
+    return {
+      prices: [...prices, ...extra],
+      filled: Array.from(new Set(extra.map((row) => row.symbol))),
+    };
+  },
+}));
+
+vi.mock("@/lib/briefNews", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/briefNews")>("@/lib/briefNews");
+  return {
+    ...actual,
+    loadMarketHeadlines: async (stored: unknown[]) => stored,
+  };
+});
+
 vi.mock("@/lib/cockpitDeskSummaries", () => ({
   fetchCockpitDeskSummaries: async () => ({
     earningsBeats: 1,
@@ -440,26 +467,56 @@ describe("GET /api/dashboard", () => {
           error: null,
         }),
         sector_rotation_runs: () => ({ data: [], error: null }),
+        news_items: () => ({
+          data: [
+            {
+              id: 7,
+              ticker: "NVDA",
+              published_at: "2026-11-02T15:00:00Z",
+              source: "Reuters",
+              headline: "Chip demand holds",
+              url: "https://example.com/nvda",
+              tone: 1.2,
+            },
+          ],
+          error: null,
+        }),
       })
     );
     const { GET } = await import("../dashboard/route");
     const res = await GET();
     const body = await res.json();
     expect(res.status).toBe(200);
+    expect(body.degraded).toBe(false);
     expect(body.breadth.total).toBe(2);
     expect(body.breadth.greens).toBe(1);
     expect(body.watchlistMovers[0].symbol).toBe("AAPL");
     expect(body.bestSector).toBe("Technology");
     expect(body.crossAsset[0].symbol).toBe("SPY");
+    expect(body.crossAsset.map((row: { symbol: string }) => row.symbol)).toEqual(
+      expect.arrayContaining(["SPY", "QQQ", "IWM"])
+    );
+    expect(body.crossAsset.find((row: { symbol: string }) => row.symbol === "QQQ").source).toBe("yahoo");
+    expect(body.intelligence.news[0].headline).toBe("Chip demand holds");
+    expect(body.intelligence.marketBrief).toContain("Risk-on tape");
+    expect(body.intelligence.marketBrief).toContain("QQQ -3.59%");
     expect(body.capital.sleeves).toHaveLength(4);
   });
 
-  it("returns 500 when the dashboard client throws", async () => {
+  it("serves the public tape when the desk client throws", async () => {
     mockCreateServerClient.mockImplementation(() => {
       throw new Error("down");
     });
     const { GET } = await import("../dashboard/route");
     const res = await GET();
-    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.degraded).toBe(true);
+    expect(body.signalsSuppressed).toBe(true);
+    expect(body.crossAsset.map((row: { symbol: string }) => row.symbol)).toEqual(
+      expect.arrayContaining(["QQQ", "IWM"])
+    );
+    expect(body.intelligence.marketBrief).toContain("Session tape");
+    expect(body.intelligence.briefSource).toBe("tape");
   });
 });

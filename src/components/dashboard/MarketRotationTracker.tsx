@@ -22,6 +22,7 @@ export type RotationQuote = {
   last: number | null;
   dayPct: number | null;
   asOf?: string | null;
+  source?: "tape" | "yahoo" | null;
 };
 
 export type RotationSector = {
@@ -203,6 +204,14 @@ export function MarketRotationTracker({
   const meter = spreadMeter(spread);
   const rest = quotes.filter((quote) => !ROTATION_INDEXES.some((meta) => meta.symbol === quote.symbol));
   const printed = latestDate([asOf, ...indexes.map((quote) => quote.asOf)]);
+  const yahooIndexes = indexes.filter((quote) => quote.source === "yahoo" && quote.last != null).length;
+  const pricedIndexes = indexes.filter((quote) => quote.last != null).length;
+  const priceLabel =
+    pricedIndexes > 0 && yahooIndexes === pricedIndexes
+      ? `Prices · Yahoo EOD · ${printed ?? "—"}`
+      : yahooIndexes > 0
+        ? `Prices · desk tape + Yahoo · ${printed ?? "—"}`
+        : `Prices · EOD · ${printed ?? "—"}`;
 
   return (
     <DeskWidget
@@ -214,7 +223,7 @@ export function MarketRotationTracker({
       ]}
       footer={
         <>
-          <span>{unavailable ? "Tape unavailable" : `Prices · EOD · ${printed ?? "—"}`}</span>
+          <span>{unavailable ? "Tape unavailable" : priceLabel}</span>
           <span>US ETFs · session move</span>
         </>
       }

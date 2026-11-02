@@ -9,8 +9,10 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PostureBreakdown, type PosturePillars } from "@/components/ui/PostureBreakdown";
 import type { CrossAssetTile } from "@/components/dashboard/CrossAssetStrip";
 import { MarketRotationTracker } from "@/components/dashboard/MarketRotationTracker";
+import { BriefNews } from "@/components/dashboard/BriefNews";
 import { TapeScoreboard, type ScoreboardName } from "@/components/dashboard/TapeScoreboard";
 import { ChipLink, StatPill } from "@/components/ui/ChipLink";
+import type { BriefNewsItem } from "@/lib/briefNews";
 
 type DashData = {
   posture: number | null;
@@ -69,6 +71,11 @@ type DashData = {
   rotateRegime: string | null;
   rotateLeading: number;
   signalsSuppressed: boolean;
+  degraded: boolean;
+  marketBrief: string | null;
+  briefSource: "pipeline" | "tape" | "mixed" | null;
+  news: BriefNewsItem[];
+  newsSource: "desk" | "yahoo" | "mixed" | "none" | null;
   capital: {
     gross: number;
     net: number;
@@ -131,7 +138,6 @@ export default function Home() {
   const [d, setD] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [showDesks, setShowDesks] = useState(false);
 
   useEffect(() => {
     fetch("/api/dashboard")
@@ -184,6 +190,11 @@ export default function Home() {
           rotateRegime: dash.rotation?.regime ?? null,
           rotateLeading: dash.rotation?.leading ?? 0,
           signalsSuppressed: !!dash.signalsSuppressed,
+          degraded: !!dash.degraded,
+          marketBrief: dash.intelligence?.marketBrief || dash.briefText || null,
+          briefSource: dash.intelligence?.briefSource ?? null,
+          news: dash.intelligence?.news ?? [],
+          newsSource: dash.intelligence?.newsSource ?? null,
           capital: dash.capital ?? null,
         });
       })
@@ -192,7 +203,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!showDesks || !d) return;
+    if (!d) return;
     Promise.all([
       fetch("/api/earnings-news?days=30").then((r) => r.json()).catch(() => null),
       fetch("/api/skew").then((r) => r.json()).catch(() => null),
@@ -206,28 +217,28 @@ export default function Home() {
         prev
           ? {
               ...prev,
-              earningsBeats: earnings?.summary?.beats ?? 0,
-              earningsMisses: earnings?.summary?.misses ?? 0,
-              earningsUpcoming: earnings?.summary?.upcoming ?? 0,
-              newsCount: earnings?.summary?.totalNews ?? 0,
-              skewNames: skew?.summary?.names ?? 0,
-              skewAtm: skew?.summary?.avgAtmIv ?? null,
-              skewWeekend: skew?.summary?.weekendRichest ?? null,
-              orbGappers: orb?.summary?.names ?? 0,
-              orbBreakouts: orb?.summary?.breakouts ?? 0,
-              analysisBuys: analysis?.summary?.buys ?? 0,
-              analysisSells: analysis?.summary?.sells ?? 0,
-              quantNames: quant?.summary?.names ?? 0,
-              quantSharpe: quant?.summary?.equalSharpe ?? null,
-              biasLongs: bias?.summary?.longs ?? 0,
-              biasShorts: bias?.summary?.shorts ?? 0,
-              cashTema: cash?.summary?.temaSlots ?? 0,
-              cashCarver: cash?.summary?.carverSlots ?? 0,
+              earningsBeats: earnings?.summary?.beats ?? prev.earningsBeats,
+              earningsMisses: earnings?.summary?.misses ?? prev.earningsMisses,
+              earningsUpcoming: earnings?.summary?.upcoming ?? prev.earningsUpcoming,
+              newsCount: earnings?.summary?.totalNews ?? prev.newsCount,
+              skewNames: skew?.summary?.names ?? prev.skewNames,
+              skewAtm: skew?.summary?.avgAtmIv ?? prev.skewAtm,
+              skewWeekend: skew?.summary?.weekendRichest ?? prev.skewWeekend,
+              orbGappers: orb?.summary?.names ?? prev.orbGappers,
+              orbBreakouts: orb?.summary?.breakouts ?? prev.orbBreakouts,
+              analysisBuys: analysis?.summary?.buys ?? prev.analysisBuys,
+              analysisSells: analysis?.summary?.sells ?? prev.analysisSells,
+              quantNames: quant?.summary?.names ?? prev.quantNames,
+              quantSharpe: quant?.summary?.equalSharpe ?? prev.quantSharpe,
+              biasLongs: bias?.summary?.longs ?? prev.biasLongs,
+              biasShorts: bias?.summary?.shorts ?? prev.biasShorts,
+              cashTema: cash?.summary?.temaSlots ?? prev.cashTema,
+              cashCarver: cash?.summary?.carverSlots ?? prev.cashCarver,
             }
           : prev
       );
     });
-  }, [showDesks, d?.asOfDate]);
+  }, [d?.asOfDate]);
 
   const postureColor =
     (d?.posture ?? 50) >= 55
@@ -242,11 +253,12 @@ export default function Home() {
     <div className="py-6 space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3 px-1">
         <div>
+          <p className="section-label">Orbis Equity</p>
           <h1 className="font-display text-xl font-semibold tracking-tight text-[var(--text-primary)]">
-            Market cockpit
+            Financial intelligence
           </h1>
           <p className="text-sm text-[var(--text-secondary)] mt-1">
-            Equity swing terminal — honest signals, global coverage, paper desks
+            Brief news, then the market brief, then the desk summary
           </p>
         </div>
         <div className="text-right font-terminal text-[10px] text-[var(--text-muted)] tracking-wider">
@@ -258,39 +270,26 @@ export default function Home() {
         </div>
       </div>
 
-      {loading ? (
-        <div className="space-y-4">
-          <div className="desk-widget h-80 animate-pulse" />
-          <div className="desk-widget h-72 animate-pulse" />
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <MarketRotationTracker
-            quotes={(d?.crossAsset ?? []).map((tile) => ({
-              symbol: tile.symbol,
-              label: tile.label,
-              last: tile.last,
-              dayPct: tile.dayPct,
-              asOf: tile.asOf,
-            }))}
-            sectors={d?.rotation?.sectors ?? []}
-            asOf={d?.asOfDate}
-            unavailable={error || !d}
-          />
-          <TapeScoreboard names={d?.scoreboard ?? []} unavailable={error || !d} />
-        </div>
-      )}
+      <BriefNews items={d?.news ?? []} source={d?.newsSource ?? null} loading={loading} />
 
-      <CapitalStrip capital={d?.capital ?? null} loading={loading} />
-
-      {error && (
+      {error && !d && (
         <EmptyState
           title="Could not load cockpit data"
-          detail="API routes returned an error. Check Supabase credentials and pipeline freshness."
+          detail="The desk and the public tape both failed. Check Supabase credentials and try again."
         />
       )}
 
-      {/* Market overview row — gauge + brief + pulse metrics */}
+      <section className="space-y-4">
+        <div className="px-1">
+          <p className="section-label">Market brief</p>
+          {d?.degraded && (
+            <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+              Desk offline. Index prices and headlines below are the public tape.
+            </p>
+          )}
+        </div>
+
+      {/* Gauge, brief, and pulse */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
         <ModulePanel
           title="EQUITY WEATHER"
@@ -310,10 +309,18 @@ export default function Home() {
         </ModulePanel>
 
         <ModulePanel
-          title="TODAY'S BRIEF"
-          badge="BRIEF"
+          title="Market brief"
+          badge="SESSION"
           accent="var(--module-3)"
-          source="RULE-BASED"
+          source={
+            d?.briefSource === "mixed"
+              ? "PIPELINE · TAPE"
+              : d?.briefSource === "tape"
+                ? "LIVE TAPE"
+                : d?.briefSource === "pipeline"
+                  ? "PIPELINE"
+                  : "RULE-BASED"
+          }
           className="lg:col-span-5"
         >
           {loading ? (
@@ -324,8 +331,8 @@ export default function Home() {
             </div>
           ) : (
             <p className="text-sm text-[var(--text-secondary)] leading-relaxed font-terminal">
-              {d?.briefText ||
-                "No brief available yet. Run the nightly pipeline to compose the morning read from posture, breadth, and sector leadership."}
+              {d?.marketBrief ||
+                "No brief yet. The nightly desk writes the posture line, and the index tape adds the session move when QQQ, IWM, and SPY have a close."}
             </p>
           )}
           <div className="mt-4 grid grid-cols-2 gap-2">
@@ -432,6 +439,29 @@ export default function Home() {
         </ModulePanel>
       </div>
 
+      {loading ? (
+        <div className="desk-widget h-72 animate-pulse" />
+      ) : (
+        <div className="space-y-4">
+          <MarketRotationTracker
+            quotes={(d?.crossAsset ?? []).map((tile) => ({
+              symbol: tile.symbol,
+              label: tile.label,
+              last: tile.last,
+              dayPct: tile.dayPct,
+              asOf: tile.asOf,
+              source: tile.source,
+            }))}
+            sectors={d?.rotation?.sectors ?? []}
+            asOf={d?.asOfDate}
+            unavailable={error && !d}
+          />
+          <TapeScoreboard names={d?.scoreboard ?? []} unavailable={error && !d} />
+        </div>
+      )}
+
+      <CapitalStrip capital={d?.capital ?? null} loading={loading} />
+
       {(d?.watchlistMovers?.length ?? 0) > 0 && (
         <ModulePanel title="WATCHLIST MOVERS" badge="HOT" accent="var(--module-1)" source="MODULE 1">
           <div className="flex flex-wrap gap-2">
@@ -476,19 +506,17 @@ export default function Home() {
           </div>
         </ModulePanel>
       )}
+      </section>
 
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => setShowDesks((v) => !v)}
-          className="sleeve-tab text-[var(--text-secondary)]"
-          data-active={showDesks}
-        >
-          {showDesks ? "Hide module desks" : "Show all module desks"}
-        </button>
-      </div>
-
-      {showDesks && (
+      <section className="space-y-3">
+        <div className="px-1">
+          <p className="section-label">Orbis Equity modules</p>
+          <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+            {loading
+              ? "Desk counts load with the cockpit."
+              : `Posture ${d?.posture ?? "—"} · Rotation ${d?.rotateRegime ?? "—"} · Earnings ${d?.earningsBeats ?? 0} beats / ${d?.earningsMisses ?? 0} misses · ORB ${d?.orbBreakouts ?? 0} breakouts · Bias ${d?.biasLongs ?? 0} long / ${d?.biasShorts ?? 0} short · Triangles ${d?.triangleSetups ?? 0}`}
+          </p>
+        </div>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {([
           {
@@ -648,7 +676,7 @@ export default function Home() {
           </Link>
         ))}
       </div>
-      )}
+      </section>
     </div>
   );
 }
