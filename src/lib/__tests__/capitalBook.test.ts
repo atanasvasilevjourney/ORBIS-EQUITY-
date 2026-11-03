@@ -49,4 +49,31 @@ describe("combineCapital", () => {
     expect(book.overlap).toEqual(["AAPL"]);
     expect(book.sleeves.find((s) => s.sleeve === "ORB")?.asOf).toBe("2026-10-17");
   });
+
+  it("treats cash BUY and SELL the same way as LONG and SHORT", () => {
+    const legs = legsFromBooks({
+      loopAsOf: null,
+      loop: [],
+      orbAsOf: null,
+      orb: [],
+      cashAsOf: "2026-10-16",
+      cash: [
+        {
+          symbol: "NVDA",
+          inTema: true,
+          temaSide: "BUY",
+          temaNotional: 800,
+          inCarver: true,
+          carverSide: "SELL",
+          carverNotional: 200,
+        },
+      ],
+      rotateAsOf: null,
+      rotate: [],
+    });
+    const book = combineCapital(legs);
+    expect(book.gross).toBe(1000);
+    expect(book.net).toBe(600);
+    expect(legs.map((leg) => leg.book).sort()).toEqual(["carver", "tema"]);
+  });
 });
