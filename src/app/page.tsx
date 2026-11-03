@@ -76,6 +76,13 @@ type DashData = {
   briefSource: "pipeline" | "tape" | "mixed" | null;
   news: BriefNewsItem[];
   newsSource: "desk" | "yahoo" | "mixed" | "none" | null;
+  earningsNames: {
+    ticker: string;
+    eventDate: string;
+    confirmed: boolean;
+    surprisePct: number | null;
+    epsEst: number | null;
+  }[];
   capital: {
     gross: number;
     net: number;
@@ -168,9 +175,6 @@ export default function Home() {
           highFScore: f.highFScore ?? 0,
           highComposite: f.highComposite ?? 0,
           avgComposite: f.avgComposite ?? 0,
-          earningsBeats: desks.earningsBeats ?? 0,
-          earningsMisses: desks.earningsMisses ?? 0,
-          earningsUpcoming: desks.earningsUpcoming ?? 0,
           newsCount: desks.newsCount ?? 0,
           skewNames: desks.skewNames ?? 0,
           skewAtm: desks.skewAtm ?? null,
@@ -195,6 +199,10 @@ export default function Home() {
           briefSource: dash.intelligence?.briefSource ?? null,
           news: dash.intelligence?.news ?? [],
           newsSource: dash.intelligence?.newsSource ?? null,
+          earningsNames: dash.intelligence?.earnings?.names ?? [],
+          earningsBeats: dash.intelligence?.earnings?.beats ?? desks.earningsBeats ?? 0,
+          earningsMisses: dash.intelligence?.earnings?.misses ?? desks.earningsMisses ?? 0,
+          earningsUpcoming: dash.intelligence?.earnings?.upcoming ?? desks.earningsUpcoming ?? 0,
           capital: dash.capital ?? null,
         });
       })
@@ -270,7 +278,21 @@ export default function Home() {
         </div>
       </div>
 
-      <BriefNews items={d?.news ?? []} source={d?.newsSource ?? null} loading={loading} />
+      <BriefNews
+        items={d?.news ?? []}
+        source={d?.newsSource ?? null}
+        loading={loading}
+        earnings={
+          d
+            ? {
+                beats: d.earningsBeats,
+                misses: d.earningsMisses,
+                upcoming: d.earningsUpcoming,
+                names: d.earningsNames,
+              }
+            : null
+        }
+      />
 
       {error && !d && (
         <EmptyState
