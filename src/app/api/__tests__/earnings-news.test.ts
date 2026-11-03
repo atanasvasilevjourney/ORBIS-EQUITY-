@@ -8,6 +8,23 @@ vi.mock("@/lib/supabase/server", () => ({
   createServerClient: () => mockCreateServerClient(),
 }));
 
+vi.mock("@/lib/earningsCalendar", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/earningsCalendar")>("@/lib/earningsCalendar");
+  return {
+    ...actual,
+    loadEarningsCalendar: async (rows: Parameters<typeof actual.eventsFromDesk>[0]) =>
+      actual.eventsFromDesk(rows),
+  };
+});
+
+vi.mock("@/lib/briefNews", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/briefNews")>("@/lib/briefNews");
+  return {
+    ...actual,
+    loadMarketHeadlines: async (stored: unknown[]) => stored,
+  };
+});
+
 describe("GET /api/earnings-news", () => {
   beforeEach(() => {
     vi.resetModules();

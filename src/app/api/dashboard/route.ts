@@ -15,6 +15,17 @@ import { evaluateFreshness, lastExpectedEodDate } from "@/lib/freshness";
 import { fillMissingTape } from "@/lib/marketTapeFill";
 import { composeMarketBrief } from "@/lib/marketBrief";
 import { deskNewsFromRows, loadMarketHeadlines, newsSource, type BriefNewsItem } from "@/lib/briefNews";
+import {
+  earningsFocusTickers,
+  earningsSpotlight,
+  liquidEarnings,
+  loadEarningsCalendar,
+  summarizeEarnings,
+  tagEarningsHeadlines,
+  type DeskEarningsRow,
+  type EarningsEvent,
+  type EarningsSummary,
+} from "@/lib/earningsCalendar";
 
 export const revalidate = 900;
 
@@ -166,7 +177,9 @@ function emptyDesks(): CockpitDeskSummaries {
 function intelligenceBlock(
   headlines: BriefNewsItem[],
   composed: ReturnType<typeof composeMarketBrief>,
-  filled: string[]
+  filled: string[],
+  earnings: EarningsSummary,
+  spotlight: EarningsEvent[]
 ) {
   return {
     news: headlines,
@@ -174,13 +187,38 @@ function intelligenceBlock(
     marketBrief: composed.text,
     briefSource: composed.source,
     tapeFilled: filled,
+    earnings: {
+      ...earnings,
+      names: spotlight.map((row) => ({
+        ticker: row.ticker,
+        name: row.name,
+        eventDate: row.eventDate,
+        confirmed: row.confirmed,
+        epsEst: row.epsEst,
+        epsActual: row.epsActual,
+        surprisePct: row.surprisePct,
+        source: row.source,
+      })),
+    },
   };
+}
+
+async function newsForEarnings(stored: Parameters<typeof deskNewsFromRows>[0], deskEarnings: DeskEarningsRow[]) {
+  const calendar = liquidEarnings(await loadEarningsCalendar(deskEarnings));
+  const summary = summarizeEarnings(calendar);
+  const spotlight = earningsSpotlight(calendar, 6);
+  const focus = earningsFocusTickers(calendar, 4);
+  const headlines = tagEarningsHeadlines(
+    await loadMarketHeadlines(deskNewsFromRows(stored), 6, focus),
+    focus
+  ).slice(0, 6);
+  return { summary, spotlight, headlines };
 }
 
 async function liveCockpit() {
   const tapeSymbols = [...CROSS_ASSET_META.map((row) => row.symbol), ...SCOREBOARD_SYMBOLS];
   const { prices, filled } = await fillMissingTape([], tapeSymbols);
-  const headlines = await loadMarketHeadlines([]);
+  const { summary: earningsSummary, spotlight, headlines } = await newsForEarnings([], []);
   const crossAsset = crossAssetTiles(prices, new Set(filled));
   const composed = composeMarketBrief({
     pipelineBrief: null,
@@ -216,8 +254,14 @@ async function liveCockpit() {
     rotation: { regime: null, headline: null, sectors: [], leading: 0 },
     watchlistMovers: [],
     fundamentals: { count: 0, highComposite: 0, highFScore: 0, avgComposite: 0 },
-    desks: emptyDesks(),
-    intelligence: intelligenceBlock(headlines, composed, filled),
+    desks: {
+      ...emptyDesks(),
+      earningsBeats: earningsSummary.beats,
+      earningsMisses: earningsSummary.misses,
+      earningsUpcoming: earningsSummary.upcoming,
+      newsCount: headlines.length,
+    },
+    intelligence: intelligenceBlock(headlines, composed, filled, earningsSummary, spotlight),
   };
 }
 
@@ -339,7 +383,7 @@ export async function GET() {
       }));
 
     const tapeSymbols = [...CROSS_ASSET_META.map((c) => c.symbol), ...SCOREBOARD_SYMBOLS];
-    const [rawPrices, desks, capital, scoreNames, scoreFunds, newsRes] = await Promise.all([
+    const [rawPrices, desks, capital, scoreNames, scoreFunds, newsRes, earningsRes] = await Promise.all([
       fetchLitePrices(sb, tapeSymbols),
       fetchCockpitDeskSummaries(sb),
       fetchCapitalBook(sb),
@@ -360,6 +404,11 @@ export async function GET() {
         .select("id, ticker, published_at, source, headline, url, tone")
         .order("published_at", { ascending: false })
         .limit(8),
+      sb
+        .from("earnings_calendar")
+        .select("ticker, event_date, confirmed, eps_est, eps_actual, surprise_pct")
+        .order("event_date", { ascending: false })
+        .limit(400),
     ]);
     const { prices: crossPrices, filled } = await fillMissingTape(
       rawPrices,
@@ -368,9 +417,17 @@ export async function GET() {
       lastExpectedEodDate()
     );
     const crossAsset = crossAssetTiles(crossPrices, new Set(filled));
-    const headlines = await loadMarketHeadlines(
-      deskNewsFromRows(Array.isArray(newsRes.data) ? newsRes.data : [])
+    const { summary: earningsSummary, spotlight, headlines } = await newsForEarnings(
+      Array.isArray(newsRes.data) ? newsRes.data : [],
+      Array.isArray(earningsRes.data) ? earningsRes.data : []
     );
+    const deskCounts = {
+      ...desks,
+      earningsBeats: earningsSummary.beats,
+      earningsMisses: earningsSummary.misses,
+      earningsUpcoming: earningsSummary.upcoming,
+      newsCount: Math.max(desks.newsCount ?? 0, headlines.length),
+    };
     const postureLabel = typeof inputs.posture_label === "string" ? inputs.posture_label : null;
     const bestSector = typeof breadthRaw?.best_sector === "string" ? breadthRaw.best_sector : null;
     const worstSector = typeof breadthRaw?.worst_sector === "string" ? breadthRaw.worst_sector : null;
@@ -438,8 +495,8 @@ export async function GET() {
         highFScore: fundRows.filter((r) => (r.f_score ?? 0) >= 7).length,
         avgComposite,
       },
-      desks,
-      intelligence: intelligenceBlock(headlines, composed, filled),
+      desks: deskCounts,
+      intelligence: intelligenceBlock(headlines, composed, filled, earningsSummary, spotlight),
     });
   } catch (err) {
     console.error("Dashboard API error:", err);
