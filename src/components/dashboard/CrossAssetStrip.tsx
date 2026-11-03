@@ -7,6 +7,7 @@ export type CrossAssetTile = {
   dayPct: number | null;
   asOf?: string | null;
   spark: number[];
+  source?: "tape" | "yahoo";
 };
 
 function sparkPath(values: number[], w = 64, h = 24): string {

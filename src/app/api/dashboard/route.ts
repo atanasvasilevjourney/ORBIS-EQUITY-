@@ -9,9 +9,12 @@ import {
   sessionMove,
 } from "@/lib/rotationDesk";
 import { orbisScore } from "@/lib/orbisScore";
-import { fetchCockpitDeskSummaries } from "@/lib/cockpitDeskSummaries";
+import { fetchCockpitDeskSummaries, type CockpitDeskSummaries } from "@/lib/cockpitDeskSummaries";
 import { combineCapital, legsFromBooks } from "@/lib/capitalBook";
-import { evaluateFreshness } from "@/lib/freshness";
+import { evaluateFreshness, lastExpectedEodDate } from "@/lib/freshness";
+import { fillMissingTape } from "@/lib/marketTapeFill";
+import { composeMarketBrief } from "@/lib/marketBrief";
+import { deskNewsFromRows, loadMarketHeadlines, newsSource, type BriefNewsItem } from "@/lib/briefNews";
 
 export const revalidate = 900;
 
@@ -109,8 +112,17 @@ function seriesBySymbol(prices: { symbol: string; date: string; close: number }[
 }
 
 function crossAssetTiles(
-  prices: { symbol: string; date: string; close: number }[]
-): { symbol: string; label: string; last: number | null; dayPct: number | null; asOf: string | null; spark: number[] }[] {
+  prices: { symbol: string; date: string; close: number }[],
+  filled: Set<string>
+): {
+  symbol: string;
+  label: string;
+  last: number | null;
+  dayPct: number | null;
+  asOf: string | null;
+  spark: number[];
+  source: "tape" | "yahoo";
+}[] {
   const bySym = seriesBySymbol(prices);
   return CROSS_ASSET_META.map(({ symbol, label }) => {
     const series = [...(bySym.get(symbol) ?? [])].sort((a, b) => a.date.localeCompare(b.date));
@@ -122,14 +134,98 @@ function crossAssetTiles(
       dayPct: move.dayPct,
       asOf: move.asOf,
       spark: series.slice(-20).map((s) => s.close),
+      source: filled.has(symbol) ? ("yahoo" as const) : ("tape" as const),
     };
   }).filter((t) => t.spark.length > 0);
+}
+
+function emptyDesks(): CockpitDeskSummaries {
+  return {
+    earningsBeats: 0,
+    earningsMisses: 0,
+    earningsUpcoming: 0,
+    newsCount: 0,
+    skewNames: 0,
+    skewAtm: null,
+    skewWeekend: null,
+    orbGappers: 0,
+    orbBreakouts: 0,
+    analysisBuys: 0,
+    analysisSells: 0,
+    quantNames: 0,
+    quantSharpe: null,
+    biasLongs: 0,
+    biasShorts: 0,
+    cashTema: 0,
+    cashCarver: 0,
+    triangleSetups: 0,
+    triangleBreakouts: 0,
+  };
+}
+
+function intelligenceBlock(
+  headlines: BriefNewsItem[],
+  composed: ReturnType<typeof composeMarketBrief>,
+  filled: string[]
+) {
+  return {
+    news: headlines,
+    newsSource: newsSource(headlines),
+    marketBrief: composed.text,
+    briefSource: composed.source,
+    tapeFilled: filled,
+  };
+}
+
+async function liveCockpit() {
+  const tapeSymbols = [...CROSS_ASSET_META.map((row) => row.symbol), ...SCOREBOARD_SYMBOLS];
+  const { prices, filled } = await fillMissingTape([], tapeSymbols);
+  const headlines = await loadMarketHeadlines([]);
+  const crossAsset = crossAssetTiles(prices, new Set(filled));
+  const composed = composeMarketBrief({
+    pipelineBrief: null,
+    postureLabel: null,
+    advancersPct: null,
+    bestSector: null,
+    worstSector: null,
+    regime: null,
+    quotes: crossAsset,
+  });
+  const asOfDate = crossAsset
+    .map((tile) => tile.asOf)
+    .filter((date): date is string => !!date)
+    .sort()
+    .at(-1) ?? null;
+  return {
+    degraded: true,
+    asOfDate,
+    briefText: composed.text || null,
+    stale: true,
+    signalsSuppressed: true,
+    capital: null,
+    posture: null,
+    postureLabel: null,
+    posturePillars: null,
+    breadth: null,
+    avgRank: 0,
+    bestSector: null,
+    worstSector: null,
+    regionBreadth: {},
+    crossAsset,
+    scoreboard: scoreboardTiles(prices, new Map(), new Map(), new Set(filled)),
+    rotation: { regime: null, headline: null, sectors: [], leading: 0 },
+    watchlistMovers: [],
+    fundamentals: { count: 0, highComposite: 0, highFScore: 0, avgComposite: 0 },
+    desks: emptyDesks(),
+    intelligence: intelligenceBlock(headlines, composed, filled),
+  };
 }
 
 function scoreboardTiles(
   prices: { symbol: string; date: string; close: number }[],
   names: Map<string, string | null>,
-  yields: Map<string, { fcf: number | null; earnings: number | null }>
+  yields: Map<string, { fcf: number | null; earnings: number | null }>,
+  filled: Set<string>
 ) {
   const bySym = seriesBySymbol(prices);
   return SCOREBOARD_SYMBOLS.map((symbol) => {
@@ -143,6 +239,7 @@ function scoreboardTiles(
       fcfYield: fund?.fcf ?? null,
       earningsYield: fund?.earnings ?? null,
       asOf: move.asOf,
+      source: filled.has(symbol) ? ("yahoo" as const) : ("tape" as const),
     };
   });
 }
@@ -242,7 +339,7 @@ export async function GET() {
       }));
 
     const tapeSymbols = [...CROSS_ASSET_META.map((c) => c.symbol), ...SCOREBOARD_SYMBOLS];
-    const [crossPrices, desks, capital, scoreNames, scoreFunds] = await Promise.all([
+    const [rawPrices, desks, capital, scoreNames, scoreFunds, newsRes] = await Promise.all([
       fetchLitePrices(sb, tapeSymbols),
       fetchCockpitDeskSummaries(sb),
       fetchCapitalBook(sb),
@@ -258,18 +355,47 @@ export async function GET() {
         "symbol, fcf_yield, earnings_yield",
         (q) => q.in("symbol", [...SCOREBOARD_SYMBOLS])
       ).catch(() => []),
+      sb
+        .from("news_items")
+        .select("id, ticker, published_at, source, headline, url, tone")
+        .order("published_at", { ascending: false })
+        .limit(8),
     ]);
+    const { prices: crossPrices, filled } = await fillMissingTape(
+      rawPrices,
+      tapeSymbols,
+      undefined,
+      lastExpectedEodDate()
+    );
+    const crossAsset = crossAssetTiles(crossPrices, new Set(filled));
+    const headlines = await loadMarketHeadlines(
+      deskNewsFromRows(Array.isArray(newsRes.data) ? newsRes.data : [])
+    );
+    const postureLabel = typeof inputs.posture_label === "string" ? inputs.posture_label : null;
+    const bestSector = typeof breadthRaw?.best_sector === "string" ? breadthRaw.best_sector : null;
+    const worstSector = typeof breadthRaw?.worst_sector === "string" ? breadthRaw.worst_sector : null;
+    const advancersPct = total > 0 ? Math.round((advancers / total) * 100) : null;
+    const composed = composeMarketBrief({
+      pipelineBrief: brief?.brief ?? null,
+      postureLabel,
+      advancersPct,
+      bestSector,
+      worstSector,
+      regime: latestRun?.regime ?? null,
+      quotes: crossAsset,
+    });
 
     const fresh = evaluateFreshness(brief?.asof_date);
 
     return NextResponse.json({
+      degraded: false,
       asOfDate: brief?.asof_date ?? null,
-      briefText: brief?.brief ?? null,
+      briefText: composed.text || brief?.brief || null,
       stale: fresh.stale,
       signalsSuppressed: fresh.signalsSuppressed,
       capital,
       posture: inputs.posture_score ?? null,
-      postureLabel: inputs.posture_label ?? null,
+      postureLabel,
       posturePillars: posturePillars ?? null,
       breadth: {
         total,
@@ -284,10 +410,10 @@ export async function GET() {
         pctRed: total > 0 ? Math.round((reds / total) * 100) : 0,
       },
       avgRank: total > 0 ? Math.round(radar.reduce((s, r) => s + r.quality_rank, 0) / total) : 0,
-      bestSector: breadthRaw?.best_sector ?? null,
-      worstSector: breadthRaw?.worst_sector ?? null,
+      bestSector,
+      worstSector,
       regionBreadth: inputs.region_breadth ?? {},
-      crossAsset: crossAssetTiles(crossPrices),
+      crossAsset,
       scoreboard: scoreboardTiles(
         crossPrices,
         new Map(scoreNames.map((row) => [row.symbol, row.company_name])),
@@ -296,7 +422,8 @@ export async function GET() {
             row.symbol,
             { fcf: finiteOrNull(row.fcf_yield), earnings: finiteOrNull(row.earnings_yield) },
           ])
-        )
+        ),
+        new Set(filled)
       ),
       rotation: {
         regime: latestRun?.regime ?? null,
@@ -312,9 +439,15 @@ export async function GET() {
         avgComposite,
       },
       desks,
+      intelligence: intelligenceBlock(headlines, composed, filled),
     });
   } catch (err) {
     console.error("Dashboard API error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    try {
+      return NextResponse.json(await liveCockpit());
+    } catch (liveErr) {
+      console.error("Dashboard live tape error:", liveErr);
+      return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    }
   }
 }

@@ -21,6 +21,7 @@ export type ScoreboardName = {
   fcfYield: number | null;
   earningsYield: number | null;
   asOf: string | null;
+  source?: "tape" | "yahoo" | null;
 };
 
 const DOT: Record<string, string> = {
@@ -59,10 +60,19 @@ export function TapeScoreboard({
       fcfYield: row?.fcfYield ?? null,
       earningsYield: row?.earningsYield ?? null,
       asOf: row?.asOf ?? null,
+      source: row?.source ?? null,
     };
   });
   const holding = holdingOrder(rows);
   const printed = latestDate(rows.map((row) => row.asOf));
+  const yahooNames = rows.filter((row) => row.source === "yahoo" && row.last != null).length;
+  const pricedNames = rows.filter((row) => row.last != null).length;
+  const priceLabel =
+    pricedNames > 0 && yahooNames === pricedNames
+      ? `Prices · Yahoo EOD · ${printed ?? "—"}`
+      : yahooNames > 0
+        ? `Prices · desk tape + Yahoo · ${printed ?? "—"}`
+        : `Prices · EOD · ${printed ?? "—"}`;
 
   return (
     <DeskWidget
@@ -73,7 +83,7 @@ export function TapeScoreboard({
       ]}
       footer={
         <>
-          <span>{unavailable ? "Tape unavailable" : `Prices · EOD · ${printed ?? "—"}`}</span>
+          <span>{unavailable ? "Tape unavailable" : priceLabel}</span>
           <span>FCF yield, or earnings yield when free cash flow is missing</span>
         </>
       }
