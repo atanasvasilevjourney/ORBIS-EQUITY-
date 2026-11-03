@@ -15,6 +15,7 @@ type PaletteItem = {
 
 const STATIC_ITEMS: PaletteItem[] = [
   { id: "home", label: "Home Cockpit", hint: "HOME", href: "/", group: "Navigate" },
+  { id: "portfolio", label: "Portfolio Studio", hint: "BOOK", href: "/portfolio", group: "Navigate" },
   { id: "watchlist-edit", label: "Edit my watchlist", hint: "DESK", href: "/?desk=edit", group: "Navigate" },
   { id: "trade", label: "Trade desk (TOS)", hint: "TOS", href: "/trade", group: "Navigate" },
   { id: "screener", label: "Watchlist", hint: "SCR", href: "/screener", group: "Navigate" },
