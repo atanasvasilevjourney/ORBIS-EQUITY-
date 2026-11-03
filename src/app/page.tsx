@@ -520,6 +520,15 @@ export default function Home() {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {([
           {
+            href: "/portfolio", title: "PORTFOLIO STUDIO", badge: "STUDIO",
+            subtitle: "Simple long-term book · Pro systematic quant", accent: "var(--module-1)", source: "PORTFOLIO",
+            metrics: [
+              { label: "SIMPLE", value: "HOLD", color: "var(--accent-bull)" },
+              { label: "PRO", value: "QUANT", color: "var(--accent-info)" },
+              { label: "NAMES", value: "24" },
+            ],
+          },
+          {
             href: "/trade", title: "TRADE", badge: "MODULE 1",
             subtitle: "thinkorswim-style MarketWatch + Charts (scan only)", accent: "var(--module-1)", source: "EOD",
             metrics: [

@@ -7,6 +7,7 @@ import { ThemeToggle } from "@/components/cards/ThemeToggle";
 
 const NAV_PRIMARY = [
   { href: "/", label: "COCKPIT", title: "Market cockpit" },
+  { href: "/portfolio", label: "PORTFOLIO", title: "Simple long-term book and Pro quant studio" },
   { href: "/trade", label: "TRADE", title: "MarketWatch + Charts (thinkorswim-style)" },
   { href: "/screener", label: "WATCHLIST", title: "Watchlist screener (TC2000 layout)" },
   { href: "/loop", label: "LOOP", title: "Production paper book" },
@@ -78,7 +79,7 @@ export function Nav() {
             </span>
           </Link>
           <div className="hidden lg:flex items-center gap-0.5 min-w-0">
-            <div className="flex items-center gap-0.5 overflow-x-auto max-w-[36rem]">
+            <div className="flex items-center gap-0.5 overflow-x-auto max-w-[46rem]">
               {NAV_PRIMARY.map((l) => (
                 <Link
                   key={l.href}
