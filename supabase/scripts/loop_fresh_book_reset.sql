@@ -1,11 +1,13 @@
 -- LOOP fresh book reset: close open paper_book rows, $100k cash, journal epoch.
 -- Run in Supabase SQL Editor as postgres / service role (bypasses RLS).
 -- Then on Render (service_role): python -m pipeline.compute.sync_loop_journal
+--
+-- Do NOT run restore_loop_book / restore_loop_book_2026-10-13.sql after this — that re-opens old names.
 
-DO $$
+DO $reset$
 DECLARE
   session_day date := (now() AT TIME ZONE 'America/New_York')::date;
-  run_id text := 'run_' || to_char(session_day, 'YYYY-MM-DD') || '_reset_manual';
+  v_run_id text := 'run_' || to_char(session_day, 'YYYY-MM-DD') || '_reset_manual';
   pos record;
   ord_n int := 0;
   open_names int := 0;
@@ -17,7 +19,7 @@ BEGIN
     run_id, asof_date, equity, deployed_pct, open_risk_pct, names, posture,
     status, headline, harness, log, computed_at
   ) VALUES (
-    run_id,
+    v_run_id,
     session_day,
     100000,
     0,
@@ -64,8 +66,8 @@ BEGIN
     INSERT INTO paper_orders (
       id, run_id, ticker, action, type, shares, limit_price, reason, sector, risk_usd, created_at
     ) VALUES (
-      run_id || '_ord_' || lpad(ord_n::text, 3, '0'),
-      run_id,
+      v_run_id || '_ord_' || lpad(ord_n::text, 3, '0'),
+      v_run_id,
       pos.symbol,
       'SELL',
       'EXIT',
@@ -84,4 +86,4 @@ BEGIN
   IF ord_n <> open_names THEN
     RAISE WARNING 'Expected % open name(s), wrote % exit order(s)', open_names, ord_n;
   END IF;
-END $$;
+END $reset$;
