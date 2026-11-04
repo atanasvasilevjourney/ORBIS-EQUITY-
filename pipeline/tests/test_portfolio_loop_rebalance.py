@@ -29,6 +29,13 @@ def test_paper_orders_include_cost_fields():
     assert "**econ" in text
 
 
+def test_deliberate_flat_clears_book_when_all_held_names_have_exit_orders():
+    text = Path("pipeline/compute/portfolio_loop.py").read_text(encoding="utf-8")
+    assert "deliberate_flat" in text
+    assert "existing_syms <= exit_tickers" in text
+    assert "paper_book cleared" in text
+
+
 def test_empty_target_does_not_rotate_out_held():
     text = Path("pipeline/compute/portfolio_loop.py").read_text(encoding="utf-8")
     assert "if target_syms:" in text

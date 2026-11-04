@@ -279,16 +279,16 @@ def _run_portfolio_loop(sb, run) -> None:
                 if hit:
                     exit_reason = atr_reason
         if exit_reason:
-            add_order(
-                ticker=sym,
-                action="SELL",
-                type="EXIT",
-                shares=shares,
-                limit_price=round(snap["close"], 2) if snap else None,
-                reason=exit_reason,
-                sector=sector,
-                risk_usd=None,
-            )
+                add_order(
+                    ticker=sym,
+                    action="SELL",
+                    type="EXIT",
+                    shares=shares,
+                    limit_price=_exit_mark_price(pos, snap),
+                    reason=exit_reason,
+                    sector=sector,
+                    risk_usd=None,
+                )
             note("ORDER", f"EXIT {sym} {shares} · {exit_reason}")
             held.pop(sym, None)
 
@@ -334,7 +334,7 @@ def _run_portfolio_loop(sb, run) -> None:
                     action="SELL",
                     type="EXIT",
                     shares=int(pos.get("shares") or 0),
-                    limit_price=round(snap["close"], 2) if snap else None,
+                    limit_price=_exit_mark_price(pos, snap),
                     reason="Rebalance · dropped from top basket",
                     sector=pos.get("sector") or "",
                     risk_usd=None,
@@ -508,11 +508,19 @@ def _run_portfolio_loop(sb, run) -> None:
 
     existing_syms = {p["symbol"] for p in book_rows}
     new_syms = {p["symbol"] for p in surviving_list}
-    if existing_syms and not surviving_list:
+    exit_tickers = {
+        o["ticker"]
+        for o in orders
+        if o.get("type") == "EXIT" and o.get("action") == "SELL"
+    }
+    deliberate_flat = bool(
+        existing_syms and not surviving_list and existing_syms <= exit_tickers
+    )
+    if existing_syms and not surviving_list and not deliberate_flat:
         note(
             "ERROR",
             "Refusing to clear paper_book — had open names but zero survivors "
-            "(check price ingest / pagination)",
+            "and no EXIT order for every held symbol (check price ingest / pagination)",
         )
     else:
         for sym in existing_syms - new_syms:
@@ -520,6 +528,8 @@ def _run_portfolio_loop(sb, run) -> None:
                 sb.table("paper_book").delete().eq("symbol", sym).execute()
             except Exception:
                 logger.exception("Failed to delete %s from paper_book", sym)
+        if deliberate_flat:
+            note("INFO", f"paper_book cleared · {len(existing_syms)} deliberate exit(s)")
 
         if surviving_list:
             sb.table("paper_book").upsert(surviving_list, on_conflict="symbol").execute()
@@ -541,6 +551,10 @@ def _run_portfolio_loop(sb, run) -> None:
         )
 
     note("INFO", f"Loop complete · {headline}")
+    try:
+        sb.table("paper_loop_runs").update({"log": log[-40:]}).eq("run_id", run_id).execute()
+    except Exception:
+        logger.exception("Failed to persist final LOOP run log")
     logger.info("=== Portfolio Loop Complete: %s ===", headline)
     run.set_row_counts(
         names=len(surviving_list),
@@ -549,6 +563,18 @@ def _run_portfolio_loop(sb, run) -> None:
         exits=n_exit,
     )
     run.set_headline(headline)
+
+
+def _exit_mark_price(pos: dict, snap: dict | None) -> float | None:
+    if snap and snap.get("close"):
+        return round(float(snap["close"]), 2)
+    last = pos.get("last")
+    if last is not None and float(last) > 0:
+        return round(float(last), 2)
+    entry = pos.get("entry")
+    if entry is not None and float(entry) > 0:
+        return round(float(entry), 2)
+    return None
 
 
 def _position_row(

@@ -119,6 +119,15 @@ export async function GET() {
 
     const orders = allOrders.filter((o) => o.run_id === latest.run_id);
 
+    let bookEpoch: string | null = null;
+    for (const r of runs) {
+      const h = r.harness;
+      if (h && typeof h === "object" && typeof (h as { bookEpoch?: unknown }).bookEpoch === "string") {
+        bookEpoch = String((h as { bookEpoch: string }).bookEpoch).slice(0, 10);
+        break;
+      }
+    }
+
     const journalDb = await fetchAll<JournalDbRow>(
       sb,
       "trading_journal",
@@ -133,6 +142,7 @@ export async function GET() {
       action: o.action,
       shares: o.shares,
       limitPrice: o.limit_price,
+      fillPrice: o.fill_price,
       reason: o.reason,
       sector: o.sector,
       createdAt: o.created_at,
@@ -154,7 +164,23 @@ export async function GET() {
       exitedAt: t.exitedAt?.slice(0, 10) ?? null,
     }));
 
-    const journal =
+    type JournalOut = {
+      id: string;
+      ticker: string;
+      side: string;
+      shares: number;
+      entry: number;
+      exit: number;
+      pnlUsd: number;
+      returnPct: number | null;
+      sector: string | null;
+      entryReason: string | null;
+      exitReason: string | null;
+      enteredAt: string | null;
+      exitedAt: string | null;
+    };
+
+    const journalAll: JournalOut[] =
       journalDb.length > 0
         ? journalDb.map((j) => ({
             id: j.id,
@@ -173,6 +199,17 @@ export async function GET() {
           }))
         : journalFromOrders;
 
+    const journalSinceEpoch = (rows: JournalOut[]) => {
+      if (!bookEpoch) return rows;
+      return rows.filter((t) => {
+        const exitDay = t.exitedAt ?? "";
+        const enterDay = t.enteredAt ?? "";
+        return exitDay >= bookEpoch || enterDay >= bookEpoch;
+      });
+    };
+
+    const journal = journalSinceEpoch(journalAll);
+
     const journalSummary = {
       closedTrades: journal.length,
       realizedPnlUsd: journal.reduce((s, t) => s + (t.pnlUsd ?? 0), 0),
@@ -180,7 +217,12 @@ export async function GET() {
         journal.length > 0
           ? (journal.filter((t) => (t.pnlUsd ?? 0) > 0).length / journal.length) * 100
           : null,
+      priorEpochTrades: bookEpoch ? Math.max(0, journalAll.length - journal.length) : 0,
     };
+
+    const recentOrdersRaw = [...allOrders]
+      .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))
+      .slice(0, 40);
 
     const entryDateByTicker = new Map<string, string>();
     const enterOrders = allOrders
@@ -196,6 +238,7 @@ export async function GET() {
           sectorExposure?: unknown[];
           skipped?: unknown[];
           config?: Record<string, unknown> | null;
+          bookEpoch?: string | null;
         }
       : { sectorExposure: [], skipped: [], config: null };
 
@@ -411,6 +454,24 @@ export async function GET() {
         })),
         freshVerdict.signalsSuppressed
       ),
+      recentOrders: gateOrders(
+        recentOrdersRaw.map((o) => ({
+          id: o.id,
+          ticker: o.ticker,
+          action: o.action,
+          shares: o.shares,
+          type: o.type,
+          limitPrice: o.limit_price,
+          fillPrice: o.fill_price,
+          fillMode: o.fill_mode,
+          reason: o.reason,
+          sector: o.sector,
+          createdAt: o.created_at?.slice(0, 10) ?? null,
+          runAsOf: runs.find((r) => r.run_id === o.run_id)?.asof_date?.slice(0, 10) ?? null,
+        })),
+        freshVerdict.signalsSuppressed
+      ),
+      bookEpoch,
       harness: (() => {
         const cfg = harness.config ?? null;
         const maxNames = typeof cfg?.maxNames === "number" ? cfg.maxNames : 8;
