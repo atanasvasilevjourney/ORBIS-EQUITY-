@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { dailyRibbonSwingLines } from "@/lib/ema200Intraday";
 import { scaleOhlc } from "@/lib/adjustOhlc";
 import { projectSwing } from "@/lib/chartEma";
 import { rateLimitAllowed } from "@/lib/rateLimit";
 import { vwapOverlaysForIntraday } from "@/lib/vwap";
-import { cachedYahooJson } from "@/lib/yahooCache";
 import { fetchYahooDaily } from "@/lib/yahooDaily";
+import { fetchYahooIntraday } from "@/lib/yahooIntraday";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -31,42 +32,44 @@ function clampBar(o: number, h: number, l: number, c: number, vol?: number, time
   return { time: time as string | number, open: o, high, low, close: c, volume: vol };
 }
 
-async function yahoo5m(ticker: string): Promise<Candle[]> {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=5m&range=5d&includePrePost=false`;
-  try {
-    const body = await cachedYahooJson(`5m:${ticker}`, 120_000, async () => {
-      const res = await fetch(url, {
-        headers: { "User-Agent": "Mozilla/5.0 OrbisEquity-Terminal" },
-        cache: "no-store",
-        signal: AbortSignal.timeout(8000),
-      });
-      if (!res.ok) return null;
-      return res.json();
-    });
-    if (!body) return [];
-    const result = body?.chart?.result?.[0];
-    const ts: number[] = result?.timestamp ?? [];
-    const q = result?.indicators?.quote?.[0] ?? {};
-    const out: Candle[] = [];
-    let lastTs = -1;
-    for (let i = 0; i < ts.length; i++) {
-      if (ts[i] <= lastTs) continue;
-      const bar = clampBar(
-        Number(q.open?.[i]),
-        Number(q.high?.[i]),
-        Number(q.low?.[i]),
-        Number(q.close?.[i]),
-        q.volume?.[i] != null ? Number(q.volume[i]) : undefined,
-        ts[i]
+async function loadDailyOhlc(sb: ReturnType<typeof createServerClient>, ticker: string) {
+  const { data } = await sb
+    .from("prices_daily")
+    .select("date, open, high, low, close, adj_close, volume")
+    .eq("symbol", ticker)
+    .order("date", { ascending: true });
+  const rows = data ?? [];
+  if (rows.length >= 400) {
+    return rows.map((r) => {
+      const close = Number(r.close);
+      const scaled = scaleOhlc(
+        {
+          open: Number(r.open ?? r.close),
+          high: Number(r.high ?? r.close),
+          low: Number(r.low ?? r.close),
+          close,
+        },
+        r.adj_close == null ? close : Number(r.adj_close)
       );
-      if (!bar) continue;
-      lastTs = ts[i];
-      out.push(bar);
-    }
-    return out;
-  } catch {
-    return [];
+      return {
+        date: String(r.date).slice(0, 10),
+        open: scaled.open,
+        high: scaled.high,
+        low: scaled.low,
+        close: scaled.close,
+        volume: Number(r.volume ?? 0),
+      };
+    });
   }
+  const yahoo = await fetchYahooDaily(ticker, "10y");
+  return yahoo.map((b) => ({
+    date: b.date,
+    open: b.open,
+    high: b.high,
+    low: b.low,
+    close: b.close,
+    volume: b.volume,
+  }));
 }
 
 export async function GET(
@@ -85,17 +88,44 @@ export async function GET(
 
   try {
     if (requested === "5m") {
-      const candles = await yahoo5m(ticker);
+      const sb = createServerClient();
+      const raw = await fetchYahooIntraday(ticker);
+      const candles: Candle[] = raw
+        .map((b) => clampBar(b.open, b.high, b.low, b.close, b.volume, b.time))
+        .filter((c): c is Candle => c != null);
       if (candles.length >= 20) {
+        const daily = await loadDailyOhlc(sb, ticker);
+        const ribbon =
+          daily.length >= 200
+            ? dailyRibbonSwingLines(
+                candles.map((c) => ({
+                  time: c.time,
+                  open: c.open,
+                  high: c.high,
+                  low: c.low,
+                  close: c.close,
+                  volume: c.volume,
+                })),
+                daily
+              )
+            : null;
         const { session, anchored, anchorLabel } = vwapOverlaysForIntraday(candles);
         return NextResponse.json({
           ticker,
           interval: "5m",
           source: "yahoo",
+          delayed: true,
+          ribbonAnchor: "daily_ema200_eod",
           candles,
           vwapSession: session,
           vwapAnchored: anchored,
           vwapAnchorLabel: anchorLabel,
+          swing: ribbon
+            ? {
+                ema200: ribbon.ema200,
+                ema200High: ribbon.ema200High,
+              }
+            : undefined,
         });
       }
     }

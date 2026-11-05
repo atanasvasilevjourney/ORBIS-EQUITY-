@@ -21,6 +21,8 @@ type ChartPayload = {
   vwapAnchored?: (number | null)[];
   source?: string;
   interval?: string;
+  ribbonAnchor?: string;
+  delayed?: boolean;
 };
 
 type Props = {
@@ -110,6 +112,7 @@ export function ChartPane({
         {companyName && <span className="text-[10px] text-[var(--text-muted)] truncate max-w-[200px]">{companyName}</span>}
         <span className="text-[10px] text-[var(--text-muted)]">
           {chart?.interval ?? interval} · {chart?.source ?? (loading ? "…" : "—")}
+          {chart?.ribbonAnchor === "daily_ema200_eod" ? " · daily 200 EMA" : ""}
         </span>
         {onIntervalChange && (
           <div className="flex gap-1 ml-2">
@@ -155,7 +158,13 @@ export function ChartPane({
           <TradingChart
             candles={chart?.candles ?? []}
             sma={chart?.interval === "1d" ? chart?.sma20 : undefined}
-            swing={chart?.interval === "1d" ? chart?.swing : undefined}
+            swing={
+              chart?.swing?.ema200?.some((v) => v != null)
+                ? chart.swing
+                : chart?.interval === "1d"
+                  ? chart?.swing
+                  : undefined
+            }
             vwapSession={chart?.interval === "5m" ? chart?.vwapSession : undefined}
             vwapAnchored={chart?.interval === "5m" ? chart?.vwapAnchored : undefined}
             segments={segments}
