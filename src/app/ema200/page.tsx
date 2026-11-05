@@ -24,12 +24,34 @@ type ApiPayload = {
   dataSource?: string;
 };
 
+type Phase3Trigger = {
+  symbol: string;
+  triggerType: "INTRADAY_AT_RIBBON" | "INTRADAY_RECLAIM";
+  barTime: string | number;
+  sessionDate: string;
+  close: number;
+  ema200Daily: number;
+  ribbonDistAtr: number;
+  rvol5m: number | null;
+  score: number;
+  dailySetup: string | null;
+};
+
+type Phase3Payload = {
+  triggers: Phase3Trigger[];
+  disclaimer?: string;
+  asOfDate?: string | null;
+  errors?: { symbol: string; error: string }[];
+};
+
 export default function Ema200WatchlistPage() {
   const { isFocusActive, symbolsParam, universeParam, deskLabel, isWatchlist } = useFocusUniverse();
   const [data, setData] = useState<ApiPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [deskOtherOpen, setDeskOtherOpen] = useState(false);
+  const [phase3, setPhase3] = useState<Phase3Payload | null>(null);
+  const [phase3Loading, setPhase3Loading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,9 +74,34 @@ export default function Ema200WatchlistPage() {
     }
   }, [isFocusActive, symbolsParam, universeParam]);
 
+  const loadPhase3 = useCallback(async () => {
+    setPhase3Loading(true);
+    try {
+      const params = new URLSearchParams();
+      if (isFocusActive && symbolsParam) {
+        params.set("symbols", symbolsParam);
+      } else if (universeParam) {
+        params.set("universe", universeParam);
+      }
+      params.set("limit", "40");
+      const res = await fetch(`/api/ema200/intraday?${params.toString()}`);
+      setPhase3(await res.json());
+    } catch {
+      setPhase3(null);
+    } finally {
+      setPhase3Loading(false);
+    }
+  }, [isFocusActive, symbolsParam, universeParam]);
+
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    loadPhase3();
+    const id = window.setInterval(loadPhase3, 5 * 60_000);
+    return () => window.clearInterval(id);
+  }, [loadPhase3]);
 
   const watch = data?.watch ?? data?.rows ?? [];
   const approaching = data?.approaching ?? [];
@@ -104,6 +151,54 @@ export default function Ema200WatchlistPage() {
           />
         ) : (
           <Ema200WatchTable rows={watch} emptyDetail="" />
+        )}
+      </ModulePanel>
+
+      <ModulePanel
+        title="PHASE 3 · 5M CONFIRMATION"
+        badge="RTH · bar close"
+        accent="var(--accent-success)"
+        source={phase3Loading ? "scanning…" : `${phase3?.triggers?.length ?? 0} triggers`}
+      >
+        {phase3?.disclaimer && (
+          <p className="px-3 py-2 text-[10px] font-terminal text-[var(--text-muted)] border-b border-[var(--panel-border)]">
+            {phase3.disclaimer}
+          </p>
+        )}
+        {phase3Loading && !phase3?.triggers?.length ? (
+          <p className="px-3 py-8 text-center text-[var(--text-muted)] font-terminal text-sm">Loading 5m scan…</p>
+        ) : !phase3?.triggers?.length ? (
+          <EmptyState
+            title="No intraday triggers on the last 5m bar"
+            detail="Names must be on the daily watchlist (or your desk list). RECLAIM needs EOD RETRACE_HELD. Data is Yahoo-delayed."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs font-terminal">
+              <thead className="text-[var(--text-muted)] border-b border-[var(--panel-border)]">
+                <tr>
+                  <th className="px-3 py-2">Symbol</th>
+                  <th className="px-3 py-2">Trigger</th>
+                  <th className="px-3 py-2">Ribbon ATR</th>
+                  <th className="px-3 py-2">RVOL</th>
+                  <th className="px-3 py-2">Score</th>
+                  <th className="px-3 py-2">EOD setup</th>
+                </tr>
+              </thead>
+              <tbody>
+                {phase3.triggers.map((t) => (
+                  <tr key={`${t.symbol}-${t.triggerType}-${String(t.barTime)}`} className="border-b border-[var(--panel-border)]/60">
+                    <td className="px-3 py-2 text-[var(--accent-info)]">{t.symbol}</td>
+                    <td className="px-3 py-2">{t.triggerType === "INTRADAY_RECLAIM" ? "Reclaim" : "At ribbon"}</td>
+                    <td className="px-3 py-2">{t.ribbonDistAtr.toFixed(2)}</td>
+                    <td className="px-3 py-2">{t.rvol5m == null ? "—" : t.rvol5m.toFixed(2)}</td>
+                    <td className="px-3 py-2">{t.score.toFixed(0)}</td>
+                    <td className="px-3 py-2">{t.dailySetup ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </ModulePanel>
 

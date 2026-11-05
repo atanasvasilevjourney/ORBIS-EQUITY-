@@ -24,9 +24,22 @@ export function nyCashClock(now = new Date()): { date: string; minutes: number }
   };
 }
 
-/** Calendar date in America/New_York for a unix-second timestamp. */
 export function nySessionDate(tsSec: number): string {
   return nyCashClock(new Date(tsSec * 1000)).date;
+}
+
+export function nySessionDateFromUnix(tsSec: number): string {
+  return nySessionDate(tsSec);
+}
+
+/** Drop the in-progress session bar before 16:00 ET on intraday candles. */
+export function dropOpenCashIntradayBars<T extends { time: string | number }>(bars: T[], now = new Date()): T[] {
+  if (!bars.length) return bars;
+  const { date, minutes } = nyCashClock(now);
+  const last = bars[bars.length - 1];
+  const lastDate = typeof last.time === "number" ? nySessionDate(last.time) : String(last.time).slice(0, 10);
+  if (lastDate === date && minutes < SESSION_CLOSE_MINUTES) return bars.slice(0, -1);
+  return bars;
 }
 
 /** Drop today's daily bar before the 16:00 ET close so scans stay on a finished session. */

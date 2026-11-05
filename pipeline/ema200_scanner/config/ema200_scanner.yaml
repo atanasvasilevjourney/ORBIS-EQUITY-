@@ -71,3 +71,17 @@ nightly:
   max_vendor_backfill_symbols: 700
   missing_data_abort_pct: 25.0
   time_budget_sec: 7200
+
+# Phase 3 — 5m confirmation on the daily EMA200 ribbon (detect/log only; alerts = Phase 4)
+phase3:
+  enabled: true
+  interval: 5m
+  range: 5d
+  rth_only: true
+  session_start: "09:30"
+  session_end: "16:00"
+  require_daily_watchlist: true   # RETRACE_HELD on latest EOD bar for RECLAIM scoring
+  volume_confirm_ratio: 1.2
+  volume_lookback_bars: 20
+  max_symbols_per_run: 80
+  confirm_mode: bar_close

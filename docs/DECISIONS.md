@@ -36,11 +36,20 @@ Initial run on AMZN, SPY, AAPL, QQQ, NVDA:
 
 **Action:** `mode` set to `watchlist_only` in YAML until a broader universe event study (incl. delisted) or intraday confirmation changes the verdict. Do not ship Discord “signal” alerts until user approves.
 
-Manual TradingView spot-check on 15m/1m remains out of scope for this daily harness (Phase 3).
+Manual TradingView spot-check on 15m/1m remains optional; Phase 3 uses **5m bar close vs the daily EMA200 ribbon stepped onto intraday bars** (not a native 200×5m EMA).
+
+### Phase 3 (intraday confirmation — enabled)
+
+- **Anchor:** Daily adjusted double EMA200 ribbon forward-filled onto each 5m bar (`attach_daily_ema200_step` / `mergeDailyRibbonOn5m`). Same definition as the EOD watchlist, not Yahoo’s intraday EMA200.
+- **Universe:** Names on the daily watchlist (`RETRACE_HELD` / desk scan) unless `require_daily_watchlist` is turned off in YAML.
+- **Triggers (detect/log only):** `INTRADAY_AT_RIBBON` (within `shortlist_atr`, close ≥ daily EMA200, optional 5m rvol confirm) and `INTRADAY_RECLAIM` (dip/re-extend + reclaim; **requires EOD `RETRACE_HELD`**).
+- **Data:** Yahoo 5m (~5d, delayed). Drop the in-progress session bar before 16:00 ET.
+- **Jobs:** `python -m pipeline.ema200_scanner.jobs.intraday` during RTH; terminal `GET /api/ema200/intraday` and 5m chart overlay via `GET /api/chart/[ticker]?interval=5m`.
+- **Phase 4** (Discord/email alerts) remains blocked until explicit user approval.
 
 ## Phase scope (alerts)
 
-- Phases 3–5 (intraday, alerts, journal) blocked until signal mode approval.
+- **Phase 4+** (alerts, journal) blocked until signal mode approval.
 
 ## Discretionary watchlist UI
 
