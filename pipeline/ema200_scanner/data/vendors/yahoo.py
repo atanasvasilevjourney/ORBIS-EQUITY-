@@ -24,15 +24,27 @@ class YahooCashEodVendor:
         return [_to_vendor(b, src) for b in bars]
 
 
+def _scale(value: float | None, factor: float) -> float | None:
+    if value is None:
+        return None
+    return float(value) * factor
+
+
 def _to_vendor(bar: DailyBar, src: str) -> VendorBar:
-    adj = bar.adj_close if bar.adj_close is not None else bar.close
+    """Return OHLC on the adjusted-close scale (raw high/low warp the ribbon)."""
+    close = bar.close
+    adj = bar.adj_close if bar.adj_close is not None else close
+    factor = 1.0
+    if close not in (None, 0) and adj is not None:
+        factor = float(adj) / float(close)
+    adj_f = float(adj) if adj is not None else (float(close) if close is not None else None)
     return VendorBar(
         date=bar.date,
-        open=bar.open,
-        high=bar.high,
-        low=bar.low,
-        close=adj,
-        adj_close=adj,
+        open=_scale(bar.open, factor),
+        high=_scale(bar.high, factor),
+        low=_scale(bar.low, factor),
+        close=adj_f,
+        adj_close=adj_f,
         volume=bar.volume,
         source=src,
     )

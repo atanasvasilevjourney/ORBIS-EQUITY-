@@ -44,6 +44,20 @@ describe("classifyEma200Setup", () => {
     ).toBeNull();
   });
 
+  it("accepts Postgres numeric strings", () => {
+    expect(
+      classifyEma200Setup({
+        symbol: "AMZN",
+        close: "250",
+        ema200: "248",
+        dist_atr: "0.40",
+        ribbon_dist_atr: "0.35",
+        days_above: "22",
+        ema200_slope: "0.002",
+      })
+    ).toBe("RETRACE_HELD");
+  });
+
   it("rejects far from EMA", () => {
     expect(
       classifyEma200Setup({

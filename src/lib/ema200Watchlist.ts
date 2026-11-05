@@ -1,5 +1,7 @@
 /** Discretionary EMA200 watchlist filters — keep aligned with ema200_scanner.yaml watchlist + touch.shortlist_atr */
 
+import { finiteNumber } from "@/lib/adjustOhlc";
+
 export type Ema200WatchlistOpts = {
   shortlistAtr: number;
   minDaysAbove: number;
@@ -18,23 +20,26 @@ export const EMA200_DEFAULTS: Ema200WatchlistOpts = {
 
 export type Ema200Setup = "RETRACE_HELD" | "AT_EMA_HELD" | "NEAR_EMA";
 
+/** Feature numbers may arrive as Postgres numeric strings. */
+export type Ema200Num = number | string | null;
+
 export type Ema200FeatureRow = {
   symbol: string;
   bar_date?: string;
-  close: number | null;
-  ema200: number | null;
-  ema200_high?: number | null;
-  dist_atr: number | null;
-  ribbon_dist_atr?: number | null;
-  days_above?: number | null;
-  ema200_slope?: number | null;
-  rvol?: number | null;
+  close: Ema200Num;
+  ema200: Ema200Num;
+  ema200_high?: Ema200Num;
+  dist_atr: Ema200Num;
+  ribbon_dist_atr?: Ema200Num;
+  days_above?: Ema200Num;
+  ema200_slope?: Ema200Num;
+  rvol?: Ema200Num;
   regime?: string | null;
 };
 
 function watchlistDistAtr(row: Ema200FeatureRow): number | null {
-  const raw = row.ribbon_dist_atr ?? row.dist_atr;
-  if (raw == null || !Number.isFinite(raw)) return null;
+  const raw = finiteNumber(row.ribbon_dist_atr) ?? finiteNumber(row.dist_atr);
+  if (raw == null) return null;
   return Math.abs(raw);
 }
 
@@ -51,11 +56,13 @@ export function classifyEma200Setup(
   const dist = watchlistDistAtr(row);
   if (dist == null) return null;
   if (dist > th.shortlistAtr) return null;
-  if (row.close == null || row.ema200 == null) return null;
+  const close = finiteNumber(row.close);
+  const ema = finiteNumber(row.ema200);
+  if (close == null || ema == null) return null;
 
-  const held = row.close >= row.ema200;
-  const daysAbove = row.days_above ?? 0;
-  const slope = row.ema200_slope ?? 0;
+  const held = close >= ema;
+  const daysAbove = finiteNumber(row.days_above) ?? 0;
+  const slope = finiteNumber(row.ema200_slope) ?? 0;
   const uptrend = daysAbove >= th.minDaysAbove && slope > th.minSlope;
 
   if (th.requireUptrend && !uptrend) return null;

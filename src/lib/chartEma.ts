@@ -21,6 +21,28 @@ export type SwingEmaOverlays = {
   ema200High: (number | null)[];
 };
 
+/** EMA lines for a visible window, computed on the full series so the 200 is warmed up. */
+export function projectSwing<T extends { close: number; high: number }>(
+  candles: T[],
+  keep: number
+): { candles: T[]; swing: SwingEmaOverlays } {
+  const swingAll = swingEmaOverlaysFromOhlc(
+    candles.map((c) => c.close),
+    candles.map((c) => c.high)
+  );
+  const start = Math.max(0, candles.length - Math.max(1, keep));
+  const slice = <U>(arr: U[]) => arr.slice(start);
+  return {
+    candles: candles.slice(start),
+    swing: {
+      ema49: slice(swingAll.ema49),
+      ema50: slice(swingAll.ema50),
+      ema200: slice(swingAll.ema200),
+      ema200High: slice(swingAll.ema200High),
+    },
+  };
+}
+
 export function swingEmaOverlaysFromOhlc(closes: number[], highs: number[]): SwingEmaOverlays {
   const hi = highs.length === closes.length ? highs : closes;
   return {

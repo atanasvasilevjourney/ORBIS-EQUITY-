@@ -12,9 +12,9 @@
 
 ## Indicators
 
-- **EMA200:** Pine Script `ta.ema` seeding (SMA over first `period` bars, then recursive EMA). Values before `history_min_bars` (500) are forced to NaN.
+- **EMA200:** Pine Script `ta.ema` seeding (SMA over first `period` bars, then recursive EMA). Values before `history_min_bars` (200) are forced to NaN. The nightly job warms that EMA on `nightly.ema_warmup_bars` (1260) so the published value is not the SMA seed.
 - **ATR14:** Reuses `pipeline.compute.atr_risk.compute_atr` (SMA of true range). This may differ slightly from TradingView’s Wilder RMA ATR; Phase 1 acceptance targets **EMA** reference validation, not ATR parity.
-- **Adjusted prices:** Feature math uses `adj_close` when present in `prices_daily`, else `close`. Vendor backfill uses adjusted close from Yahoo/Stooq.
+- **Adjusted prices:** Open, high, low, and close are scaled by `adj_close / close` before any EMA or ATR math (`pipeline/ema200_scanner/data/adjust.py`). Adjusting only the close leaves the high-line EMA and the ribbon on raw prints and mis-tags touches after splits.
 
 ## TradingView validation
 

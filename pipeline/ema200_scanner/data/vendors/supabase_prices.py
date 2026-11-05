@@ -6,6 +6,7 @@ import logging
 import pandas as pd
 from supabase import Client
 
+from pipeline.ema200_scanner.data.adjust import scale_ohlcv_frame
 from pipeline.utils.supabase import fetch_all
 
 logger = logging.getLogger(__name__)
@@ -26,11 +27,6 @@ def load_prices_dataframe(sb: Client, symbol: str) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     df["date"] = pd.to_datetime(df["date"])
     df = df.sort_values("date").set_index("date")
-    # Adjusted prices only for indicator math
-    adj = df["adj_close"].where(df["adj_close"].notna(), df["close"])
-    df["close"] = adj.astype(float)
-    for col in ("open", "high", "low"):
-        if col in df.columns:
-            df[col] = df[col].astype(float)
-    df["volume"] = df["volume"].fillna(0).astype(float)
+    # One scale for close, high, and low — ribbon and ATR both need it.
+    df = scale_ohlcv_frame(df)
     return df[["open", "high", "low", "close", "volume"]]

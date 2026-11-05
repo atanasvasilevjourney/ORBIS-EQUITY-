@@ -9,7 +9,8 @@ universe:
   exclude_pharma: false
 ema_period: 200
 atr_period: 14
-# Hosted prices_daily has ~307 sessions today; 500 masked all EMA200 values. Keep ≥ ema_period.
+# Publish an EMA once this many bars exist. The value itself must be warmed on
+# nightly.ema_warmup_bars — seeding on ~200 bars is an SMA, not a 200 EMA.
 history_min_bars: 200
 
 trend:
@@ -63,6 +64,10 @@ validation:
 
 nightly:
   min_history_bars: 220
+  # ~5y of sessions. EMA200 still carries ~5% of a 2y seed; 5y matches a long chart.
+  ema_warmup_bars: 1260
+  # Prior sessions so the desk can show "days since touch" and the 1-day distance change.
+  feature_history_bars: 45
   max_vendor_backfill_symbols: 700
   missing_data_abort_pct: 25.0
   time_budget_sec: 7200
