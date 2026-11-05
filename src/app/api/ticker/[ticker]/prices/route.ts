@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { scaleOhlc } from "@/lib/adjustOhlc";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchYahooDaily } from "@/lib/yahooDaily";
 
@@ -39,14 +40,26 @@ export async function GET(
     });
   }
 
-  let bars = (data ?? []).map((r) => ({
-    time: r.date,
-    open: r.open ?? r.close,
-    high: r.high ?? r.close,
-    low: r.low ?? r.close,
-    close: r.adj_close ?? r.close,
-    volume: r.volume,
-  }));
+  let bars = (data ?? []).map((r) => {
+    const close = Number(r.close);
+    const scaled = scaleOhlc(
+      {
+        open: Number(r.open ?? r.close),
+        high: Number(r.high ?? r.close),
+        low: Number(r.low ?? r.close),
+        close,
+      },
+      r.adj_close == null ? close : Number(r.adj_close)
+    );
+    return {
+      time: r.date,
+      open: scaled.open,
+      high: scaled.high,
+      low: scaled.low,
+      close: scaled.close,
+      volume: r.volume,
+    };
+  });
 
   let source = "prices_daily";
   if (bars.length < 20) {

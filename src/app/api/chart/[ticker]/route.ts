@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
-import { swingEmaOverlaysFromOhlc } from "@/lib/chartEma";
+import { scaleOhlc } from "@/lib/adjustOhlc";
+import { projectSwing } from "@/lib/chartEma";
 import { rateLimitAllowed } from "@/lib/rateLimit";
 import { vwapOverlaysForIntraday } from "@/lib/vwap";
 import { cachedYahooJson } from "@/lib/yahooCache";
@@ -102,10 +103,10 @@ export async function GET(
     const sb = createServerClient();
     const { data, error } = await sb
       .from("prices_daily")
-      .select("date, open, high, low, close, volume")
+      .select("date, open, high, low, close, adj_close, volume")
       .eq("symbol", ticker)
       .order("date", { ascending: false })
-      .limit(400);
+      .limit(2000);
     if (error) {
       console.error("chart query", error);
       return NextResponse.json({
@@ -118,42 +119,51 @@ export async function GET(
       });
     }
     let candles: Candle[] = (data ?? [])
-      .map((r) =>
-        clampBar(
-          Number(r.open ?? r.close),
-          Number(r.high ?? r.close),
-          Number(r.low ?? r.close),
-          Number(r.close),
+      .map((r) => {
+        const close = Number(r.close);
+        const scaled = scaleOhlc(
+          {
+            open: Number(r.open ?? r.close),
+            high: Number(r.high ?? r.close),
+            low: Number(r.low ?? r.close),
+            close,
+          },
+          r.adj_close == null ? close : Number(r.adj_close)
+        );
+        return clampBar(
+          scaled.open,
+          scaled.high,
+          scaled.low,
+          scaled.close,
           r.volume != null ? Number(r.volume) : undefined,
           String(r.date).slice(0, 10)
-        )
-      )
+        );
+      })
       .filter((c): c is Candle => c != null)
       .reverse();
     let source = "prices_daily";
-    if (candles.length < 20) {
-      const yahoo = await fetchYahooDaily(ticker, "5y");
+    // Short stored history reseeds EMA200. Prefer a long adjusted Yahoo series.
+    if (candles.length < 1200) {
+      const yahoo = await fetchYahooDaily(ticker, "10y");
       const fromYahoo = yahoo
-        .map((b) =>
-          clampBar(b.open, b.high, b.low, b.close, b.volume, b.date)
-        )
+        .map((b) => clampBar(b.open, b.high, b.low, b.close, b.volume, b.date))
         .filter((c): c is Candle => c != null);
       if (fromYahoo.length > candles.length) {
         candles = fromYahoo;
         source = "yahoo_eod";
       }
     }
-    const closes = candles.map((c) => c.close);
-    const highs = candles.map((c) => c.high);
-    const swing = swingEmaOverlaysFromOhlc(closes, highs);
+    const projected = projectSwing(candles, 400);
+    const view = projected.candles;
+    const closes = view.map((c) => c.close);
     return NextResponse.json({
       ticker,
       interval: "1d",
       source,
       delayed: source === "yahoo_eod",
-      candles,
+      candles: view,
       sma20: sma(closes, 20),
-      swing,
+      swing: projected.swing,
       fallbackFrom5m: requested === "5m",
     });
   } catch (err) {

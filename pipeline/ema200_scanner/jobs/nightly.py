@@ -123,18 +123,23 @@ def run_nightly(*, sb: Client | None = None) -> dict:
     atr_period = int(cfg["atr_period"])
     history_min = int(cfg["history_min_bars"])
     slope_lb = int(cfg["trend"]["slope_lookback"])
-    min_bars = int(cfg.get("nightly", {}).get("min_history_bars", history_min + 50))
-    max_backfill = int(cfg.get("nightly", {}).get("max_vendor_backfill_symbols", 200))
-    abort_pct = float(cfg.get("nightly", {}).get("missing_data_abort_pct", 15.0))
-    budget = float(cfg.get("nightly", {}).get("time_budget_sec", 3600))
+    nightly_cfg = cfg.get("nightly", {})
+    min_bars = int(nightly_cfg.get("min_history_bars", history_min + 50))
+    warmup = int(nightly_cfg.get("ema_warmup_bars", max(min_bars, 1260)))
+    history_keep = max(1, int(nightly_cfg.get("feature_history_bars", 45)))
+    max_backfill = int(nightly_cfg.get("max_vendor_backfill_symbols", 200))
+    abort_pct = float(nightly_cfg.get("missing_data_abort_pct", 15.0))
+    budget = float(nightly_cfg.get("time_budget_sec", 3600))
 
     sync_ema200_universe(sb)
     universe = fetch_all(sb, "ema200_universe", "symbol, asset_class, active", filters=lambda q: q.eq("active", True))
 
     eq_bm = cfg["regime"]["equity_benchmark"]
     cr_bm = cfg["regime"]["crypto_benchmark"]
-    spy_close = _load_benchmark_series(sb, eq_bm, asset_class="equity", min_bars=min_bars, vendor=vendor)
-    btc_close = _load_benchmark_series(sb, cr_bm.replace("-", "/"), asset_class="crypto", min_bars=min_bars, vendor=vendor)
+    spy_close = _load_benchmark_series(sb, eq_bm, asset_class="equity", min_bars=warmup, vendor=vendor)
+    btc_close = _load_benchmark_series(
+        sb, cr_bm.replace("-", "/"), asset_class="crypto", min_bars=min(warmup, 1000), vendor=vendor
+    )
 
     spy_regime = (
         compute_regime(spy_close, ema_period, history_min)
@@ -163,15 +168,18 @@ def run_nightly(*, sb: Client | None = None) -> dict:
         try:
             if asset_class == "crypto":
                 pair = symbol.replace("-", "/")
-                ohlcv = fetch_crypto_ohlcv(pair, limit=min_bars)
+                # Binance 1d candles cap near 1000; equities use the longer Yahoo window.
+                ohlcv = fetch_crypto_ohlcv(pair, limit=min(warmup, 1000))
                 regime_lookup = btc_regime
             else:
                 ohlcv = load_prices_dataframe(sb, symbol)
-                if len(ohlcv) < min_bars and backfill_count < max_backfill:
-                    hist = vendor.fetch_history(symbol, min_bars=min_bars, country="US")
+                if len(ohlcv) < warmup and backfill_count < max_backfill:
+                    hist = vendor.fetch_history(symbol, min_bars=warmup, country="US")
                     backfill_count += 1
                     if hist:
-                        ohlcv = _vendor_bars_to_frame(hist)
+                        vendor_df = _vendor_bars_to_frame(hist)
+                        if len(vendor_df) > len(ohlcv):
+                            ohlcv = vendor_df
                 regime_lookup = spy_regime
 
             if ohlcv.empty or len(ohlcv) < history_min:
@@ -198,9 +206,9 @@ def run_nightly(*, sb: Client | None = None) -> dict:
                 slope_lookback=slope_lb,
                 regime=str(regime_val) if regime_val is not None else None,
             )
-            # Only upsert the latest bar nightly (full history stays in research path)
-            latest = feat.tail(1)
-            all_rows.extend(_features_to_rows(symbol, latest))
+            # Keep a short tail so the desk can measure days-since-touch and the 1-day change.
+            # EMA itself is still computed on the full warmed series above.
+            all_rows.extend(_features_to_rows(symbol, feat.tail(history_keep)))
         except Exception:
             logger.warning("Feature compute failed for %s", symbol, exc_info=True)
             missing += 1
