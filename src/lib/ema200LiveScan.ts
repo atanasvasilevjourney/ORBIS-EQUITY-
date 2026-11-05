@@ -3,6 +3,8 @@
  * (migrations not applied yet). Matches pipeline/ema200_scanner feature math.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { scaleOhlc } from "@/lib/adjustOhlc";
+import { dropOpenCashSession } from "@/lib/cashSession";
 import { emaPineSeries } from "@/lib/chartEma";
 import { EMA200_SYMBOL_SUPPLEMENTS } from "@/lib/ema200Config";
 import { fetchAll } from "@/lib/supabase/paginate";
@@ -10,10 +12,15 @@ import { fetchYahooDaily } from "@/lib/yahooDaily";
 
 const EMA_PERIOD = 200;
 const ATR_PERIOD = 14;
-/** Match ema200_scanner.yaml history_min_bars (hosted DB ~307 EOD bars). */
+/** Match ema200_scanner.yaml history_min_bars. EMA is still computed on the full series passed in. */
 const HISTORY_MIN = 200;
 const SLOPE_LOOKBACK = 20;
 const HISTORY_TAIL = 45;
+/** ~6 years. A 620-day cutoff reseeded EMA200 on a short window and missed the chart line. */
+const LOOKBACK_DAYS = 2200;
+/** Below this, a desk symbol is re-warmed from Yahoo. ~1000 sessions is about 4 years. */
+const WARMUP_BARS = 1000;
+const YAHOO_RANGE = "10y";
 
 export type LiveFeatureRow = {
   symbol: string;
@@ -36,8 +43,38 @@ type PriceRow = {
   high: number;
   low: number;
   close: number;
+  adj_close?: number | null;
   volume: number | null;
 };
+
+function toOhlc(p: {
+  date: string;
+  open?: number | null;
+  high?: number | null;
+  low?: number | null;
+  close: number;
+  adj_close?: number | null;
+  volume?: number | null;
+}): Ohlc {
+  const close = Number(p.close);
+  const scaled = scaleOhlc(
+    {
+      open: Number(p.open ?? p.close),
+      high: Number(p.high ?? p.close),
+      low: Number(p.low ?? p.close),
+      close,
+    },
+    p.adj_close == null ? close : Number(p.adj_close)
+  );
+  return {
+    date: String(p.date).slice(0, 10),
+    open: scaled.open,
+    high: scaled.high,
+    low: scaled.low,
+    close: scaled.close,
+    volume: Number(p.volume ?? 0),
+  };
+}
 
 type Ohlc = { date: string; open: number; high: number; low: number; close: number; volume: number };
 
@@ -82,7 +119,8 @@ function ribbonDist(close: number, emaC: number, emaH: number): number {
   return 0;
 }
 
-function featuresForSymbol(symbol: string, bars: Ohlc[]): LiveFeatureRow[] {
+function featuresForSymbol(symbol: string, rawBars: Ohlc[]): LiveFeatureRow[] {
+  const bars = dropOpenCashSession(rawBars);
   if (bars.length < HISTORY_MIN) return [];
   const close = bars.map((b) => b.close);
   const high = bars.map((b) => b.high);
@@ -130,7 +168,7 @@ async function fetchPricesParallel(sb: SupabaseClient, cutoffStr: string): Promi
   const base = () =>
     sb
       .from("prices_daily")
-      .select("symbol, date, open, high, low, close, volume")
+      .select("symbol, date, open, high, low, close, adj_close, volume")
       .gte("date", cutoffStr)
       .order("date", { ascending: true });
 
@@ -172,36 +210,34 @@ async function barsForSymbol(
   cachedBySym: Map<string, Ohlc[]>
 ): Promise<Ohlc[] | null> {
   const existing = cachedBySym.get(sym);
-  if (existing && existing.length >= HISTORY_MIN) return existing;
+  if (existing && existing.length >= WARMUP_BARS) return existing;
 
   const { data, error } = await sb
     .from("prices_daily")
-    .select("date, open, high, low, close, volume")
+    .select("date, open, high, low, close, adj_close, volume")
     .eq("symbol", sym)
     .gte("date", cutoffStr)
     .order("date", { ascending: true });
-  if (!error && data && data.length >= HISTORY_MIN) {
-    const ohlc: Ohlc[] = data.map((p) => ({
-      date: String(p.date),
-      open: Number(p.open ?? p.close),
-      high: Number(p.high ?? p.close),
-      low: Number(p.low ?? p.close),
-      close: Number(p.close),
-      volume: Number(p.volume ?? 0),
-    }));
-    return ohlc;
-  }
+  const dbBars =
+    !error && data?.length
+      ? data.map((p) =>
+          toOhlc({
+            date: String(p.date),
+            open: p.open,
+            high: p.high,
+            low: p.low,
+            close: Number(p.close),
+            adj_close: p.adj_close,
+            volume: p.volume,
+          })
+        )
+      : [];
+  if (dbBars.length >= WARMUP_BARS) return dbBars;
 
-  const yahoo = await fetchYahooDaily(sym, "5y");
-  if (yahoo.length < HISTORY_MIN) return null;
-  return yahoo.map((b) => ({
-    date: b.date,
-    open: b.open,
-    high: b.high,
-    low: b.low,
-    close: b.close,
-    volume: b.volume,
-  }));
+  const yahoo = await fetchYahooDaily(sym, YAHOO_RANGE);
+  if (yahoo.length >= HISTORY_MIN && yahoo.length > dbBars.length) return yahoo;
+  if (dbBars.length >= HISTORY_MIN) return dbBars;
+  return yahoo.length >= HISTORY_MIN ? yahoo : null;
 }
 
 /** On-demand EMA200 features for a user desk list (Yahoo backfill when DB is thin). */
@@ -213,16 +249,22 @@ export async function computeEma200FeaturesForSymbols(
   if (!list.length) return [];
 
   const cutoff = new Date();
-  cutoff.setUTCDate(cutoff.getUTCDate() - 620);
+  cutoff.setUTCDate(cutoff.getUTCDate() - LOOKBACK_DAYS);
   const cutoffStr = cutoff.toISOString().slice(0, 10);
 
   const bySym = new Map<string, Ohlc[]>();
   const out: LiveFeatureRow[] = [];
-  for (const sym of list) {
-    const bars = await barsForSymbol(sb, sym, cutoffStr, bySym);
-    if (!bars) continue;
-    out.push(...featuresForSymbol(sym, bars));
-  }
+  const queue = [...list];
+  const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
+    while (queue.length) {
+      const sym = queue.shift();
+      if (!sym) break;
+      const bars = await barsForSymbol(sb, sym, cutoffStr, bySym);
+      if (!bars) continue;
+      out.push(...featuresForSymbol(sym, bars));
+    }
+  });
+  await Promise.all(workers);
   return out;
 }
 
@@ -235,7 +277,7 @@ export async function computeEma200FeaturesLive(sb: SupabaseClient): Promise<Liv
   if (!symbols.size) return [];
 
   const cutoff = new Date();
-  cutoff.setUTCDate(cutoff.getUTCDate() - 620);
+  cutoff.setUTCDate(cutoff.getUTCDate() - LOOKBACK_DAYS);
   const cutoffStr = cutoff.toISOString().slice(0, 10);
 
   const prices = await fetchPricesParallel(sb, cutoffStr);
@@ -244,14 +286,7 @@ export async function computeEma200FeaturesLive(sb: SupabaseClient): Promise<Liv
   for (const p of prices) {
     if (!symbols.has(p.symbol)) continue;
     const list = bySym.get(p.symbol) ?? [];
-    list.push({
-      date: String(p.date),
-      open: Number(p.open ?? p.close),
-      high: Number(p.high ?? p.close),
-      low: Number(p.low ?? p.close),
-      close: Number(p.close),
-      volume: Number(p.volume ?? 0),
-    });
+    list.push(toOhlc(p));
     bySym.set(p.symbol, list);
   }
 
@@ -262,18 +297,13 @@ export async function computeEma200FeaturesLive(sb: SupabaseClient): Promise<Liv
 
   for (const sym of EMA200_SYMBOL_SUPPLEMENTS) {
     const existing = bySym.get(sym);
-    if (existing && existing.length >= HISTORY_MIN) continue;
-    const yahoo = await fetchYahooDaily(sym, "5y");
-    if (yahoo.length < HISTORY_MIN) continue;
-    const ohlc: Ohlc[] = yahoo.map((b) => ({
-      date: b.date,
-      open: b.open,
-      high: b.high,
-      low: b.low,
-      close: b.close,
-      volume: b.volume,
-    }));
-    out.push(...featuresForSymbol(sym, ohlc));
+    if (existing && existing.length >= WARMUP_BARS) continue;
+    const yahoo = await fetchYahooDaily(sym, YAHOO_RANGE);
+    if (yahoo.length < HISTORY_MIN || yahoo.length <= (existing?.length ?? 0)) continue;
+    for (let i = out.length - 1; i >= 0; i--) {
+      if (out[i].symbol === sym) out.splice(i, 1);
+    }
+    out.push(...featuresForSymbol(sym, yahoo));
   }
 
   return out;

@@ -1,3 +1,5 @@
+import { scaleOhlc } from "@/lib/adjustOhlc";
+import { dropOpenCashSession, nySessionDate } from "@/lib/cashSession";
 import { cachedYahooJson } from "@/lib/yahooCache";
 
 export type YahooDailyBar = {
@@ -9,9 +11,9 @@ export type YahooDailyBar = {
   volume: number;
 };
 
-/** Adjusted daily OHLCV from Yahoo chart API (Pine-compatible EMA input). */
+/** Split- and dividend-adjusted daily OHLCV from Yahoo (Pine-compatible EMA input). */
 export async function fetchYahooDaily(symbol: string, range = "2y"): Promise<YahooDailyBar[]> {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}&includePrePost=false`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${encodeURIComponent(range)}&events=history&includeAdjustedClose=true&includePrePost=false`;
   try {
     const body = await cachedYahooJson(`daily:${symbol}:${range}`, 5 * 60_000, async () => {
       const res = await fetch(url, {
@@ -26,6 +28,7 @@ export async function fetchYahooDaily(symbol: string, range = "2y"): Promise<Yah
     const result = body?.chart?.result?.[0];
     const ts: number[] = result?.timestamp ?? [];
     const q = result?.indicators?.quote?.[0] ?? {};
+    const adj: Array<number | null> | undefined = result?.indicators?.adjclose?.[0]?.adjclose;
     const out: YahooDailyBar[] = [];
     for (let i = 0; i < ts.length; i++) {
       const o = Number(q.open?.[i]);
@@ -33,18 +36,18 @@ export async function fetchYahooDaily(symbol: string, range = "2y"): Promise<Yah
       const l = Number(q.low?.[i]);
       const c = Number(q.close?.[i]);
       if (![o, h, l, c].every(Number.isFinite)) continue;
-      const d = new Date(ts[i] * 1000);
-      const date = d.toISOString().slice(0, 10);
+      const adjClose = adj && Number.isFinite(Number(adj[i])) ? Number(adj[i]) : c;
+      const scaled = scaleOhlc({ open: o, high: h, low: l, close: c }, adjClose);
       out.push({
-        date,
-        open: o,
-        high: h,
-        low: l,
-        close: c,
+        date: nySessionDate(ts[i]),
+        open: scaled.open,
+        high: scaled.high,
+        low: scaled.low,
+        close: scaled.close,
         volume: Number(q.volume?.[i] ?? 0),
       });
     }
-    return out;
+    return dropOpenCashSession(out);
   } catch {
     return [];
   }

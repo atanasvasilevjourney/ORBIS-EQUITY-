@@ -1,5 +1,6 @@
 /** Distance to the double EMA200 ribbon (close + high lines). */
 
+import { finiteNumber } from "@/lib/adjustOhlc";
 import { EMA200_DEFAULTS, type Ema200FeatureRow } from "@/lib/ema200Watchlist";
 
 export const APPROACHING_MAX_ATR = 3.0;
@@ -35,15 +36,15 @@ export function ribbonDistPct(
 }
 
 export function ribbonDistAtr(row: Ema200FeatureRow): number | null {
-  const raw = row.ribbon_dist_atr ?? row.dist_atr;
-  if (raw == null || !Number.isFinite(raw)) return null;
+  const raw = finiteNumber(row.ribbon_dist_atr) ?? finiteNumber(row.dist_atr);
+  if (raw == null) return null;
   return Math.abs(raw);
 }
 
 export type HistoryBar = {
   bar_date: string;
-  ribbon_dist_atr: number | null;
-  dist_atr: number | null;
+  ribbon_dist_atr: number | string | null;
+  dist_atr: number | string | null;
 };
 
 export function daysSinceRibbonTouch(
@@ -66,8 +67,8 @@ export function daysSinceRibbonTouch(
 }
 
 function ribbonDistAtrFromBar(b: HistoryBar): number | null {
-  const raw = b.ribbon_dist_atr ?? b.dist_atr;
-  if (raw == null || !Number.isFinite(raw)) return null;
+  const raw = finiteNumber(b.ribbon_dist_atr) ?? finiteNumber(b.dist_atr);
+  if (raw == null) return null;
   return Math.abs(raw);
 }
 
@@ -77,9 +78,11 @@ export function isApproachingPullback(row: Ema200FeatureRow, setup: string | nul
   if (dist == null) return false;
   if (dist <= EMA200_DEFAULTS.shortlistAtr) return false;
   if (dist > APPROACHING_MAX_ATR) return false;
-  if (row.close == null || row.ema200 == null) return false;
-  if (row.close < row.ema200) return false;
-  const daysAbove = row.days_above ?? 0;
-  const slope = row.ema200_slope ?? 0;
+  const close = finiteNumber(row.close);
+  const ema = finiteNumber(row.ema200);
+  if (close == null || ema == null) return false;
+  if (close < ema) return false;
+  const daysAbove = finiteNumber(row.days_above) ?? 0;
+  const slope = finiteNumber(row.ema200_slope) ?? 0;
   return daysAbove >= EMA200_DEFAULTS.minDaysAbove && slope > EMA200_DEFAULTS.minSlope;
 }

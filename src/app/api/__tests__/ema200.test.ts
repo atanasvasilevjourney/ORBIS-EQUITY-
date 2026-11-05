@@ -63,4 +63,44 @@ describe("GET /api/ema200", () => {
     expect(body.watch[0].setup).toBe("RETRACE_HELD");
     expect(body.watch[0].distUsd).toBeDefined();
   });
+
+  it("keeps a name from the prior session and accepts numeric strings", async () => {
+    const row = (symbol: string, bar_date: string) => ({
+      symbol,
+      bar_date,
+      close: "250",
+      ema200: "248",
+      ema200_high: "249",
+      dist_atr: "0.35",
+      ribbon_dist_atr: "0.35",
+      days_above: "24",
+      ema200_slope: "0.001",
+      rvol: "1.1",
+      regime: "bull",
+    });
+    mockCreateServerClient.mockReturnValue(
+      createMockSupabase({
+        ema200_features: () => ({
+          data: [row("AMZN", "2026-10-10"), row("MSFT", "2026-10-09")],
+          error: null,
+        }),
+        universe_members: () => ({ data: [], error: null }),
+        fundamentals_snapshot: () => ({ data: [], error: null }),
+        ema200_universe: () => ({
+          data: [
+            { symbol: "AMZN", index_tag: "sp500", asset_class: "equity" },
+            { symbol: "MSFT", index_tag: "sp500", asset_class: "equity" },
+          ],
+          error: null,
+        }),
+      })
+    );
+
+    const { GET } = await import("../ema200/route");
+    const res = await GET(new NextRequest("http://localhost/api/ema200"));
+    const body = await res.json();
+    expect(body.asOfDate).toBe("2026-10-10");
+    expect(body.watch.map((r: { symbol: string }) => r.symbol).sort()).toEqual(["AMZN", "MSFT"]);
+    expect(body.watch[0].close).toBe(250);
+  });
 });

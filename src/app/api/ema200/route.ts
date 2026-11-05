@@ -9,7 +9,9 @@ import {
   ribbonDistPct,
   ribbonDistUsd,
 } from "@/lib/ema200Distance";
+import { finiteNumber } from "@/lib/adjustOhlc";
 import { ema200SupplementSet } from "@/lib/ema200Config";
+import { selectScanUniverse } from "@/lib/ema200ScanSelect";
 import { computeEma200FeaturesForSymbols, computeEma200FeaturesLive } from "@/lib/ema200LiveScan";
 import { parseSymbolsQueryParam } from "@/lib/symbolsQuery";
 import { resolveUniverseDesk } from "@/lib/resolveIndexDesk";
@@ -51,6 +53,21 @@ type FundRow = {
   market_cap: number | null;
   average_volume: number | null;
 };
+
+function coerceFeature(r: FeatureDbRow): FeatureDbRow {
+  return {
+    ...r,
+    bar_date: String(r.bar_date).slice(0, 10),
+    close: finiteNumber(r.close),
+    ema200: finiteNumber(r.ema200),
+    ema200_high: finiteNumber(r.ema200_high),
+    dist_atr: finiteNumber(r.dist_atr),
+    ribbon_dist_atr: finiteNumber(r.ribbon_dist_atr),
+    days_above: finiteNumber(r.days_above),
+    ema200_slope: finiteNumber(r.ema200_slope),
+    rvol: finiteNumber(r.rvol),
+  };
+}
 
 function groupHistoryBySymbol(rows: FeatureDbRow[]): Map<string, FeatureDbRow[]> {
   const m = new Map<string, FeatureDbRow[]>();
@@ -200,16 +217,17 @@ export async function GET(req: NextRequest) {
     }
 
     if (deskSymbols.length) {
-      const have = new Set(features.map((f) => f.symbol));
-      const missing = deskSymbols.filter((s) => !have.has(s));
-      if (missing.length) {
-        try {
-          const extra = await computeEma200FeaturesForSymbols(sb, missing);
-          features = [...features, ...extra];
-          if (extra.length) dataSource = "prices_daily_live";
-        } catch (liveErr) {
-          console.error("EMA200 desk symbol scan failed:", liveErr);
+      // Recompute the desk from adjusted history. Cached ema200_features can be a
+      // short-window EMA or a ribbon built on raw highs, which mis-tags touches.
+      try {
+        const extra = await computeEma200FeaturesForSymbols(sb, deskSymbols);
+        if (extra.length) {
+          const liveSyms = new Set(extra.map((r) => r.symbol));
+          features = [...features.filter((f) => !liveSyms.has(f.symbol)), ...extra];
+          dataSource = "prices_daily_live";
         }
+      } catch (liveErr) {
+        console.error("EMA200 desk symbol scan failed:", liveErr);
       }
     }
 
@@ -218,17 +236,26 @@ export async function GET(req: NextRequest) {
         mode: "watchlist_only",
         asOfDate: null,
         disclaimer:
-          "No EMA200 feature rows yet. Apply supabase migrations 021 + 026 in the SQL editor, run pipeline.ema200_scanner.jobs.nightly, or ensure prices_daily has ≥500 bars per symbol.",
+          "No EMA200 feature rows yet. Apply supabase migrations 021 + 026 in the SQL editor, run pipeline.ema200_scanner.jobs.nightly, or ensure prices_daily has at least 200 adjusted sessions per symbol.",
         rows: [],
         watch: [],
         approaching: [],
       });
     }
 
-    const latestDate = features.reduce(
-      (max, r) => (r.bar_date > max ? r.bar_date : max),
-      features[0].bar_date
-    );
+    features = features.map(coerceFeature);
+    const scan = selectScanUniverse(features);
+    if (!scan.asOfDate) {
+      return NextResponse.json({
+        mode: "watchlist_only",
+        asOfDate: null,
+        disclaimer: "EMA200 features had no usable bar dates.",
+        rows: [],
+        watch: [],
+        approaching: [],
+      });
+    }
+    const latestDate = scan.asOfDate;
     type ScannerUniverseRow = { symbol: string; index_tag: string | null; asset_class: string | null };
     let scannerUniverse: ScannerUniverseRow[] = [];
     try {
@@ -254,8 +281,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const latestRows = features.filter((r) => {
-      if (r.bar_date !== latestDate) return false;
+    const latestRows = scan.latest.filter((r) => {
       if (deskSymbols.length) return deskSymbols.includes(r.symbol);
       if (indexDeskFilter) return indexDeskFilter.has(r.symbol);
       return allowedSymbols.size === 0 || allowedSymbols.has(r.symbol) || supplements.has(r.symbol);
