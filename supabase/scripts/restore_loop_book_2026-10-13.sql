@@ -1,6 +1,8 @@
 -- Restore LOOP paper book: CRWD, PANW, A (opened 2026-09-28 session)
 -- Run in Supabase SQL Editor (service role / postgres — bypasses RLS).
 -- Cause: 2026-10-13 portfolio_loop rebalance with empty target rotated out all names.
+--
+-- LEGACY ONLY — do not run after a fresh book reset (loop_fresh_book_reset.sql).
 
 BEGIN;
 

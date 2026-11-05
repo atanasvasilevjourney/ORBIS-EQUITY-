@@ -127,6 +127,8 @@ def load_loop_tables(sb: Client | None = None) -> dict[str, list[dict]]:
 
 
 def parse_exit_price(order: dict) -> float | None:
+    if order.get("fill_price") is not None:
+        return float(order["fill_price"])
     if order.get("limit_price") is not None:
         return float(order["limit_price"])
     reason = order.get("reason") or ""

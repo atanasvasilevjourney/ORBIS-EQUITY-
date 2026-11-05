@@ -6,6 +6,7 @@ export type LoopOrder = {
   action: string;
   shares: number;
   limitPrice: number | null;
+  fillPrice?: number | null;
   reason: string | null;
   sector: string | null;
   createdAt: string | null;
@@ -28,6 +29,7 @@ export type ClosedLoopTrade = {
 };
 
 function parseExitPrice(order: LoopOrder): number | null {
+  if (order.fillPrice != null) return order.fillPrice;
   if (order.limitPrice != null) return order.limitPrice;
   const reason = order.reason ?? "";
   const m = /last\s+([\d.]+)/i.exec(reason);
