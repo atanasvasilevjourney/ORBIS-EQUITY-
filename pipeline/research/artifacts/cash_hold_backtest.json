@@ -1,0 +1,136 @@
+{
+  "start": "2010-01-04",
+  "end": "2026-11-10",
+  "names": [
+    "SPY",
+    "QQQ",
+    "IWM",
+    "AAPL",
+    "MSFT",
+    "XOM",
+    "JPM",
+    "ADM",
+    "AON"
+  ],
+  "cost_bps": 5.0,
+  "daily_equal_weight": {
+    "train": {
+      "sharpe": 0.9964,
+      "cagr": 0.1581,
+      "max_drawdown": -0.1954,
+      "total_return": 2.4359,
+      "volatility": 0.1603,
+      "bars": 2119
+    },
+    "valid": {
+      "sharpe": 0.8627,
+      "cagr": 0.1893,
+      "max_drawdown": -0.3591,
+      "total_return": 1.0734,
+      "volatility": 0.2326,
+      "bars": 1060
+    },
+    "lock": {
+      "sharpe": 1.0777,
+      "cagr": 0.1637,
+      "max_drawdown": -0.1787,
+      "total_return": 0.8921,
+      "volatility": 0.1513,
+      "bars": 1060
+    },
+    "spans": {
+      "train": [
+        "2010-01-05",
+        "2018-06-05"
+      ],
+      "valid": [
+        "2018-06-06",
+        "2022-08-19"
+      ],
+      "lock": [
+        "2022-08-22",
+        "2026-11-10"
+      ]
+    }
+  },
+  "quarterly_no_cost": {
+    "train": {
+      "sharpe": 1.0011,
+      "cagr": 0.1586,
+      "max_drawdown": -0.191,
+      "total_return": 2.4483,
+      "volatility": 0.1599,
+      "bars": 2119
+    },
+    "valid": {
+      "sharpe": 0.8743,
+      "cagr": 0.1918,
+      "max_drawdown": -0.3545,
+      "total_return": 1.0922,
+      "volatility": 0.2317,
+      "bars": 1060
+    },
+    "lock": {
+      "sharpe": 1.0923,
+      "cagr": 0.1653,
+      "max_drawdown": -0.1788,
+      "total_return": 0.9032,
+      "volatility": 0.1504,
+      "bars": 1060
+    },
+    "spans": {
+      "train": [
+        "2010-01-05",
+        "2018-06-05"
+      ],
+      "valid": [
+        "2018-06-06",
+        "2022-08-19"
+      ],
+      "lock": [
+        "2022-08-22",
+        "2026-11-10"
+      ]
+    }
+  },
+  "quarterly_with_cost": {
+    "train": {
+      "sharpe": 1.0008,
+      "cagr": 0.1585,
+      "max_drawdown": -0.1911,
+      "total_return": 2.4469,
+      "volatility": 0.1599,
+      "bars": 2119
+    },
+    "valid": {
+      "sharpe": 0.874,
+      "cagr": 0.1918,
+      "max_drawdown": -0.3545,
+      "total_return": 1.0916,
+      "volatility": 0.2317,
+      "bars": 1060
+    },
+    "lock": {
+      "sharpe": 1.0918,
+      "cagr": 0.1652,
+      "max_drawdown": -0.1788,
+      "total_return": 0.9026,
+      "volatility": 0.1504,
+      "bars": 1060
+    },
+    "spans": {
+      "train": [
+        "2010-01-05",
+        "2018-06-05"
+      ],
+      "valid": [
+        "2018-06-06",
+        "2022-08-19"
+      ],
+      "lock": [
+        "2022-08-22",
+        "2026-11-10"
+      ]
+    }
+  }
+}

@@ -6,7 +6,7 @@ from typing import Any, Mapping, Sequence
 
 import pandas as pd
 
-from pipeline.strategies import donchian_vwap, watchlist_momentum
+from pipeline.strategies import cash_hold, donchian_vwap, watchlist_momentum
 from pipeline.strategies.types import Signal
 
 StrategyFn = Callable[
@@ -15,6 +15,7 @@ StrategyFn = Callable[
 ]
 
 _REGISTRY: dict[str, StrategyFn] = {
+    "cash_hold": cash_hold.signals,
     "donchian_vwap": donchian_vwap.signals,
     "watchlist_momentum": watchlist_momentum.signals,
 }
