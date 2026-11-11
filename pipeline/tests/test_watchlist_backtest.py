@@ -67,6 +67,26 @@ def test_simulate_trades_on_list_flip_next_open_to_close():
     assert t.return_pct == pytest.approx((107 / 106 - 1) * 100, rel=1e-4)
 
 
+def test_failed_follow_through_exits_early():
+    signal = _watchlist_day_frame(n_prior=MIN_HISTORY_DAYS, day_pct=6.0, rel_vol_today=2.5)
+    # Signal close is 106. The next two sessions fall back under it.
+    extra = pd.DataFrame(
+        {
+            "open": [106.0, 104.0],
+            "high": [107.0, 105.0],
+            "low": [103.0, 102.0],
+            "close": [104.0, 103.0],
+            "volume": [2_000_000.0, 1_000_000.0],
+        },
+        index=pd.bdate_range(signal.index[-1] + pd.offsets.BDay(1), periods=2),
+    )
+    df = pd.concat([signal, extra])
+    trades = simulate_watchlist_trades("TEST", df, hold_sessions=5, stop_under_signal=True)
+    assert len(trades) == 1
+    assert trades[0].exit_date == str(extra.index[0].date())
+    assert trades[0].exit_price == pytest.approx(104.0)
+
+
 def test_summarize_empty():
     s = summarize([])
     assert s["n_trades"] == 0

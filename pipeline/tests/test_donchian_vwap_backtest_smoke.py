@@ -62,6 +62,26 @@ def test_eligibility_on_signal_day_not_entry_day():
     assert float(daily.iloc[5]) < 0.05
 
 
+def test_exit_day_return_is_booked():
+    """A close that breaks the exit still earns that session, then leaves."""
+    days = pd.bdate_range("2026-03-02", periods=8)
+    spy = _panel(days, [100] * 8, [100] * 8)
+    opens = [100, 100, 100, 100, 100, 90, 90, 90]
+    closes = [100, 100, 100, 100, 90, 90, 90, 90]
+    panels = {"SPY": spy, "AAA": _panel(days, opens, closes)}
+    signals = {"AAA": _signals(days, eligible_from=0)}
+    signals["AAA"].loc[days[4], "exit_signal"] = True
+    daily, _ = run_donchian_vwap_portfolio(
+        days[0].date(),
+        days[-1].date(),
+        panels=panels,
+        signals=signals,
+        sym_sector={"AAA": "Technology"},
+        exit_mode="donchian20",
+    )
+    assert float(daily.iloc[4]) < -0.05
+
+
 def test_backtest_runs_with_injected_universe():
     days = pd.bdate_range("2026-03-02", periods=8)
     spy = _panel(days, [100] * 8, [100] * 8)

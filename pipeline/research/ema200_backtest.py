@@ -187,6 +187,7 @@ def simulate_long_touch(
     """Long at bounce close; exit on stop (low), time, or close < EMA200."""
     close = ohlcv["close"].astype(float).to_numpy()
     low = ohlcv["low"].astype(float).to_numpy()
+    open_ = ohlcv["open"].astype(float).to_numpy()
     ema = events["ema200"].astype(float).to_numpy()
     atr = events["atr14"].astype(float).to_numpy()
     signal = events["is_touch_bounce"].to_numpy(dtype=bool)
@@ -200,18 +201,22 @@ def simulate_long_touch(
     cooldown_until = 0
 
     index = ohlcv.index
+    exit_fill: dict[int, float] = {}
 
     for i in range(n):
         if in_trade:
             reason = None
+            exit_px = close[i]
             if low[i] <= stop:
                 reason = "atr_stop"
+                # A gap through the stop fills at the open. Otherwise fill the stop.
+                exit_px = float(open_[i]) if open_[i] < stop else float(stop)
             elif i - entry_i >= hold_bars:
                 reason = "time_exit"
             elif close[i] < ema[i]:
                 reason = "ema_break"
             if reason:
-                exit_px = close[i]
+                exit_fill[i] = float(exit_px)
                 ret = exit_px / entry_px - 1.0
                 trades.append(
                     Trade(
@@ -237,7 +242,8 @@ def simulate_long_touch(
     rets = np.zeros(n - 1)
     for i in range(n - 1):
         if pos[i] > 0 and close[i] > 0:
-            rets[i] = close[i + 1] / close[i] - 1.0
+            dest = exit_fill.get(i + 1, close[i + 1])
+            rets[i] = dest / close[i] - 1.0
     return trades, rets
 
 

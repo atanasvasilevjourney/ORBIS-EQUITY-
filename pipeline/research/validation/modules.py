@@ -29,7 +29,9 @@ from pipeline.research.validation.metrics import (
     ROUND_TRIP_PCT,
     ModuleRun,
     align_benchmark,
+    apply_turnover,
     equity_curve,
+    side_cost_fraction,
     spell_returns,
     summarize,
 )
@@ -76,30 +78,50 @@ def _indexed(df: pd.DataFrame) -> pd.DataFrame:
     return out.set_index("date").sort_index()
 
 
+def _high_matrix(panel: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    cols = {}
+    for sym, df in panel.items():
+        cols[sym] = pd.Series(df["high"].to_numpy(), index=pd.to_datetime(df["date"]))
+    return pd.DataFrame(cols).sort_index()
+
+
 def run_watchlist(panel: dict[str, pd.DataFrame] | None = None) -> ModuleRun:
-    """Module 1 — +4% and 2× volume, one session, next open to that close."""
+    """Module 1 — on-list flip that closed near the high, then up to five sessions."""
     panel = panel or synthetic_panel()
     bench = equal_weight_returns(panel)
-    by_day: dict[pd.Timestamp, list[float]] = {}
+    daily = bench * 0.0
     trades: list[float] = []
+    n_names = max(len(panel), 1)
     for sym, df in panel.items():
         indexed = _indexed(df)
-        for trade in simulate_watchlist_trades(sym, indexed):
+        for trade in simulate_watchlist_trades(
+            sym,
+            indexed,
+            hold_sessions=5,
+            stop_under_signal=True,
+            require_near_high=True,
+        ):
             net = trade.return_pct - ROUND_TRIP_PCT
             trades.append(net)
-            day = pd.Timestamp(trade.exit_date)
-            by_day.setdefault(day, []).append(net / 100.0)
-    daily = bench * 0.0
-    for day, rets in by_day.items():
-        if day in daily.index:
-            daily.loc[day] = float(np.mean(rets))
+            entry_ts = pd.Timestamp(trade.entry_date)
+            exit_ts = pd.Timestamp(trade.exit_date)
+            window = indexed.loc[entry_ts:exit_ts]
+            prev_close = float(trade.entry_price)
+            for ts, row in window.iterrows():
+                px = float(row["close"])
+                base = float(row["open"]) if ts == window.index[0] else prev_close
+                if base > 0 and ts in daily.index:
+                    daily.loc[ts] += (px / base - 1.0) / n_names
+                prev_close = px
+            if exit_ts in daily.index:
+                daily.loc[exit_ts] -= (ROUND_TRIP_PCT / 100.0) / n_names
     return _finish(
         "module-1-watchlist",
         "Module 1 — momentum watchlist",
         [
             "On list when the day is at least +4% and volume is at least 2× the prior 50-day average.",
-            "Hot when the day is at least +10% and volume is at least 5×.",
-            "Enter the next session open after an off-to-on flip. Exit that session's close.",
+            "Take the flip only when that close finished within 1% of the session high.",
+            "Enter the next open. Exit if the close falls back under the signal close, otherwise hold up to 5 sessions.",
             "Subtract 5 bps commission and 5 bps slippage on the entry and again on the exit.",
         ],
         daily,
@@ -115,35 +137,41 @@ def run_donchian(panel: dict[str, pd.DataFrame] | None = None) -> ModuleRun:
     bench = equal_weight_returns(panel)
     dates = as_of_dates(panel)
     holdings: dict[str, float] = {}
+    entry_px: dict[str, float] = {}
     daily = pd.Series(0.0, index=closes.index)
     trades: list[float] = []
-    prev: set[str] = set()
     for i, d in enumerate(dates[:-1]):
-        entered: set[str] = set()
-        exited: set[str] = set()
+        cost = 0.0
         if i % 5 == 0 and i >= 60:
             sigs = donchian_signals(symbols(), panel, d)
             buys = [s.symbol for s in sigs if s.side == "BUY"][:TOP_N]
-            holdings = {sym: 1.0 / len(buys) for sym in buys} if buys else {}
-            entered = set(holdings) - prev
-            exited = prev - set(holdings)
-            for sym in entered | exited:
-                trades.append(-ROUND_TRIP_PCT / 2.0)
-            prev = set(holdings)
-        if not holdings:
+            new = {sym: 1.0 / len(buys) for sym in buys} if buys else {}
+            for sym in set(entry_px) - set(new):
+                px = float(closes[sym].iloc[i])
+                ep = entry_px.pop(sym)
+                if ep > 0:
+                    trades.append((px / ep - 1.0) * 100.0 - ROUND_TRIP_PCT)
+            for sym in new:
+                if sym not in entry_px:
+                    entry_px[sym] = float(closes[sym].iloc[i])
+            delta = sum(abs(new.get(sym, 0.0) - holdings.get(sym, 0.0)) for sym in set(holdings) | set(new))
+            cost = delta * side_cost_fraction()
+            holdings = new
+        if not holdings and cost == 0.0:
             continue
         day = closes.index[i + 1]
-        ret = 0.0
+        ret = -cost
         for sym, w in holdings.items():
             prev_px = float(closes[sym].iloc[i])
             px = float(closes[sym].iloc[i + 1])
             if prev_px > 0:
                 ret += w * (px / prev_px - 1.0)
-        turn = (len(entered) + len(exited)) / 2.0 if i % 5 == 0 else 0.0
-        ret -= turn * (ROUND_TRIP_PCT / 100.0) / max(len(holdings), 1)
         daily.loc[day] = ret
-        if entered or exited:
-            trades.append(ret * 100.0)
+    last = len(closes) - 1
+    for sym, ep in entry_px.items():
+        px = float(closes[sym].iloc[last])
+        if ep > 0:
+            trades.append((px / ep - 1.0) * 100.0 - ROUND_TRIP_PCT)
     return _finish(
         "module-4-donchian",
         "Module 4 — Donchian 55 + VWAP",
@@ -151,7 +179,7 @@ def run_donchian(panel: dict[str, pd.DataFrame] | None = None) -> ModuleRun:
             "Eligible when the prior close is above the prior 55-day high and above the 20-day VWAP.",
             "Exit when the close is under the prior 20-day low.",
             "Hold the top 8 by breakout strength, equal weight, rebalance every 5 sessions.",
-            "The decision uses the prior bar. The book earns the next close-to-close return.",
+            "The decision uses the prior bar. Costs follow the weight that turns over, and a finished hold is one trade.",
         ],
         daily,
         bench,
@@ -162,18 +190,23 @@ def run_donchian(panel: dict[str, pd.DataFrame] | None = None) -> ModuleRun:
 def run_xs(panel: dict[str, pd.DataFrame] | None = None) -> ModuleRun:
     """XS sleeve — 63-session sector residual, top names, 5-session rebalance."""
     panel = panel or synthetic_panel()
+    from pipeline.compute.trail_exit import TrailState
+
     closes = close_matrix(panel)
+    highs = _high_matrix(panel).reindex(closes.index)
     bench = equal_weight_returns(panel)
     sec = sectors()
+    sma = closes.rolling(20).mean()
     daily = pd.Series(0.0, index=closes.index)
     trades: list[float] = []
     hold_leg = 0.0
     holdings: dict[str, float] = {}
+    trails: dict[str, TrailState] = {}
     for i in range(70, len(closes) - 1):
+        cost = 0.0
         if (i - 70) % 5 == 0:
-            if hold_leg != 0.0 or trades:
-                if (i - 70) > 0:
-                    trades.append(hold_leg * 100.0)
+            if (i - 70) > 0:
+                trades.append(hold_leg * 100.0)
             hold_leg = 0.0
             raw: dict[str, float] = {}
             for sym in closes.columns:
@@ -193,19 +226,40 @@ def run_xs(panel: dict[str, pd.DataFrame] | None = None) -> ModuleRun:
                 per_sec[s] = per_sec.get(s, 0) + 1
                 if len(picked) == 8:
                     break
-            holdings = {sym: 1.0 / len(picked) for sym in picked} if picked else {}
-        if not holdings:
+            new = {sym: 1.0 / len(picked) for sym in picked} if picked else {}
+            delta = sum(abs(new.get(sym, 0.0) - holdings.get(sym, 0.0)) for sym in set(holdings) | set(new))
+            cost = delta * side_cost_fraction()
+            holdings = new
+            for sym in list(trails):
+                if sym not in holdings:
+                    trails.pop(sym, None)
+            for sym in holdings:
+                if sym not in trails:
+                    px = float(closes[sym].iloc[i])
+                    trails[sym] = TrailState(entry_price=px, current_sl=0.0, peak_price=px)
+        if not holdings and cost == 0.0:
             continue
-        ret = 0.0
+        ret = -cost
         for sym, w in holdings.items():
             a = float(closes[sym].iloc[i])
             b = float(closes[sym].iloc[i + 1])
             if a > 0:
                 ret += w * (b / a - 1.0)
-        if (i - 70) % 5 == 0:
-            ret -= ROUND_TRIP_PCT / 100.0
+        j = i + 1
+        for sym in list(holdings):
+            state = trails.get(sym)
+            if state is None:
+                continue
+            px = float(closes[sym].iloc[j])
+            hi = float(highs[sym].iloc[j]) if np.isfinite(highs[sym].iloc[j]) else px
+            sma_v = float(sma[sym].iloc[j]) if np.isfinite(sma[sym].iloc[j]) else 0.0
+            state.update(hi, px, sma_v)
+            if state.trail_active and px < state.current_sl:
+                ret -= holdings[sym] * side_cost_fraction()
+                holdings.pop(sym)
+                trails.pop(sym, None)
         hold_leg += ret
-        daily.iloc[i + 1] = ret
+        daily.iloc[j] = ret
     if hold_leg != 0.0:
         trades.append(hold_leg * 100.0)
     return _finish(
@@ -215,7 +269,7 @@ def run_xs(panel: dict[str, pd.DataFrame] | None = None) -> ModuleRun:
             "Score is the 63-session return minus the equal-weight return of the same sector.",
             "A one-name sector is dropped. There is no peer to be relative to.",
             "Hold the top 8, at most 2 per sector, and rebalance every 5 sessions.",
-            "A down close is not an exit. The sleeve leaves a name when it falls out of the basket.",
+            "A down close is not an exit. The wide SMA20 trail is. Costs follow the weight that changes.",
         ],
         daily,
         bench,
@@ -333,20 +387,25 @@ def run_tema(panel: dict[str, pd.DataFrame] | None = None) -> ModuleRun:
     trades: list[float] = []
     for sym in closes.columns:
         px = closes[sym].to_numpy(dtype=float)
-        strat, pos = strategy_returns(px)
-        series = pd.Series(strat, index=closes.index[1:])
-        stacked.append(series)
+        _strat, pos = strategy_returns(px)
+        kl = calculate_kama(closes[sym], n=KAMA_LONG_N, fast=KAMA_LONG_FAST, slow=KAMA_LONG_SLOW)
+        bull = (closes[sym].shift(1) > kl.shift(1)).fillna(False).to_numpy()
+        gated = np.array(pos, dtype=float, copy=True)
+        gated[(gated > 0) & ~bull] = 0.0
+        gated[(gated < 0) & bull] = 0.0
         bar = np.diff(px) / np.where(px[:-1] == 0, np.nan, px[:-1])
-        trades.extend(spell_returns(pos[:-1], bar).tolist())
+        earned = apply_turnover(gated[:-1], bar)
+        stacked.append(pd.Series(earned, index=closes.index[1:]))
+        trades.extend(spell_returns(gated[:-1], bar).tolist())
     daily = pd.concat(stacked, axis=1).mean(axis=1).reindex(closes.index).fillna(0.0)
     return _finish(
         "module-11-tema",
         "Module 11 — TEMA 9 / 99 / 199",
         [
-            "Long when close is above TEMA-199 and TEMA-9 is above TEMA-99.",
-            "Short when both point down. Otherwise flat.",
+            "Long when close is above TEMA-199 and TEMA-9 is above TEMA-99, and only while the prior close is above the long KAMA.",
+            "Short when both TEMAs point down and the prior close is below the long KAMA. Otherwise flat.",
             "MACD close flattens the position.",
-            "The position from today's close earns the next close-to-close return.",
+            "The position from today's close earns the next close-to-close return, after the weight that changed.",
         ],
         daily,
         bench,
@@ -369,9 +428,10 @@ def run_carver(panel: dict[str, pd.DataFrame] | None = None) -> ModuleRun:
             pos[i] = forecast / CARVER_CAP
         rets = pd.Series(px, index=closes.index).pct_change().fillna(0.0)
         # Forecast at i uses closes through i, so it earns i → i+1.
-        earned = pd.Series(pos, index=closes.index).shift(1).fillna(0.0) * rets
+        weight = pd.Series(pos, index=closes.index).shift(1).fillna(0.0)
+        earned = pd.Series(apply_turnover(weight.to_numpy(), rets.to_numpy()), index=closes.index)
         daily = daily.add(earned, fill_value=0.0)
-        trades.extend(spell_returns(pos, rets.to_numpy()).tolist())
+        trades.extend(spell_returns(weight.to_numpy(), rets.to_numpy()).tolist())
     daily = daily / len(closes.columns)
     return _finish(
         "module-11-carver",
@@ -380,7 +440,7 @@ def run_carver(panel: dict[str, pd.DataFrame] | None = None) -> ModuleRun:
             "Forecast is the average of the fast and slow EWMAC, clipped at ±20.",
             "Position is forecast / 20, so a full forecast is a full unit.",
             "The forecast uses closes through today and earns the next session.",
-            "Names are equal-weighted in the sleeve.",
+            "Names are equal-weighted. Costs follow the change in forecast weight.",
         ],
         daily,
         bench,
@@ -419,6 +479,7 @@ def run_triangle(panel: dict[str, pd.DataFrame] | None = None) -> ModuleRun:
     bench = equal_weight_returns(panel)
     daily = pd.Series(0.0, index=closes.index)
     trades: list[float] = []
+    n_names = max(len(panel), 1)
     for sym, df in panel.items():
         held_until = -1
         for i in range(80, len(df) - 11):
@@ -436,18 +497,21 @@ def run_triangle(panel: dict[str, pd.DataFrame] | None = None) -> ModuleRun:
             gross = sign * (exit_ / entry - 1.0) * 100.0
             net = gross - ROUND_TRIP_PCT
             trades.append(net)
-            daily.iloc[i + 10] = daily.iloc[i + 10] + net / 100.0
+            for k in range(1, 11):
+                a = float(closes[sym].iloc[i + k - 1])
+                b = float(closes[sym].iloc[i + k])
+                if a > 0:
+                    daily.iloc[i + k] += sign * (b / a - 1.0) / n_names
+            daily.iloc[i + 1] -= (ROUND_TRIP_PCT / 100.0) / n_names
             held_until = i + 10
-    # Mean across names is not known per day; the additions are sparse so leave the sum,
-    # which is the book P&L of one unit per breakout.
     return _finish(
         "module-14-triangle",
         "Module 14 — triangle breakout",
         [
             "Ascending: flat swing highs and rising swing lows. Descending: flat lows and falling highs.",
             "Breakout up when the close clears the resistance line by the buffer.",
-            "Hold 10 sessions. A downside break is a short for the same window.",
-            "Detection uses only bars up to the signal day.",
+            "Hold 10 sessions, one name at a time, at 1/N of the book. A downside break is a short for the same window.",
+            "Detection uses only bars up to the signal day. The book is marked each session, not in one lump.",
         ],
         daily,
         bench,
@@ -471,16 +535,19 @@ def run_ema200(panel: dict[str, pd.DataFrame] | None = None) -> ModuleRun:
         daily = daily.add(pd.Series(earned, index=ohlcv.index[1:]), fill_value=0.0)
         for trade in book:
             trades.append(float(trade.return_pct) * 100.0 - ROUND_TRIP_PCT)
+            exit_ts = pd.Timestamp(str(trade.exit_date)[:10])
+            if exit_ts in daily.index:
+                daily.loc[exit_ts] -= ROUND_TRIP_PCT / 100.0
     if len(panel):
         daily = daily / len(panel)
-    trade_arr = np.array([t - ROUND_TRIP_PCT for t in trades], dtype=float)
+    trade_arr = np.array(trades, dtype=float)
     return _finish(
         "ema200-touch",
         "EMA200 touch bounce",
         [
             "Long when price has stayed above a rising EMA200 and the low tags the EMA within 0.25 ATR.",
             "The close must hold the EMA. A close under it is a breakdown, not a buy.",
-            "Exit on an ATR stop, a close back under the EMA, or the research time stop.",
+            "Exit on an ATR stop filled at the stop (or the open if the bar gaps through), a close back under the EMA, or the research time stop.",
             "History floor in this notebook is 220 bars so the synthetic tape can show the rule. Production warmup is longer.",
         ],
         daily,
@@ -499,11 +566,12 @@ def run_kama(panel: dict[str, pd.DataFrame] | None = None) -> ModuleRun:
     for sym in closes.columns:
         close = closes[sym]
         kl = calculate_kama(close, n=KAMA_LONG_N, fast=KAMA_LONG_FAST, slow=KAMA_LONG_SLOW)
+        # Prior close versus prior KAMA earns today's close-to-close return. One lag, not two.
         pos = (close.shift(1) > kl.shift(1)).astype(float).fillna(0.0)
         rets = close.pct_change().fillna(0.0)
-        held = pos.shift(1).fillna(0.0)
-        daily = daily.add(held * rets, fill_value=0.0)
-        trades.extend(spell_returns(held.to_numpy(), rets.to_numpy()).tolist())
+        earned = pd.Series(apply_turnover(pos.to_numpy(), rets.to_numpy()), index=close.index)
+        daily = daily.add(earned, fill_value=0.0)
+        trades.extend(spell_returns(pos.to_numpy(), rets.to_numpy()).tolist())
     daily = daily / len(closes.columns)
     return _finish(
         "kama-regime",
@@ -512,7 +580,7 @@ def run_kama(panel: dict[str, pd.DataFrame] | None = None) -> ModuleRun:
             "Production regime is bullish when the prior close is above the long KAMA.",
             "The research cross of short KAMA over long KAMA is not the production gate.",
             "This book is long-only in a bullish regime and flat otherwise.",
-            "The regime known yesterday earns today's close-to-close return.",
+            "The regime known at yesterday's close earns today's return. A flip pays one side of costs.",
         ],
         daily,
         bench,
@@ -529,37 +597,37 @@ def run_daily_bias(panel: dict[str, pd.DataFrame] | None = None) -> ModuleRun:
     bench = equal_weight_returns(panel)
     daily = pd.Series(0.0, index=closes.index)
     trades: list[float] = []
+    n_names = max(len(panel), 1)
     for sym, df in panel.items():
         high = df["high"].to_numpy(dtype=float)
         low = df["low"].to_numpy(dtype=float)
         close = df["close"].to_numpy(dtype=float)
-        for i in range(60, len(df) - 1):
+        sign = np.zeros(len(df))
+        for i in range(60, len(df)):
             card = build_card(close[: i + 1], high[: i + 1], low[: i + 1])
             if not card:
                 continue
             bias = card["bias"]
             if bias == "LONG":
-                sign = 1.0
+                sign[i] = 1.0
             elif bias == "SHORT":
-                sign = -1.0
-            else:
-                continue
-            a = float(closes[sym].iloc[i])
-            b = float(closes[sym].iloc[i + 1])
-            if a <= 0:
-                continue
-            gross = sign * (b / a - 1.0)
-            net = gross - ROUND_TRIP_PCT / 100.0
-            trades.append(net * 100.0)
-            daily.iloc[i + 1] += net / len(panel)
+                sign[i] = -1.0
+        # The card at today's close earns the next session, and a stance that
+        # does not change does not pay another round trip.
+        weight = np.zeros(len(df))
+        weight[1:] = sign[:-1]
+        bar = pd.Series(close, index=closes.index).pct_change().fillna(0.0).to_numpy()
+        earned = apply_turnover(weight, bar)
+        daily = daily.add(pd.Series(earned, index=closes.index) / n_names, fill_value=0.0)
+        trades.extend(spell_returns(weight, bar).tolist())
     return _finish(
         "module-10-daily-bias",
         "Module 10 — daily bias",
         [
-            "Bias is long when close is above the SMA50, MACD is positive, and RSI is not extended. The mirror is short.",
+            "Bias is long only when the close is above the SMA50 and MACD is positive and RSI is not extended. One vote stays flat. The mirror is short.",
             "Levels are classic floor pivots from the prior high, low, and close, plus the prior session range.",
-            "A long bias earns the next close-to-close gain. A short bias earns the opposite.",
-            "Neutral days stay in cash.",
+            "A long stance earns the next close-to-close gain and stays on until the card changes. A short stance earns the opposite.",
+            "Costs are charged when the stance changes, not on every session it stays the same.",
         ],
         daily,
         bench,

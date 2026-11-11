@@ -77,6 +77,7 @@ def build_watchlist_history(df: pd.DataFrame) -> pd.DataFrame:
                 "rel_vol": sig["f_ewmac"],
                 "entry_timing": sig["entry_timing"],
                 "quality_rank": sig["quality_rank"],
+                "breakout_active": bool(sig["breakout_active"]),
             }
         )
         prev_state = state
@@ -84,30 +85,53 @@ def build_watchlist_history(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows).set_index("date")
 
 
-def simulate_watchlist_trades(symbol: str, df: pd.DataFrame) -> list[WatchlistTrade]:
-    """One-day hold after an on-list flip; entries at next open."""
+def simulate_watchlist_trades(
+    symbol: str,
+    df: pd.DataFrame,
+    *,
+    hold_sessions: int = 1,
+    stop_under_signal: bool = False,
+    require_near_high: bool = False,
+) -> list[WatchlistTrade]:
+    """Enter the next open after an on-list flip.
+
+    The default is the one-session follow-through. A longer hold exits early
+    when the close falls back under the signal close, so a failed push does
+    not keep paying for a full window.
+    """
     df = _normalize_ohlcv(df)
     hist = build_watchlist_history(df)
     trades: list[WatchlistTrade] = []
+    hold_sessions = max(int(hold_sessions), 1)
+    busy_until = -1
 
     for signal_date, row in hist[hist["on_list_flip"]].iterrows():
+        if require_near_high and not bool(row.get("breakout_active", False)):
+            continue
         loc = df.index.get_loc(signal_date)
         if isinstance(loc, slice):
             continue
-        if loc + 1 >= len(df):
+        if loc <= busy_until or loc + 1 >= len(df):
             continue
-        nxt = df.iloc[loc + 1]
-        entry = float(nxt["open"])
-        exit_ = float(nxt["close"])
+        entry = float(df.iloc[loc + 1]["open"])
         if entry <= 0:
             continue
+        signal_close = float(df.iloc[loc]["close"])
+        last = min(loc + hold_sessions, len(df) - 1)
+        exit_i = loc + 1
+        for j in range(loc + 1, last + 1):
+            exit_i = j
+            if stop_under_signal and float(df.iloc[j]["close"]) < signal_close:
+                break
+        exit_ = float(df.iloc[exit_i]["close"])
+        busy_until = exit_i
         ret = (exit_ / entry - 1.0) * 100.0
         trades.append(
             WatchlistTrade(
                 symbol=symbol,
                 signal_date=str(signal_date.date()),
                 entry_date=str(df.index[loc + 1].date()),
-                exit_date=str(df.index[loc + 1].date()),
+                exit_date=str(df.index[exit_i].date()),
                 entry_price=entry,
                 exit_price=exit_,
                 return_pct=ret,

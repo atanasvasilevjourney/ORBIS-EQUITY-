@@ -66,6 +66,26 @@ def summarize(daily_returns: pd.Series, trades_pct: np.ndarray) -> dict:
     }
 
 
+def side_cost_fraction() -> float:
+    """One side of the paper cost model, as a return fraction (10 bps = 0.001)."""
+    return DEFAULT_LOOP_COSTS.bps_per_side / 10_000.0
+
+
+def apply_turnover(weight: np.ndarray, bar_returns: np.ndarray) -> np.ndarray:
+    """Weight times the bar return, minus one side of costs on the weight that changed.
+
+    ``weight[i]`` earns ``bar_returns[i]``. A move from flat to a full long
+    pays one side. Leaving that long pays the other side.
+    """
+    w = np.nan_to_num(np.asarray(weight, dtype=float))
+    r = np.nan_to_num(np.asarray(bar_returns, dtype=float))
+    n = min(len(w), len(r))
+    w = w[:n]
+    r = r[:n]
+    delta = np.abs(np.diff(w, prepend=0.0))
+    return w * r - delta * side_cost_fraction()
+
+
 def spell_returns(position: np.ndarray, bar_returns: np.ndarray) -> np.ndarray:
     """Percent return of each non-flat spell, after a round trip of paper costs.
 
