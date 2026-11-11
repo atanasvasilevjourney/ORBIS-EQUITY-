@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { isMissingRelation } from "@/lib/supabase/errors";
 import {
   EMPTY_ROTATE,
   canaryTapesFromConfig,
@@ -132,13 +133,16 @@ function mapGroup(r: GroupRow) {
 export async function GET() {
   try {
     const sb = createServerClient();
-    const runs = await fetchAll<RunRow>(
-      sb,
-      "sector_rotation_runs",
-      "run_id, asof_date, names, n_sectors, n_industries, regime, canary_score, canary_on, canary_off, n_triggers, n_carver, carver_rungs, headline, config, computed_at",
-      (q) => q.order("computed_at", { ascending: false })
-    );
-    const latest = runs[0] ?? null;
+    const { data: latestRaw, error: runErr } = await sb
+      .from("sector_rotation_runs")
+      .select(
+        "run_id, asof_date, names, n_sectors, n_industries, regime, canary_score, canary_on, canary_off, n_triggers, n_carver, carver_rungs, headline, config, computed_at"
+      )
+      .order("computed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (runErr && !isMissingRelation(runErr)) throw runErr;
+    const latest = runErr ? null : ((latestRaw as RunRow | null) ?? null);
     if (!latest) {
       const fresh = await deskFreshnessForLite(sb, null);
       return NextResponse.json({
@@ -151,13 +155,14 @@ export async function GET() {
         lite: false,
       });
     }
+    const runId = latest.run_id;
     const [rows, canaryRows, triggerRows, carverRows] = await Promise.all([
-      fetchAll<GroupRow>(sb, "sector_rotation_groups", "*"),
-      fetchAll<CanaryRow>(sb, "sector_rotation_canaries", "*").catch(() => []),
-      fetchAll<TriggerRow>(sb, "sector_rotation_triggers", "*").catch(() => []),
-      fetchAll<CarverRow>(sb, "sector_rotation_carver", "*").catch(() => []),
+      fetchAll<GroupRow>(sb, "sector_rotation_groups", "*", (q) => q.eq("run_id", runId)),
+      fetchAll<CanaryRow>(sb, "sector_rotation_canaries", "*", (q) => q.eq("run_id", runId)).catch(() => []),
+      fetchAll<TriggerRow>(sb, "sector_rotation_triggers", "*", (q) => q.eq("run_id", runId)).catch(() => []),
+      fetchAll<CarverRow>(sb, "sector_rotation_carver", "*", (q) => q.eq("run_id", runId)).catch(() => []),
     ]);
-    const groups = rows.filter((r) => r.run_id === latest.run_id).map(mapGroup);
+    const groups = rows.filter((r) => r.run_id === runId).map(mapGroup);
     const sectors = groups
       .filter((g) => g.groupType === "sector")
       .sort((a, b) => Number(b.aligned) - Number(a.aligned) || (b.score ?? 0) - (a.score ?? 0));

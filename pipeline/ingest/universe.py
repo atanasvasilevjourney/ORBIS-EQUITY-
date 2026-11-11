@@ -206,8 +206,10 @@ def main() -> None:
     # Deactivate symbols no longer in screener
     current_symbols = {r["symbol"] for r in rows}
     try:
-        all_members = sb.table("universe_members").select("symbol").execute()
-        stale = [r["symbol"] for r in (all_members.data or []) if r["symbol"] not in current_symbols]
+        from pipeline.utils.supabase import fetch_all
+
+        all_members = fetch_all(sb, "universe_members", "symbol", order=("symbol", False))
+        stale = [r["symbol"] for r in all_members if r["symbol"] not in current_symbols]
         if stale:
             for i in range(0, len(stale), batch_size):
                 batch_syms = stale[i : i + batch_size]

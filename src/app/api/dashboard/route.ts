@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { isMissingRelation } from "@/lib/supabase/errors";
 import { fetchLitePrices } from "@/lib/liteDeskApi";
 import {
   finiteOrNull,
@@ -12,6 +13,8 @@ import { orbisScore } from "@/lib/orbisScore";
 import { fetchCockpitDeskSummaries, type CockpitDeskSummaries } from "@/lib/cockpitDeskSummaries";
 import { combineCapital, legsFromBooks } from "@/lib/capitalBook";
 import { evaluateFreshness, lastExpectedEodDate } from "@/lib/freshness";
+import { postureLabelFromScore } from "@/lib/posture";
+import { gateCockpitActionable } from "@/lib/deskActionGate";
 import { fillMissingTape } from "@/lib/marketTapeFill";
 import { composeMarketBrief } from "@/lib/marketBrief";
 import { deskNewsFromRows, loadMarketHeadlines, newsSource, type BriefNewsItem } from "@/lib/briefNews";
@@ -287,13 +290,16 @@ export async function GET() {
           )
         : 0;
 
-    const runs = await fetchAll<{ run_id: string; regime: string | null; headline: string | null; computed_at: string | null }>(
-      sb,
-      "sector_rotation_runs",
-      "run_id, regime, headline, computed_at",
-      (q) => q.order("computed_at", { ascending: false })
-    );
-    const latestRun = runs[0] ?? null;
+    const { data: latestRunRaw, error: rotationErr } = await sb
+      .from("sector_rotation_runs")
+      .select("run_id, regime, headline, computed_at")
+      .order("computed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (rotationErr && !isMissingRelation(rotationErr)) throw rotationErr;
+    const latestRun = rotationErr
+      ? null
+      : (latestRunRaw as { run_id: string; regime: string | null; headline: string | null; computed_at: string | null } | null);
     let rotationSectors: {
       name: string;
       rs4w: number | null;
@@ -312,9 +318,14 @@ export async function GET() {
         label: string | null;
         score: number | null;
         run_id: string | null;
-      }>(sb, "sector_rotation_groups", "group_type, name, n_names, rs_4w, impulse, label, score, run_id");
+      }>(
+        sb,
+        "sector_rotation_groups",
+        "group_type, name, n_names, rs_4w, impulse, label, score, run_id",
+        (q) => q.eq("run_id", latestRun.run_id).eq("group_type", "sector")
+      );
       rotationSectors = groups
-        .filter((g) => g.run_id === latestRun.run_id && g.group_type === "sector")
+        .filter((g) => g.group_type === "sector")
         .map((g) => ({
           name: g.name,
           rs4w: g.rs_4w,
@@ -371,10 +382,17 @@ export async function GET() {
     const headlines = await loadMarketHeadlines(
       deskNewsFromRows(Array.isArray(newsRes.data) ? newsRes.data : [])
     );
-    const postureLabel = typeof inputs.posture_label === "string" ? inputs.posture_label : null;
     const bestSector = typeof breadthRaw?.best_sector === "string" ? breadthRaw.best_sector : null;
     const worstSector = typeof breadthRaw?.worst_sector === "string" ? breadthRaw.worst_sector : null;
     const advancersPct = total > 0 ? Math.round((advancers / total) * 100) : null;
+    const storedPosture = typeof inputs.posture_score === "number" ? inputs.posture_score : null;
+    const posture = advancersPct ?? storedPosture;
+    const postureLabel =
+      posture != null
+        ? postureLabelFromScore(posture)
+        : typeof inputs.posture_label === "string"
+          ? inputs.posture_label
+          : null;
     const composed = composeMarketBrief({
       pipelineBrief: brief?.brief ?? null,
       postureLabel,
@@ -385,7 +403,14 @@ export async function GET() {
       quotes: crossAsset,
     });
 
-    const fresh = evaluateFreshness(brief?.asof_date);
+    const tapeAsOf =
+      crossAsset
+        .map((tile) => tile.asOf)
+        .filter((date): date is string => !!date)
+        .map((date) => date.slice(0, 10))
+        .sort()[0] ?? null;
+    const fresh = evaluateFreshness(brief?.asof_date, tapeAsOf);
+    const gatedDesks = gateCockpitActionable(desks, fresh.signalsSuppressed);
 
     return NextResponse.json({
       degraded: false,
@@ -394,7 +419,7 @@ export async function GET() {
       stale: fresh.stale,
       signalsSuppressed: fresh.signalsSuppressed,
       capital,
-      posture: inputs.posture_score ?? null,
+      posture,
       postureLabel,
       posturePillars: posturePillars ?? null,
       breadth: {
@@ -438,7 +463,7 @@ export async function GET() {
         highFScore: fundRows.filter((r) => (r.f_score ?? 0) >= 7).length,
         avgComposite,
       },
-      desks,
+      desks: gatedDesks,
       intelligence: intelligenceBlock(headlines, composed, filled),
     });
   } catch (err) {

@@ -27,6 +27,8 @@ from typing import Any
 
 import requests
 
+from pipeline.utils.supabase import fetch_all
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_MIN_RANK = 60
@@ -276,13 +278,14 @@ def fetch_radar_and_universe(sb: Any) -> tuple[list[dict], dict[str, dict]]:
             break
         offset += page
 
-    uni_resp = (
-        sb.table("universe_members")
-        .select("symbol,company_name,sector")
-        .eq("is_active", True)
-        .execute()
+    uni_rows = fetch_all(
+        sb,
+        "universe_members",
+        "symbol,company_name,sector",
+        filters=lambda q: q.eq("is_active", True),
+        order=("symbol", False),
     )
-    uni_map = {r["symbol"]: r for r in (uni_resp.data or [])}
+    uni_map = {r["symbol"]: r for r in uni_rows}
     return radar, uni_map
 
 

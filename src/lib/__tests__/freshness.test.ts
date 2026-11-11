@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  evaluateFreshness,
   isEodStale,
   lastExpectedEodDate,
   previousTradingDayIso,
@@ -37,5 +38,11 @@ describe("freshness", () => {
 
   it("missing asOf is stale", () => {
     expect(isEodStale(null)).toBe(true);
+  });
+
+  it("a stale price tape suppresses signals even when the brief date is fresh", () => {
+    const monMorning = new Date("2026-10-12T14:00:00Z");
+    expect(evaluateFreshness("2026-10-09", "2026-10-07", monMorning).signalsSuppressed).toBe(true);
+    expect(evaluateFreshness("2026-10-09", "2026-10-09", monMorning).signalsSuppressed).toBe(false);
   });
 });

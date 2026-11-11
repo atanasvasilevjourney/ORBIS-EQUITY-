@@ -490,6 +490,9 @@ describe("GET /api/dashboard", () => {
     expect(body.degraded).toBe(false);
     expect(body.breadth.total).toBe(2);
     expect(body.breadth.greens).toBe(1);
+    expect(body.posture).toBe(50);
+    expect(body.postureLabel).toBe("Neutral");
+    expect(body.signalsSuppressed).toBe(true);
     expect(body.watchlistMovers[0].symbol).toBe("AAPL");
     expect(body.bestSector).toBe("Technology");
     expect(body.crossAsset[0].symbol).toBe("SPY");

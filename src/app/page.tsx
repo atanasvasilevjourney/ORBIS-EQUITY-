@@ -13,6 +13,8 @@ import { BriefNews } from "@/components/dashboard/BriefNews";
 import { TapeScoreboard, type ScoreboardName } from "@/components/dashboard/TapeScoreboard";
 import { ChipLink, StatPill } from "@/components/ui/ChipLink";
 import type { BriefNewsItem } from "@/lib/briefNews";
+import { FACTOR_STYLES } from "@/lib/factorInvesting";
+import { UNIVERSE } from "@/lib/portfolio/universe";
 
 type DashData = {
   posture: number | null;
@@ -225,15 +227,15 @@ export default function Home() {
               skewAtm: skew?.summary?.avgAtmIv ?? prev.skewAtm,
               skewWeekend: skew?.summary?.weekendRichest ?? prev.skewWeekend,
               orbGappers: orb?.summary?.names ?? prev.orbGappers,
-              orbBreakouts: orb?.summary?.breakouts ?? prev.orbBreakouts,
-              analysisBuys: analysis?.summary?.buys ?? prev.analysisBuys,
-              analysisSells: analysis?.summary?.sells ?? prev.analysisSells,
+              orbBreakouts: prev.signalsSuppressed ? 0 : (orb?.summary?.breakouts ?? prev.orbBreakouts),
+              analysisBuys: prev.signalsSuppressed ? 0 : (analysis?.summary?.buys ?? prev.analysisBuys),
+              analysisSells: prev.signalsSuppressed ? 0 : (analysis?.summary?.sells ?? prev.analysisSells),
               quantNames: quant?.summary?.names ?? prev.quantNames,
               quantSharpe: quant?.summary?.equalSharpe ?? prev.quantSharpe,
-              biasLongs: bias?.summary?.longs ?? prev.biasLongs,
-              biasShorts: bias?.summary?.shorts ?? prev.biasShorts,
-              cashTema: cash?.summary?.temaSlots ?? prev.cashTema,
-              cashCarver: cash?.summary?.carverSlots ?? prev.cashCarver,
+              biasLongs: prev.signalsSuppressed ? 0 : (bias?.summary?.longs ?? prev.biasLongs),
+              biasShorts: prev.signalsSuppressed ? 0 : (bias?.summary?.shorts ?? prev.biasShorts),
+              cashTema: prev.signalsSuppressed ? 0 : (cash?.summary?.temaSlots ?? prev.cashTema),
+              cashCarver: prev.signalsSuppressed ? 0 : (cash?.summary?.carverSlots ?? prev.cashCarver),
             }
           : prev
       );
@@ -316,7 +318,7 @@ export default function Home() {
             d?.briefSource === "mixed"
               ? "PIPELINE · TAPE"
               : d?.briefSource === "tape"
-                ? "LIVE TAPE"
+                ? "EOD TAPE"
                 : d?.briefSource === "pipeline"
                   ? "PIPELINE"
                   : "RULE-BASED"
@@ -469,8 +471,12 @@ export default function Home() {
               <ChipLink key={m.symbol} href={`/ticker/${m.symbol}`}>
                 <span className="font-bold">{m.symbol}</span>
                 <span className="text-[var(--text-muted)]">O {m.orbisScore ?? "—"}</span>
-                <span style={{ color: "var(--accent-bull)" }}>
-                  {m.dayPct != null ? `+${m.dayPct.toFixed(1)}%` : ""}
+                <span
+                  style={{
+                    color: (m.dayPct ?? 0) < 0 ? "var(--accent-bear)" : "var(--accent-bull)",
+                  }}
+                >
+                  {m.dayPct != null ? `${m.dayPct > 0 ? "+" : ""}${m.dayPct.toFixed(1)}%` : ""}
                 </span>
               </ChipLink>
             ))}
@@ -525,7 +531,7 @@ export default function Home() {
             metrics: [
               { label: "SIMPLE", value: "HOLD", color: "var(--accent-bull)" },
               { label: "PRO", value: "QUANT", color: "var(--accent-info)" },
-              { label: "NAMES", value: "24" },
+              { label: "NAMES", value: String(UNIVERSE.length) },
             ],
           },
           {
@@ -552,7 +558,7 @@ export default function Home() {
             metrics: [
               { label: "AVG COMP", value: loading ? "…" : d?.avgComposite != null ? Math.round(d.avgComposite) : "—", color: "var(--accent-info)" },
               { label: "COMP 70+", value: loading ? "…" : d?.highComposite ?? 0, color: "var(--accent-bull)" },
-              { label: "STYLES", value: "5" },
+              { label: "STYLES", value: String(FACTOR_STYLES.length) },
             ],
           },
           {

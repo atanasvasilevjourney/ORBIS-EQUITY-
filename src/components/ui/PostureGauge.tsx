@@ -6,9 +6,15 @@ type PostureGaugeProps = {
 
 /** Semi-circle posture gauge — risk appetite / market weather. */
 export function PostureGauge({ value, label, size = 160 }: PostureGaugeProps) {
-  const v = value ?? 50;
-  const color =
-    v >= 55 ? "var(--accent-bull)" : v <= 45 ? "var(--accent-bear)" : "var(--accent-info)";
+  const missing = value == null || !Number.isFinite(value);
+  const v = missing ? 0 : value;
+  const color = missing
+    ? "var(--text-muted)"
+    : v >= 55
+      ? "var(--accent-bull)"
+      : v <= 45
+        ? "var(--accent-bear)"
+        : "var(--accent-info)";
 
   const r = 56;
   const cx = 80;
@@ -16,11 +22,16 @@ export function PostureGauge({ value, label, size = 160 }: PostureGaugeProps) {
   const stroke = 10;
   // Semi-circle path length
   const circ = Math.PI * r;
-  const filled = (Math.max(0, Math.min(100, v)) / 100) * circ;
+  const filled = missing ? 0 : (Math.max(0, Math.min(100, v)) / 100) * circ;
 
   return (
     <div className="flex flex-col items-center justify-center">
-      <svg width={size} height={size * 0.72} viewBox="0 0 160 115" aria-label={`Posture ${v}`}>
+      <svg
+        width={size}
+        height={size * 0.72}
+        viewBox="0 0 160 115"
+        aria-label={missing ? "Posture unavailable" : `Posture ${v}`}
+      >
         <path
           d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
           fill="none"

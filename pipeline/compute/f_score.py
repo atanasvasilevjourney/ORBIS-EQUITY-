@@ -116,7 +116,9 @@ def compute_f_score_detail(
     components["cfo_positive"] = cfo is not None and cfo > 0
 
     prior_ni = income_pri.get("netIncome")
-    prior_ta_beg = (balance_older or balance_pri).get("totalAssets")
+    # Prior-year ROA and asset turnover need assets at the start of that year.
+    # Falling back to year-end assets mixes end-of-year and beginning-of-year bases.
+    prior_ta_beg = balance_older.get("totalAssets") if balance_older else None
     prior_roa = _safe_div(prior_ni, prior_ta_beg)
     components["delta_roa"] = (
         roa is not None and prior_roa is not None and roa > prior_roa
@@ -201,10 +203,11 @@ def compute_f_score(
     balance_cur: dict | None,
     balance_pri: dict | None,
     cashflow_cur: dict | None,
+    balance_older: dict | None = None,
 ) -> int | None:
     """Compute Piotroski F-Score from pre-loaded report data. Returns 0-9 or None."""
     detail = compute_f_score_detail(
-        income_cur, income_pri, balance_cur, balance_pri, cashflow_cur
+        income_cur, income_pri, balance_cur, balance_pri, cashflow_cur, balance_older
     )
     return None if detail is None else int(detail["score"])
 

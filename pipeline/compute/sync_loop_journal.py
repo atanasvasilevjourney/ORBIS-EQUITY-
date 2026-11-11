@@ -54,7 +54,7 @@ def sync_loop_trading_journal(sb: Client) -> int:
     orders = fetch_all(
         sb,
         "paper_orders",
-        "id, run_id, ticker, action, type, shares, limit_price, reason, sector, risk_usd, created_at",
+        "id, run_id, ticker, action, type, shares, limit_price, fill_price, cost_usd, reason, sector, risk_usd, created_at",
         order=("created_at", False),
     )
     closed = closed_trades(orders)

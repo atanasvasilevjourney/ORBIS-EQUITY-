@@ -1,5 +1,5 @@
 """Unit tests for pipeline.compute.f_score Piotroski scoring."""
-from pipeline.compute.f_score import compute_f_score, _safe_div
+from pipeline.compute.f_score import compute_f_score, compute_f_score_detail, _safe_div
 
 
 class TestSafeDiv:
@@ -52,3 +52,25 @@ class TestComputeFScore:
             d["cashflow_cur"],
         )
         assert 0 <= score <= 9
+
+    def test_yoy_ratios_need_beginning_assets(self, strong_f_score_data):
+        d = strong_f_score_data
+        two_years = compute_f_score_detail(
+            d["income_cur"], d["income_pri"],
+            d["balance_cur"], d["balance_pri"],
+            d["cashflow_cur"],
+        )
+        assert two_years is not None
+        assert two_years["components"]["delta_roa"] is False
+        assert two_years["components"]["delta_asset_turnover"] is False
+
+        three_years = compute_f_score_detail(
+            d["income_cur"], d["income_pri"],
+            d["balance_cur"], d["balance_pri"],
+            d["cashflow_cur"],
+            {"totalAssets": 22000},
+        )
+        assert three_years is not None
+        assert three_years["components"]["delta_roa"] is True
+        assert three_years["components"]["delta_asset_turnover"] is True
+        assert three_years["score"] == two_years["score"] + 2
