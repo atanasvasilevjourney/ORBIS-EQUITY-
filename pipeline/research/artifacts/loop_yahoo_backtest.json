@@ -1,0 +1,238 @@
+{
+  "source": "yahoo_finance",
+  "universe": "loop_merged_sp500_ndx_ex_pharma",
+  "data_start": "2022-06-01",
+  "window": {
+    "start": "2023-01-01",
+    "end": "2026-09-26"
+  },
+  "is_oos_split": {
+    "is": [
+      "2023-01-01",
+      "2024-12-31"
+    ],
+    "oos": [
+      "2025-01-01",
+      "2026-09-26"
+    ]
+  },
+  "donchian_rules": {
+    "entry": "close > prior 55d high and close > 20d VWAP",
+    "exit": "ATR(14)\u00d72.0 chandelier",
+    "top_n": 8,
+    "max_per_sector": 2,
+    "rebalance_days": 5
+  },
+  "xs_rules": {
+    "lookback": 63,
+    "top_n": 8,
+    "max_per_sector": 2,
+    "rebalance_days": 5,
+    "trail": "wide SMA20"
+  },
+  "cost_bps_per_side": 10,
+  "symbols_downloaded": 503,
+  "books": {
+    "donchian_prod": {
+      "full": {
+        "return_pct": 82.61,
+        "sharpe": 0.8,
+        "max_drawdown_pct": -27.1,
+        "days": 936,
+        "sortino": 1.1395,
+        "cagr": 0.176,
+        "total_return": 0.8261,
+        "max_drawdown": -0.271,
+        "calmar": 0.6495,
+        "profit_factor": 1.1576,
+        "day_win_rate": 0.5075,
+        "n_trades": 2,
+        "trade_win_rate": 1.0,
+        "avg_trade": 35.2966
+      },
+      "is": {
+        "return_pct": 23.75,
+        "sharpe": 0.68,
+        "max_drawdown_pct": -20.1,
+        "days": 502,
+        "sortino": 1.0821,
+        "cagr": 0.1129,
+        "total_return": 0.2375,
+        "max_drawdown": -0.201,
+        "calmar": 0.5617,
+        "profit_factor": 1.123,
+        "day_win_rate": 0.4821,
+        "n_trades": 1,
+        "trade_win_rate": 1.0,
+        "avg_trade": 24.4222
+      },
+      "oos": {
+        "return_pct": 47.56,
+        "sharpe": 0.92,
+        "max_drawdown_pct": -24.38,
+        "days": 434,
+        "sortino": 1.261,
+        "cagr": 0.2535,
+        "total_return": 0.4756,
+        "max_drawdown": -0.2438,
+        "calmar": 1.0397,
+        "profit_factor": 1.1853,
+        "day_win_rate": 0.5369,
+        "n_trades": 2,
+        "trade_win_rate": 0.5,
+        "avg_trade": 22.9855
+      }
+    },
+    "xs": {
+      "full": {
+        "return_pct": 687.93,
+        "sharpe": 1.83,
+        "max_drawdown_pct": -32.45,
+        "days": 865,
+        "sortino": 2.7789,
+        "cagr": 0.8246,
+        "total_return": 6.8793,
+        "max_drawdown": -0.3245,
+        "calmar": 2.5409,
+        "profit_factor": 1.3583,
+        "day_win_rate": 0.5711,
+        "n_trades": 1,
+        "trade_win_rate": 1.0,
+        "avg_trade": 229.4242
+      },
+      "is": {
+        "return_pct": 286.26,
+        "sharpe": 2.42,
+        "max_drawdown_pct": -24.11,
+        "days": 431,
+        "sortino": 3.965,
+        "cagr": 1.2037,
+        "total_return": 2.8626,
+        "max_drawdown": -0.2411,
+        "calmar": 4.993,
+        "profit_factor": 1.5003,
+        "day_win_rate": 0.5824,
+        "n_trades": 1,
+        "trade_win_rate": 1.0,
+        "avg_trade": 145.6364
+      },
+      "oos": {
+        "return_pct": 103.99,
+        "sharpe": 1.28,
+        "max_drawdown_pct": -32.45,
+        "days": 434,
+        "sortino": 1.8444,
+        "cagr": 0.5128,
+        "total_return": 1.0399,
+        "max_drawdown": -0.3245,
+        "calmar": 1.5799,
+        "profit_factor": 1.2398,
+        "day_win_rate": 0.5599,
+        "n_trades": 1,
+        "trade_win_rate": 1.0,
+        "avg_trade": 83.5878
+      }
+    },
+    "equal_weight": {
+      "full": {
+        "return_pct": 107.37,
+        "sharpe": 1.41,
+        "max_drawdown_pct": -17.72,
+        "days": 935,
+        "sortino": 2.1143,
+        "cagr": 0.2172,
+        "total_return": 1.0737,
+        "max_drawdown": -0.1772,
+        "calmar": 1.2256,
+        "profit_factor": 1.2773,
+        "day_win_rate": 0.5401,
+        "n_trades": 1,
+        "trade_win_rate": 1.0,
+        "avg_trade": 76.7877
+      },
+      "is": {
+        "return_pct": 54.15,
+        "sharpe": 1.68,
+        "max_drawdown_pct": -12.03,
+        "days": 501,
+        "sortino": 2.5343,
+        "cagr": 0.2432,
+        "total_return": 0.5415,
+        "max_drawdown": -0.1203,
+        "calmar": 2.022,
+        "profit_factor": 1.3113,
+        "day_win_rate": 0.5509,
+        "n_trades": 1,
+        "trade_win_rate": 1.0,
+        "avg_trade": 44.8999
+      },
+      "oos": {
+        "return_pct": 34.52,
+        "sharpe": 1.15,
+        "max_drawdown_pct": -17.3,
+        "days": 434,
+        "sortino": 1.7265,
+        "cagr": 0.1879,
+        "total_return": 0.3452,
+        "max_drawdown": -0.173,
+        "calmar": 1.0863,
+        "profit_factor": 1.2402,
+        "day_win_rate": 0.5276,
+        "n_trades": 1,
+        "trade_win_rate": 1.0,
+        "avg_trade": 31.6877
+      }
+    },
+    "spy": {
+      "full": {
+        "return_pct": 112.36,
+        "sharpe": 1.43,
+        "max_drawdown_pct": -18.76,
+        "days": 935,
+        "sortino": 2.1588,
+        "cagr": 0.225,
+        "total_return": 1.1236,
+        "max_drawdown": -0.1876,
+        "calmar": 1.1999,
+        "profit_factor": 1.2974,
+        "day_win_rate": 0.5626,
+        "n_trades": 2,
+        "trade_win_rate": 1.0,
+        "avg_trade": 39.5313
+      },
+      "is": {
+        "return_pct": 58.24,
+        "sharpe": 1.87,
+        "max_drawdown_pct": -9.97,
+        "days": 501,
+        "sortino": 2.7953,
+        "cagr": 0.2597,
+        "total_return": 0.5824,
+        "max_drawdown": -0.0997,
+        "calmar": 2.6034,
+        "profit_factor": 1.3625,
+        "day_win_rate": 0.5749,
+        "n_trades": 2,
+        "trade_win_rate": 1.0,
+        "avg_trade": 23.574
+      },
+      "oos": {
+        "return_pct": 34.2,
+        "sharpe": 1.08,
+        "max_drawdown_pct": -18.76,
+        "days": 434,
+        "sortino": 1.641,
+        "cagr": 0.1862,
+        "total_return": 0.342,
+        "max_drawdown": -0.1876,
+        "calmar": 0.993,
+        "profit_factor": 1.2345,
+        "day_win_rate": 0.5484,
+        "n_trades": 1,
+        "trade_win_rate": 1.0,
+        "avg_trade": 31.7145
+      }
+    }
+  },
+  "note": "Merged index universe via yfinance. IS 2023\u20132024, OOS 2025\u20132026-09-26. Not a live-edge claim."
+}
