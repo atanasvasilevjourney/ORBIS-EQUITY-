@@ -669,6 +669,16 @@ export default function TickerPage() {
               color: r.entry_timing === "hot" ? "var(--accent-bull)" : r.entry_timing === "watch" ? "var(--accent-warning)" : "",
             },
             { label: "GATES", value: `${r.convergence_count}/3`, color: r.convergence_count >= 2 ? "var(--accent-bull)" : "" },
+            {
+              label: "REGIME",
+              value: r.kama_regime === 1 ? "BULL" : r.kama_regime === -1 ? "BEAR" : "—",
+              color: r.kama_regime === 1 ? "var(--accent-bull)" : r.kama_regime === -1 ? "var(--accent-bear)" : "",
+            },
+            {
+              label: "Z",
+              value: r.price_z == null ? "—" : `${r.price_z > 0 ? "+" : ""}${Number(r.price_z).toFixed(2)}`,
+              color: r.price_z > 0 ? "var(--accent-bull)" : r.price_z < 0 ? "var(--accent-bear)" : "",
+            },
           ].map((c) => (
             <div key={c.label} className="p-3 rounded border border-[var(--border)] bg-[var(--card-bg)] text-center">
               <div className="text-[10px] font-terminal text-[var(--text-muted)] tracking-widest">{c.label}</div>

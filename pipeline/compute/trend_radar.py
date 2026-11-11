@@ -17,11 +17,13 @@ Column mapping on `trend_radar` (existing schema):
   z_mom              day percent change (4.2 means +4.2%)
   f_ewmac            relative volume (today / 50-day average, shifted 1 bar)
   z_52               (close / session high) - 1   (0 = closed at the high)
+  price_z            prior close vs the long KAMA, in stdevs of daily changes
   breakout_active    close within 1% of the session high
   volume_confirmed   relative volume >= 5
   quality_rank       sort score; on-list names are 70–100
   state              1 on list, 0 up but not qualified, -1 down day
   entry_timing       hot | watch | off
+  kama_regime        1 prior close above the long KAMA, -1 below, 0 warmup
   convergence_count  how many of the three gates fired (day, volume, near high)
 
 Usage:
@@ -38,6 +40,15 @@ import pandas as pd
 from dotenv import load_dotenv
 from supabase import create_client
 
+from pipeline.compute.kama_regime import (
+    KAMA_LONG_FAST,
+    KAMA_LONG_N,
+    KAMA_LONG_SLOW,
+    KAMA_MIN_HISTORY,
+    calculate_kama,
+    compute_kama_regime,
+)
+
 logger = logging.getLogger(__name__)
 
 REL_VOL_BARS = 50
@@ -48,6 +59,8 @@ WATCH_MIN_REL_VOLUME = 2.0
 HOT_MIN_DAY_PCT = 10.0
 HOT_MIN_REL_VOLUME = 5.0
 NEAR_HIGH_PCT = -1.0  # within 1 percentage point of the session high
+Z_WINDOW = 20
+Z_CLIP = 8.0
 
 
 def day_percent_change(close: pd.Series) -> float:
@@ -89,6 +102,32 @@ def percent_from_high(close: pd.Series, high: pd.Series) -> float:
 
 def on_watchlist(day_pct: float, rel_vol: float) -> bool:
     return day_pct >= WATCH_MIN_DAY_PCT and rel_vol >= WATCH_MIN_REL_VOLUME
+
+
+def is_actionable(state: int, near_high: bool) -> bool:
+    """On the list and the close held the high. That is the row worth acting on."""
+    return int(state) == 1 and bool(near_high)
+
+
+def price_zscore(close: pd.Series, window: int = Z_WINDOW) -> float | None:
+    """Prior close versus the long KAMA, in standard deviations of daily changes.
+
+    The long KAMA is the fair-price line used by the production regime. The
+    prior bar is the one that is known at the close, so the print does not
+    use today's close against a KAMA that includes today.
+    """
+    if len(close) < max(KAMA_MIN_HISTORY, window + 2):
+        return None
+    fair = calculate_kama(close, n=KAMA_LONG_N, fast=KAMA_LONG_FAST, slow=KAMA_LONG_SLOW)
+    sigma = close.diff().rolling(window).std()
+    fair_px = fair.iloc[-2]
+    sig = sigma.iloc[-2]
+    if not np.isfinite(fair_px) or not np.isfinite(sig):
+        return None
+    distance = float(close.iloc[-2]) - float(fair_px)
+    if float(sig) <= 0:
+        return 0.0 if abs(distance) < 1e-9 else None
+    return float(np.clip(distance / float(sig), -Z_CLIP, Z_CLIP))
 
 
 def is_hot(day_pct: float, rel_vol: float) -> bool:
@@ -150,7 +189,8 @@ def process_ticker(df: pd.DataFrame) -> dict | None:
         "z_52": round(off_high / 100.0, 4),
         "breakout_active": bool(near_high),
         "volume_confirmed": bool(rel_vol >= HOT_MIN_REL_VOLUME),
-        "kama_regime": 0,
+        "kama_regime": int(compute_kama_regime(close)),
+        "price_z": None if (z := price_zscore(close)) is None else round(z, 2),
         "adx": round(rel_vol, 2),
         "entry_timing": timing,
         "convergence_count": int(sum(gates)),

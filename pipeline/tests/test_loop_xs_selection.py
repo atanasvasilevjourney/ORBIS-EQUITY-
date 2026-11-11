@@ -108,10 +108,35 @@ def test_full_coverage_admits_a_quiet_sector_leader():
 def test_plus_four_day_breaks_an_rs_tie():
     rows = [
         {"symbol": "QUIET", "state": 0, "quality_rank": 80, "z_mom": 1, "f_ewmac": 1, "rs_pct": 80},
-        {"symbol": "GAP", "state": 1, "quality_rank": 70, "z_mom": 5, "f_ewmac": 2, "rs_pct": 80},
+        {
+            "symbol": "GAP",
+            "state": 1,
+            "quality_rank": 70,
+            "z_mom": 5,
+            "f_ewmac": 2,
+            "rs_pct": 80,
+            "breakout_active": True,
+        },
     ]
     sector = {"QUIET": "Tech", "GAP": "Energy"}
     assert select_xs_targets(rows, sector, top_n=1) == ["GAP"]
+
+
+def test_faded_plus_four_day_does_not_break_an_rs_tie():
+    rows = [
+        {"symbol": "QUIET", "state": 0, "quality_rank": 80, "z_mom": 1, "f_ewmac": 1, "rs_pct": 80},
+        {
+            "symbol": "FADE",
+            "state": 1,
+            "quality_rank": 70,
+            "z_mom": 5,
+            "f_ewmac": 2,
+            "rs_pct": 80,
+            "breakout_active": False,
+        },
+    ]
+    sector = {"QUIET": "Tech", "FADE": "Energy"}
+    assert select_xs_targets(rows, sector, top_n=1) == ["QUIET"]
 
 
 def test_residual_eligibility_does_not_require_the_gapper_list():

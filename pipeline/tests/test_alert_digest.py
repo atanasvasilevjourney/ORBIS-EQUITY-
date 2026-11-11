@@ -41,6 +41,17 @@ def test_filter_keeps_today_green_flips():
     assert symbols == ["KEEP", "WAIT"]
 
 
+def test_filter_production_labels_keep_hot_near_high_only():
+    as_of = date(2026, 8, 26)
+    rows = [
+        _row(symbol="HOT", entry_timing="hot", breakout_active=True),
+        _row(symbol="FADE", entry_timing="hot", breakout_active=False),
+        _row(symbol="WATCH", entry_timing="watch", breakout_active=True),
+    ]
+    kept = filter_alert_rows(rows, as_of=as_of, min_rank=60, min_convergence=4)
+    assert [r["symbol"] for r in kept] == ["HOT"]
+
+
 def test_filter_can_skip_wait_pullback():
     as_of = date(2026, 8, 26)
     rows = [_row(symbol="WAIT", entry_timing="wait_pullback")]

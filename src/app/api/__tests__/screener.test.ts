@@ -76,6 +76,8 @@ describe("GET /api/screener", () => {
     expect(body[0].rank).toBe(75);
     expect(body[0].companyName).toBe("Apple Inc.");
     expect(body[0].kamaRegime).toBe(1);
+    expect(body[0].priceZ).toBeNull();
+    expect(body[0].actionable).toBe(true);
   });
 
   it("filters by direction=bull via state=1", async () => {

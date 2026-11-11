@@ -88,10 +88,15 @@ def filter_alert_rows(
         if rank < min_rank or conv < min_convergence:
             continue
         timing = str(r.get("entry_timing") or "ok")
-        if timing == "too_late":
-            continue
-        if skip_wait_pullback and timing == "wait_pullback":
-            continue
+        if timing in ("hot", "watch", "off"):
+            # Production scan labels. Email the hot name that also closed near the high.
+            if timing != "hot" or not r.get("breakout_active"):
+                continue
+        else:
+            if timing == "too_late":
+                continue
+            if skip_wait_pullback and timing == "wait_pullback":
+                continue
         out.append(r)
     out.sort(key=lambda x: (-int(x.get("quality_rank") or 0), x.get("symbol") or ""))
     return out
