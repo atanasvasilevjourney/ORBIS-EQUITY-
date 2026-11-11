@@ -641,10 +641,10 @@ export default function Home() {
             ],
           },
           {
-            href: "/cash", title: "TEMA + CARVER CASH", badge: "MODULE 11",
-            subtitle: "Cash-sized TEMA & Carver", accent: "var(--module-3)", source: "CASH",
+            href: "/cash", title: "TEMA SCREEN + CARVER", badge: "MODULE 11",
+            subtitle: "Discretionary TEMA list · Carver cash", accent: "var(--module-3)", source: "CASH",
             metrics: [
-              { label: "TEMA", value: String(d?.cashTema ?? 0), color: "var(--accent-info)" },
+              { label: "TEMA", value: "LIST", color: "var(--accent-info)" },
               { label: "CARVER", value: String(d?.cashCarver ?? 0), color: "var(--accent-warning)" },
               { label: "VENUE", value: "CASH", color: "var(--accent-bull)" },
             ],

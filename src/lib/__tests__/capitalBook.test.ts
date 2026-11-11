@@ -33,19 +33,19 @@ describe("combineCapital", () => {
         {
           symbol: "AAPL",
           inTema: true,
-          temaSide: "SHORT",
+          temaSide: "LONG",
           temaNotional: 300,
-          inCarver: false,
-          carverSide: "FLAT",
-          carverNotional: 0,
+          inCarver: true,
+          carverSide: "LONG",
+          carverNotional: 400,
         },
       ],
       rotateAsOf: "2026-10-15",
       rotate: [{ symbol: "XOM", side: "FLAT", notional: 1000 }],
     });
     const book = combineCapital(legs);
-    expect(book.gross).toBe(10 * 100 + 2 * 50 + 300);
-    expect(book.net).toBe(1000 + 100 - 300);
+    expect(book.gross).toBe(10 * 100 + 2 * 50 + 400);
+    expect(book.net).toBe(1000 + 100 + 400);
     expect(book.overlap).toEqual(["AAPL"]);
     expect(book.sleeves.find((s) => s.sleeve === "ORB")?.asOf).toBe("2026-10-17");
   });

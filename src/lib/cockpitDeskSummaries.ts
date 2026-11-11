@@ -117,7 +117,7 @@ export async function fetchCockpitDeskSummaries(sb: SupabaseClient): Promise<Coc
     quantSharpe: equalSharpe,
     biasLongs: bias?.longs ?? 0,
     biasShorts: bias?.shorts ?? 0,
-    cashTema: cash?.tema_slots ?? 0,
+    cashTema: 0,
     cashCarver: cash?.carver_slots ?? 0,
     triangleSetups: triangleRun?.names ?? 0,
     triangleBreakouts: triangleBreakoutsRes ?? 0,

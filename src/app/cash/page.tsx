@@ -64,6 +64,22 @@ type Data = {
 
 const DEFAULT_TEMA_NAMES = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "JPM", "XOM"];
 
+type ScreenRow = {
+  ticker: string;
+  companyName: string;
+  sector: string;
+  last: number | null;
+  asOf: string | null;
+  on: boolean;
+  votes: number;
+  distance: number;
+  histograms: [boolean, boolean, boolean];
+};
+
+type ScreenData = { watched: number; on: number; rows: ScreenRow[] };
+
+const SPREAD = ["8/21", "12/50", "8/63"];
+
 const usd = (v: number | null | undefined, d = 0) =>
   v == null ? "—" : v.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: d });
 const px = (v: number | null | undefined, d = 2) => (v == null ? "—" : v.toFixed(d));
@@ -95,6 +111,8 @@ export default function CashPage() {
   const [vizTicker, setVizTicker] = useState("AAPL");
   const [tape, setTape] = useState<{ bars: TemaBar[]; readout: TemaReadout | null }>({ bars: [], readout: null });
   const [tapeNote, setTapeNote] = useState("Loading listed closes…");
+  const [screen, setScreen] = useState<ScreenData | null>(null);
+  const [screenLoading, setScreenLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/cash")
@@ -119,6 +137,16 @@ export default function CashPage() {
       })
       .catch(() => setD(null))
       .finally(() => setLoading(false));
+    fetch("/api/tema-screen")
+      .then((r) => r.json())
+      .then((raw: ScreenData) => {
+        const rows = Array.isArray(raw?.rows) ? raw.rows : [];
+        setScreen({ watched: raw?.watched ?? 0, on: raw?.on ?? rows.length, rows });
+        const first = rows[0]?.ticker;
+        if (first) setVizTicker(first);
+      })
+      .catch(() => setScreen({ watched: 0, on: 0, rows: [] }))
+      .finally(() => setScreenLoading(false));
   }, []);
 
   useEffect(() => {
@@ -151,7 +179,7 @@ export default function CashPage() {
     const out: string[] = [];
     for (const t of [
       vizTicker,
-      ...(d?.temaBook ?? []).map((n) => n.ticker),
+      ...(screen?.rows ?? []).map((n) => n.ticker),
       ...(d?.carverBook ?? []).map((n) => n.ticker),
       ...(d?.names ?? []).map((n) => n.ticker),
       ...DEFAULT_TEMA_NAMES,
@@ -163,14 +191,14 @@ export default function CashPage() {
       if (out.length >= 16) break;
     }
     return out;
-  }, [d, vizTicker]);
+  }, [d, screen, vizTicker]);
 
   const s = d?.summary;
   const regimeColor = s?.regime === "CASH" ? "var(--accent-bear)" : s?.regime === "REDUCE" ? "var(--accent-warning)" : "var(--accent-bull)";
   const cards = [
     { label: "REGIME", value: s?.regime ?? "—", color: regimeColor },
     { label: "DD / SCALAR", value: s?.drawdown == null ? "—" : `${(s.drawdown * 100).toFixed(1)}% · ${num(s.ddScalar, 2)}`, color: (s?.drawdown ?? 0) < -0.1 ? "var(--accent-warning)" : "" },
-    { label: "TEMA 9/99/199", value: s?.temaSlots ?? "—", color: "var(--accent-info)" },
+    { label: "TEMA ON", value: screenLoading ? "…" : String(screen?.on ?? 0), color: "var(--accent-info)" },
     { label: "CARVER", value: s?.carverSlots ?? "—", color: "var(--accent-warning)" },
     { label: "CASH OUT", value: s?.deployed == null ? "—" : usd(s.deployed, 0), color: "var(--accent-bull)" },
   ];
@@ -179,34 +207,34 @@ export default function CashPage() {
     <div className="py-6">
       <DeskPageHeader
         badge="CASH DESK"
-        title="TEMA + Carver book"
-        subtitle="Listed EOD closes · fully funded paper shares · isolated from LOOP / ORB / ROTATE"
+        title="TEMA screen · Carver book"
+        subtitle="TEMA lists names. You decide. Carver is the only sized cash book."
       />
 
-      <InfoCallout title="CASH book">
+      <InfoCallout title="TEMA is a screen">
         <p>
-          Same TEMA 9/99/199 swing and Carver EWMAC, sized on cash EOD from prices_daily (Yahoo → Stooq).
-          Slots are shares × close, capped at sleeve cash. No perp leverage or borrow model.
+          A name is on when at least two of the 8/21, 12/50, and 8/63 TEMA histograms are positive and the close is above TEMA-199.
+          It stays on until the close falls back through TEMA-199. Long only. No share count, no cash amount, no stop, no target.
         </p>
-        <p>MACD(12,26,9) is the systematic close. 2.5 ATR hard stop. Paper only — not investment advice.</p>
+        <p>Carver still sizes its own cash book. The list is for your decision. Paper only — not investment advice.</p>
       </InfoCallout>
 
       {(d?.headline || d?.summary == null) && (
         <div className="headline-banner mb-4">
           <span style={{ color: "var(--accent-info)" }}>CASH:</span>{" "}
-          {d?.headline ?? "Paper TEMA ribbon on listed closes. Book slots fill after python -m pipeline.compute.perps_desk."}
+          {d?.headline ?? "Carver sizes the cash book. The TEMA list below is a screen."}
         </div>
       )}
 
       <MetricStrip items={cards} columns={5} loading={loading} />
 
       <CashBookBoard
-        names={(d?.temaBook ?? []).map((row) => ({
+        names={(d?.carverBook ?? []).map((row) => ({
           ticker: row.ticker,
           companyName: row.companyName,
           last: row.last,
-          notional: row.temaNotional,
-          side: row.temaSide,
+          notional: row.carverNotional,
+          side: row.carverSide,
         }))}
         onPick={setVizTicker}
       />
@@ -221,87 +249,46 @@ export default function CashPage() {
         <TemaRibbon bars={tape.bars} readout={tape.readout} title={`TEMA RIBBON · ${vizTicker} · 9 / 99 / 199`} />
       </div>
 
-      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">TEMA BOOK · CASH SHARES · MACD HOLD · B+ · 3L/3S</h2>
+      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">
+        TEMA SCREEN · LONG ONLY · 2 OF 3 HISTOGRAMS · EXIT AT TEMA-199 · {screen ? `${screen.on} ON / ${screen.watched} WATCHED` : "—"}
+      </h2>
       <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
         <table className="w-full text-sm font-terminal">
           <thead>
             <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
               <th className="text-left px-3 py-2">TICKER</th>
-              <th className="text-right px-3 py-2">CASH PX</th>
-              <th className="text-left px-3 py-2">SIDE</th>
-              <th className="text-left px-3 py-2">GRADE</th>
-              <th className="text-left px-3 py-2">MACD</th>
-              <th className="text-right px-3 py-2">WGT</th>
-              <th className="text-right px-3 py-2">SHARES</th>
-              <th className="text-right px-3 py-2">CASH $</th>
-              <th className="text-right px-3 py-2">STOP</th>
-              <th className="text-right px-3 py-2">TP</th>
+              <th className="text-left px-3 py-2">SECTOR</th>
+              <th className="text-right px-3 py-2">LAST</th>
+              <th className="text-left px-3 py-2">AS OF</th>
+              <th className="text-left px-3 py-2">STATE</th>
+              <th className="text-right px-3 py-2">VOTES</th>
+              <th className="text-right px-3 py-2">8/21</th>
+              <th className="text-right px-3 py-2">12/50</th>
+              <th className="text-right px-3 py-2">8/63</th>
+              <th className="text-right px-3 py-2">VS TEMA-199</th>
             </tr>
           </thead>
           <tbody>
-            {loading ? (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
-            ) : !d?.temaBook?.length ? (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-[var(--text-muted)]">No TEMA slots yet (nightly perps_desk has not written a book). Ribbon above still plots 9/99/199 on listed closes.</td></tr>
+            {screenLoading ? (
+              <tr><td colSpan={10} className="px-3 py-8 text-center text-[var(--text-muted)]">Reading the top 100 closes…</td></tr>
+            ) : !screen?.rows.length ? (
+              <tr><td colSpan={10} className="px-3 py-8 text-center text-[var(--text-muted)]">No names are on the screen.</td></tr>
             ) : (
-              d.temaBook.map((r) => (
-                <tr key={`t-${r.ticker}`} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">
+              screen.rows.map((r) => (
+                <tr key={`s-${r.ticker}`} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">
                   <td className="px-3 py-2">
                     <Link href={`/ticker/${r.ticker}`} className="font-bold hover:text-[var(--accent-info)]" onClick={() => setVizTicker(r.ticker)}>{r.ticker}</Link>
                     <span className="text-[var(--text-muted)] ml-2 text-xs hidden lg:inline">{r.companyName}</span>
                   </td>
+                  <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{r.sector || "—"}</td>
                   <td className="px-3 py-2 text-right">{px(r.last)}</td>
-                  <td className="px-3 py-2 font-bold" style={{ color: sideColor(r.temaSide) }}>{r.temaSide}</td>
-                  <td className="px-3 py-2 font-bold" style={{ color: gradeColor(r.temaGrade) }}>{r.temaGrade} {num(r.temaScore, 0)}</td>
-                  <td className="px-3 py-2 font-bold" style={{ color: macdColor(r.macdAction) }}>
-                    {r.macdAction ?? "—"}
-                    <span className="text-[var(--text-muted)] font-normal ml-2 text-xs">{num(r.macd, 3)}</span>
-                  </td>
-                  <td className="px-3 py-2 text-right">{r.temaWeightPct == null ? "—" : `${r.temaWeightPct.toFixed(1)}%`}</td>
-                  <td className="px-3 py-2 text-right">{sh(r.temaShares)}</td>
-                  <td className="px-3 py-2 text-right">{usd(r.temaNotional, 0)}</td>
-                  <td className="px-3 py-2 text-right" style={{ color: "var(--accent-bear)" }}>{px(r.temaStop)}</td>
-                  <td className="px-3 py-2 text-right" style={{ color: "var(--accent-bull)" }}>{px(r.temaTp)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">MACD CLOSE · TEMA SETUP, LINE CROSSED SIGNAL · NOT IN BOOK</h2>
-      <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
-        <table className="w-full text-sm font-terminal">
-          <thead>
-            <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
-              <th className="text-left px-3 py-2">TICKER</th>
-              <th className="text-left px-3 py-2">SIDE</th>
-              <th className="text-left px-3 py-2">GRADE</th>
-              <th className="text-right px-3 py-2">MACD</th>
-              <th className="text-right px-3 py-2">SIGNAL</th>
-              <th className="text-right px-3 py-2">HIST</th>
-              <th className="text-right px-3 py-2">STOP</th>
-              <th className="text-left px-3 py-2">NOTE</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
-            ) : !d?.macdClosed?.length ? (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">No TEMA names sitting on a MACD close.</td></tr>
-            ) : (
-              d.macdClosed.map((r) => (
-                <tr key={`m-${r.ticker}`} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">
-                  <td className="px-3 py-2">
-                    <Link href={`/ticker/${r.ticker}`} className="font-bold hover:text-[var(--accent-info)]" onClick={() => setVizTicker(r.ticker)}>{r.ticker}</Link>
-                  </td>
-                  <td className="px-3 py-2 font-bold" style={{ color: sideColor(r.temaSide) }}>{r.temaSide}</td>
-                  <td className="px-3 py-2 font-bold" style={{ color: gradeColor(r.temaGrade) }}>{r.temaGrade} {num(r.temaScore, 0)}</td>
-                  <td className="px-3 py-2 text-right">{num(r.macd, 3)}</td>
-                  <td className="px-3 py-2 text-right">{num(r.macdSignal, 3)}</td>
-                  <td className="px-3 py-2 text-right" style={{ color: (r.macdHist ?? 0) < 0 ? "var(--accent-bear)" : "var(--accent-bull)" }}>{num(r.macdHist, 3)}</td>
-                  <td className="px-3 py-2 text-right" style={{ color: "var(--accent-bear)" }}>{px(r.temaStop)}</td>
-                  <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{r.skipReason ?? "macd_close"}</td>
+                  <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{r.asOf ?? "—"}</td>
+                  <td className="px-3 py-2 font-bold" style={{ color: "var(--accent-bull)" }}>ON</td>
+                  <td className="px-3 py-2 text-right">{r.votes} / 3</td>
+                  {r.histograms.map((up, i) => (
+                    <td key={SPREAD[i]} className="px-3 py-2 text-right" style={{ color: up ? "var(--accent-bull)" : "var(--text-muted)" }}>{up ? "UP" : "—"}</td>
+                  ))}
+                  <td className="px-3 py-2 text-right">{pct(r.distance, 1)}</td>
                 </tr>
               ))
             )}
@@ -385,8 +372,7 @@ export default function CashPage() {
       </div>
 
       <p className="text-[10px] text-[var(--text-muted)] font-terminal mt-3">
-        Paper harness: $100,000 cash · TEMA 9/99/199 · MACD(12,26,9) close · 2.5 ATR hard stop ·
-        Carver DD soft 10% / hard 25% · rotation LIVE / REDUCE / CASH · fully funded. Not investment advice.
+        TEMA screen does not allocate. Carver is the sized cash book · DD soft 10% / hard 25% · fully funded. Not investment advice.
       </p>
     </div>
   );
