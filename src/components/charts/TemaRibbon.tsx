@@ -97,8 +97,7 @@ export function TemaRibbon({
         <line x1={pad.l} x2={w - pad.r} y1={yMacd(0)} y2={yMacd(0)} stroke="var(--border)" />
       </svg>
       <p className="text-[10px] text-[var(--text-muted)] font-terminal mt-1">
-        Ribbon = 9 vs 199. Trigger is 9 vs 99; 199 is the regime. MACD(12,26,9) histogram is the systematic close.
-        Paper overlay on listed closes — not a live order.
+        Chart of 9 / 99 / 199 for the name you pick. It does not size a position or place an order.
       </p>
     </div>
   );

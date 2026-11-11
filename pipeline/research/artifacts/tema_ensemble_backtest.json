@@ -1,0 +1,100 @@
+{
+  "symbols": 100,
+  "sessions": 306,
+  "start": "2025-06-23",
+  "end": "2026-10-13",
+  "scored_from": "2026-04-09",
+  "scored_days": 106,
+  "sectors": 11,
+  "rules": {
+    "pairs": [
+      [
+        8,
+        21,
+        9
+      ],
+      [
+        12,
+        50,
+        9
+      ],
+      [
+        8,
+        63,
+        9
+      ]
+    ],
+    "regime": 199,
+    "entry_votes": 2,
+    "top_n": 3,
+    "sector_cap": 2,
+    "cost_bps_per_side": 10
+  },
+  "note": "TEMA-199 consumes the first 199 sessions, so this tape has no separate train window for the new rule. The scored days are the only days the rule can trade. The rule was written after an earlier look at this same tape.",
+  "books": {
+    "new_desk": {
+      "days": 106,
+      "sharpe": 1.0119,
+      "sortino": 1.4894,
+      "cagr": 0.4499,
+      "total_return": 0.1691,
+      "max_drawdown": -0.2768,
+      "calmar": 1.6256,
+      "profit_factor": 1.2036,
+      "day_win_rate": 0.5283,
+      "n_trades": 143,
+      "trade_win_rate": 0.8042,
+      "avg_trade": 0.0206,
+      "exposure": 1.0,
+      "names": 3.0
+    },
+    "new_equal": {
+      "days": 106,
+      "sharpe": 2.3539,
+      "sortino": 3.7518,
+      "cagr": 0.5302,
+      "total_return": 0.1959,
+      "max_drawdown": -0.0648,
+      "calmar": 8.183,
+      "profit_factor": 1.4913,
+      "day_win_rate": 0.5283,
+      "n_trades": 369,
+      "trade_win_rate": 0.1897,
+      "avg_trade": -0.0003,
+      "exposure": 1.0,
+      "names": 47.9434
+    },
+    "live_desk": {
+      "days": 106,
+      "sharpe": -0.7366,
+      "sortino": -0.9957,
+      "cagr": -0.2452,
+      "total_return": -0.1116,
+      "max_drawdown": -0.278,
+      "calmar": -0.8821,
+      "profit_factor": 0.8775,
+      "day_win_rate": 0.4906,
+      "n_trades": 187,
+      "trade_win_rate": 0.7166,
+      "avg_trade": 0.0084,
+      "exposure": 1.0,
+      "names": 6.0
+    },
+    "buyhold": {
+      "days": 106,
+      "sharpe": 3.3728,
+      "sortino": 6.1067,
+      "cagr": 0.4696,
+      "total_return": 0.1758,
+      "max_drawdown": -0.0278,
+      "calmar": 16.9161,
+      "profit_factor": 1.7592,
+      "day_win_rate": 0.566,
+      "n_trades": 100,
+      "trade_win_rate": 0.32,
+      "avg_trade": -0.0003,
+      "exposure": 1.0,
+      "names": 100.0
+    }
+  }
+}

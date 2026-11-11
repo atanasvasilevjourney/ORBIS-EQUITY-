@@ -144,9 +144,6 @@ export async function GET() {
     }
     const rows = await fetchAll<NameRow>(sb, "perp_names", "*");
     const names = rows.filter((r) => r.run_id === latest.run_id).map(mapName);
-    const temaBook = names
-      .filter((n) => n.inTemaBook)
-      .sort((a, b) => (b.temaScore ?? 0) - (a.temaScore ?? 0));
     const macdClosed = names
       .filter((n) => n.macdAction === "CLOSE" && (n.temaSide === "BUY" || n.temaSide === "SELL"))
       .sort((a, b) => (b.temaScore ?? 0) - (a.temaScore ?? 0));
@@ -170,7 +167,7 @@ export async function GET() {
     return NextResponse.json({
       summary: {
         names: latest.names,
-        temaSlots: latest.tema_slots,
+        temaSlots: 0,
         carverSlots: latest.carver_slots,
         grossLeverage: latest.gross_leverage,
         deployed: typeof cfg.deployed === "number" ? cfg.deployed : null,
@@ -187,16 +184,23 @@ export async function GET() {
         activeForecasts: typeof cfg.activeForecasts === "number" ? cfg.activeForecasts : null,
       },
       names: maskedNames.sort((a, b) => a.ticker.localeCompare(b.ticker)),
-      temaBook: suppress ? [] : temaBook,
+      // TEMA is a screener. Stale sized rows from an older run stay out of this payload.
+      temaBook: [],
       macdClosed: suppress ? [] : macdClosed,
       carverBook: suppress ? [] : carverBook,
-      headline: staleHeadline(latest.headline, suppress),
+      headline: staleHeadline(
+        (latest.headline ?? "").replace(
+          /TEMA 9\/99\/199 \+ MACD close \d+ slots/,
+          "TEMA screener (unsized)"
+        ) || null,
+        suppress
+      ),
       config: latest.config,
       stale,
       signalsSuppressed: suppress,
     });
   } catch (err) {
     console.error("Cash desk API error:", err);
-    return NextResponse.json({ ...EMPTY_CASH, headline: "Cash TEMA desk unavailable" });
+    return NextResponse.json({ ...EMPTY_CASH, headline: "Cash desk unavailable" });
   }
 }

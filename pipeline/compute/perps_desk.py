@@ -53,12 +53,9 @@ from pipeline.compute.perps_math import (
     rotation_size_mult,
     round_px,
     scale_gross,
-    side_weights,
     size_cash,
-    tema_book_eligible,
     tema_notional,
     tema_signal,
-    pick_ranked,
     wilder_atr,
 )
 from pipeline.utils.supabase import fetch_all
@@ -176,38 +173,8 @@ def run() -> dict:
     rot_mult = rotation_size_mult(regime)
     risk_mult = dd_s * rot_mult
 
-    # ── TEMA ranked swing book ──────────────────────────────────────────
-    eligible = [
-        r for r in scanned
-        if tema_book_eligible(r["tema"], r["skip_reason"])
-    ]
-    longs = sorted(
-        [r for r in eligible if r["tema"].side == "BUY"],
-        key=lambda r: (-r["tema"].score, r["symbol"]),
-    )
-    shorts = sorted(
-        [r for r in eligible if r["tema"].side == "SELL"],
-        key=lambda r: (-r["tema"].score, r["symbol"]),
-    )
-    top_l = TEMA_TOP_LONG
-    top_s = TEMA_TOP_SHORT
-    if regime == "REDUCE":
-        top_l = min(top_l, CARVER_REDUCE_TOP)
-        top_s = min(top_s, CARVER_REDUCE_TOP)
-    if regime == "CASH":
-        longs_p, shorts_p = [], []
-    else:
-        longs_p = pick_ranked(longs, top_l, TEMA_CLUSTER_MAX, lambda r: r["sector"])
-        shorts_p = pick_ranked(shorts, top_s, TEMA_CLUSTER_MAX, lambda r: r["sector"])
-    long_book = 50.0 if longs_p and shorts_p else (100.0 if longs_p else 0.0)
-    short_book = 50.0 if longs_p and shorts_p else (100.0 if shorts_p else 0.0)
-    lw = side_weights(len(longs_p), long_book)
-    sw = side_weights(len(shorts_p), short_book)
+    # TEMA is a screener. The cash book does not size it. Carver still does.
     tema_alloc: dict[str, dict] = {}
-    for i, r in enumerate(longs_p):
-        tema_alloc[r["symbol"]] = {"rank": i + 1, "weight_pct": lw[i], "side": "BUY"}
-    for i, r in enumerate(shorts_p):
-        tema_alloc[r["symbol"]] = {"rank": i + 1, "weight_pct": sw[i], "side": "SELL"}
 
     # ── Carver vol-target book, then rotate ─────────────────────────────
     carver_raw: list[tuple[str, float]] = []
@@ -347,7 +314,7 @@ def run() -> dict:
     deployed_frac = gross / EQUITY if EQUITY else 0.0
     headline = (
         f"{today.isoformat()} · {len(rows)} names · cash close · "
-        f"TEMA 9/99/199 + MACD close {tema_slots} slots · "
+        f"TEMA screener (unsized) · "
         f"Carver {carver_slots} slots · {regime} · DD {current_dd*100:.1f}% "
         f"(scalar {dd_s:.2f}) · deployed ${gross:,.0f} ({deployed_frac*100:.0f}% of $100k)"
     )
@@ -370,6 +337,7 @@ def run() -> dict:
         "carverTargetVol": CARVER_TARGET_VOL,
         "cashGrossCap": CASH_GROSS_CAP,
         "book": "cash",
+        "temaRole": "screener",
         "minAtrPct": MIN_ATR_PCT,
         "maxAtrPct": MAX_ATR_PCT,
         "regime": regime,
