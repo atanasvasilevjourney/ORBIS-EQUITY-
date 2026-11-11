@@ -116,12 +116,7 @@ export function legsFromBooks(input: {
   }
 
   for (const row of input.cash) {
-    if (row.inTema) {
-      const signed = signedNotional(row.temaSide, row.temaNotional);
-      if (signed != null) {
-        legs.push({ sleeve: "CASH", symbol: row.symbol, signedNotional: signed, asOf: input.cashAsOf });
-      }
-    }
+    // TEMA is a screener. It does not take a cash slot.
     if (row.inCarver) {
       const signed = signedNotional(row.carverSide, row.carverNotional);
       if (signed != null) {
