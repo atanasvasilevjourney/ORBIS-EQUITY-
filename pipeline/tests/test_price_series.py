@@ -17,3 +17,6 @@ def test_ohlcv_frame_uses_adj_for_signals():
         {"date": "2026-01-02", "open": 1, "high": 2, "low": 1, "close": 10, "adj_close": 6, "volume": 100},
     ])
     assert float(df.iloc[-1]["close"]) == 6.0
+    assert float(df.iloc[-1]["open"]) == 0.6
+    assert float(df.iloc[-1]["high"]) == 1.2
+    assert float(df.iloc[-1]["low"]) == 0.6

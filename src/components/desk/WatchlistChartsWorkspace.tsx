@@ -66,6 +66,8 @@ type ScreenerSortKey =
   | "dayPct"
   | "relVolume"
   | "pctFromHigh"
+  | "kamaRegime"
+  | "priceZ"
   | "rank"
   | "sector"
   | "price"
@@ -77,6 +79,8 @@ const SCREENER_SORT_LABELS: Record<ScreenerSortKey, string> = {
   dayPct: "Day %",
   relVolume: "Rel vol",
   pctFromHigh: "Off high",
+  kamaRegime: "Regime",
+  priceZ: "Z",
   rank: "Rank",
   sector: "Sector",
   price: "Last",
@@ -89,6 +93,8 @@ const SCREENER_ACCESSORS: Record<ScreenerSortKey, (r: ScreenerRow) => string | n
   dayPct: (r) => r.dayPct ?? r.zMom,
   relVolume: (r) => r.relVolume ?? r.fEwmac,
   pctFromHigh: (r) => r.pctFromHigh ?? r.z52 * 100,
+  kamaRegime: (r) => r.kamaRegime ?? null,
+  priceZ: (r) => r.priceZ,
   rank: (r) => r.rank,
   sector: (r) => r.sector,
   price: (r) => r.price,
@@ -289,6 +295,8 @@ export function WatchlistChartsWorkspace({ variant = "tc2000" }: Props) {
                     <SortableTh columnKey="dayPct" label="DAY" levels={levels} align="right" onSort={onHeaderClick} />
                     <SortableTh columnKey="relVolume" label="REL VOL" levels={levels} align="right" onSort={onHeaderClick} />
                     <SortableTh columnKey="pctFromHigh" label="OFF HIGH" levels={levels} align="right" onSort={onHeaderClick} />
+                    <SortableTh columnKey="kamaRegime" label="REGIME" levels={levels} align="right" onSort={onHeaderClick} />
+                    <SortableTh columnKey="priceZ" label="Z" levels={levels} align="right" onSort={onHeaderClick} />
                     <SortableTh columnKey="sector" label="SECTOR" levels={levels} onSort={onHeaderClick} />
                     <SortableTh columnKey="price" label="LAST" levels={levels} align="right" onSort={onHeaderClick} />
                     <th className="text-left px-3 py-2">BADGES</th>
@@ -297,13 +305,13 @@ export function WatchlistChartsWorkspace({ variant = "tc2000" }: Props) {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={9} className="px-3 py-8 text-center text-[var(--text-muted)]">
+                      <td colSpan={11} className="px-3 py-8 text-center text-[var(--text-muted)]">
                         Loading scoreboard…
                       </td>
                     </tr>
                   ) : sortedRows.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-3 py-4">
+                      <td colSpan={11} className="px-3 py-4">
                         <EmptyState
                           title="No names on this scan"
                           detail="On list needs a day of at least +4% and volume at least 2× the prior 50-day average. Switch to All to see every name sorted by distance from the session high."

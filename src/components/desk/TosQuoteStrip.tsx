@@ -63,6 +63,14 @@ export function TosQuoteStrip({ row, crosshair, interval }: Props) {
         <span className="text-[var(--text-muted)]">Rel vol </span>
         {row.relVolume ?? row.fEwmac != null ? (row.relVolume ?? row.fEwmac).toFixed(2) : "—"}×
       </span>
+      <span style={{ color: row.kamaRegime === 1 ? "var(--accent-bull)" : row.kamaRegime === -1 ? "var(--accent-bear)" : "var(--text-muted)" }}>
+        <span className="text-[var(--text-muted)]">Regime </span>
+        {row.kamaRegime === 1 ? "BULL" : row.kamaRegime === -1 ? "BEAR" : "—"}
+      </span>
+      <span style={{ color: (row.priceZ ?? 0) > 0 ? "var(--accent-bull)" : (row.priceZ ?? 0) < 0 ? "var(--accent-bear)" : "var(--text-muted)" }}>
+        <span className="text-[var(--text-muted)]">Z </span>
+        {row.priceZ == null ? "—" : `${row.priceZ > 0 ? "+" : ""}${row.priceZ.toFixed(2)}`}
+      </span>
       <span className="hidden md:inline text-[var(--text-muted)]">|</span>
       <span className="hidden md:inline tabular-nums">
         O {fmt(o)} H {fmt(h)} L {fmt(l)} C {fmt(c)}

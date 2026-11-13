@@ -43,7 +43,7 @@ export function DataHonestyBar() {
     >
       <span
         className="inline-flex items-center gap-1.5"
-        title={live ? "Tape within freshness window" : "Check status"}
+        title={live ? "EOD within expected window" : "EOD outside expected window"}
       >
         <span
           className="w-1.5 h-1.5 rounded-full"

@@ -71,6 +71,7 @@ export async function GET(req: NextRequest) {
       convergence_count: number;
       state_changed_at: string | null;
       computed_at: string | null;
+      price_z?: number | null;
     };
 
     const [universe, fundamentals] = await Promise.all([
@@ -154,6 +155,7 @@ export async function GET(req: NextRequest) {
 
     const radarFull =
       "symbol, state, quality_rank, z_mom, f_ewmac, z_52, breakout_active, volume_confirmed, kama_regime, adx, entry_timing, convergence_count, state_changed_at, computed_at";
+    const radarWithZ = `${radarFull}, price_z`;
     const radarBase =
       "symbol, state, quality_rank, z_mom, f_ewmac, z_52, breakout_active, volume_confirmed, convergence_count, state_changed_at, computed_at";
 
@@ -161,26 +163,31 @@ export async function GET(req: NextRequest) {
     const useStrategyBus = strategyBuySymbols.length > 0 && !deskMode;
     try {
       if (useStrategyBus) {
-        allRadar = await fetchAll<RadarRow>(sb, "trend_radar", radarFull, (q) =>
+        allRadar = await fetchAll<RadarRow>(sb, "trend_radar", radarWithZ, (q) =>
           q.in("symbol", strategyBuySymbols.slice(0, 1000)).order("quality_rank", { ascending: false })
         );
       } else {
-        allRadar = await fetchAll<RadarRow>(sb, "trend_radar", radarFull, radarFilter);
+        allRadar = await fetchAll<RadarRow>(sb, "trend_radar", radarWithZ, radarFilter);
       }
     } catch (err) {
       if (!isMissingColumn(err)) throw err;
-      const slim = await fetchAll<Omit<RadarRow, "kama_regime" | "adx" | "entry_timing">>(
-        sb,
-        "trend_radar",
-        radarBase,
-        radarFilter
-      );
-      allRadar = slim.map((r) => ({
-        ...r,
-        kama_regime: null,
-        adx: null,
-        entry_timing: null,
-      }));
+      const missingZ = /price_z/i.test(String((err as { message?: string }).message ?? err));
+      if (missingZ) {
+        allRadar = await fetchAll<RadarRow>(sb, "trend_radar", radarFull, radarFilter);
+      } else {
+        const slim = await fetchAll<Omit<RadarRow, "kama_regime" | "adx" | "entry_timing">>(
+          sb,
+          "trend_radar",
+          radarBase,
+          radarFilter
+        );
+        allRadar = slim.map((r) => ({
+          ...r,
+          kama_regime: null,
+          adx: null,
+          entry_timing: null,
+        }));
+      }
     }
 
     let rows = allRadar
@@ -205,6 +212,8 @@ export async function GET(req: NextRequest) {
           breakout: r.breakout_active,
           volumeConfirmed: r.volume_confirmed,
           kamaRegime: r.kama_regime ?? 0,
+          priceZ: r.price_z ?? null,
+          actionable: r.state === 1 && !!r.breakout_active,
           adx: r.adx ?? null,
           entryTiming: r.entry_timing ?? null,
           convergence: r.convergence_count,
@@ -249,6 +258,8 @@ export async function GET(req: NextRequest) {
             breakout: r.breakout_active,
             volumeConfirmed: r.volume_confirmed,
             kamaRegime: r.kama_regime ?? 0,
+            priceZ: r.price_z ?? null,
+            actionable: r.state === 1 && !!r.breakout_active,
             adx: r.adx ?? null,
             entryTiming: r.entry_timing ?? null,
             convergence: r.convergence_count,
@@ -282,6 +293,8 @@ export async function GET(req: NextRequest) {
           breakout: false,
           volumeConfirmed: false,
           kamaRegime: 0,
+          priceZ: null,
+          actionable: false,
           adx: null,
           entryTiming: null,
           convergence: 0,

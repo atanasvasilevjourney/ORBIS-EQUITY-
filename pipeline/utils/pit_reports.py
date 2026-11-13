@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
+
+# Outer US 10-K deadline. A fiscal period end is not a publication date.
+ANNUAL_FILING_LAG_DAYS = 90
 
 
 def _report_known_on(row: dict) -> date | None:
@@ -10,7 +13,7 @@ def _report_known_on(row: dict) -> date | None:
         return date.fromisoformat(str(fd)[:10])
     d = row.get("date")
     if d:
-        return date.fromisoformat(str(d)[:10])
+        return date.fromisoformat(str(d)[:10]) + timedelta(days=ANNUAL_FILING_LAG_DAYS)
     return None
 
 

@@ -17,6 +17,8 @@ export type ScreenerRow = {
   breakout: boolean;
   volumeConfirmed: boolean;
   kamaRegime?: number;
+  priceZ?: number | null;
+  actionable?: boolean;
   adx?: number | null;
   entryTiming?: string | null;
   convergence: number;
@@ -40,6 +42,18 @@ function formatSigned(value: number | null | undefined, digits: number, suffix =
   if (value == null || Number.isNaN(value)) return "—";
   const sign = value > 0 ? "+" : "";
   return `${sign}${value.toFixed(digits)}${suffix}`;
+}
+
+function regimeText(regime: number | null | undefined): string {
+  if (regime === 1) return "BULL";
+  if (regime === -1) return "BEAR";
+  return "—";
+}
+
+function regimeColor(regime: number | null | undefined): string {
+  if (regime === 1) return "var(--accent-bull)";
+  if (regime === -1) return "var(--accent-bear)";
+  return "";
 }
 
 function isRecentFlip(changedAt: string | null): boolean {
@@ -108,6 +122,20 @@ export function ScoreboardRow({
       <td className="px-3 py-2.5 text-right font-terminal text-xs" style={{ color: offHigh >= -1 ? "var(--accent-bull)" : "" }}>
         {formatSigned(offHigh, 1, "%")}
       </td>
+      <td
+        className="px-3 py-2.5 text-right font-terminal text-xs font-bold"
+        style={{ color: regimeColor(row.kamaRegime) }}
+        title="Prior close versus the long KAMA. Bull means the close is above that line."
+      >
+        {regimeText(row.kamaRegime)}
+      </td>
+      <td
+        className="px-3 py-2.5 text-right font-terminal text-xs"
+        style={{ color: (row.priceZ ?? 0) > 0 ? "var(--accent-bull)" : (row.priceZ ?? 0) < 0 ? "var(--accent-bear)" : "" }}
+        title="Prior close versus the long KAMA, in standard deviations of daily price changes. Positive is above fair value."
+      >
+        {formatSigned(row.priceZ, 2)}
+      </td>
       <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs truncate max-w-[9rem]" title={row.sector}>{sectorLabel}</td>
       <td className="px-3 py-2.5 text-right font-terminal text-xs">{formatPrice(row.price)}</td>
       <td className="px-3 py-2.5">
@@ -115,6 +143,11 @@ export function ScoreboardRow({
           {flip && (
             <span className="text-[10px] px-1 py-0.5 rounded bg-[var(--accent-info)] text-[var(--surface)] font-terminal font-bold">
               NEW
+            </span>
+          )}
+          {row.actionable && (
+            <span className="text-[10px] px-1 py-0.5 rounded bg-[var(--badge-bg)] text-[var(--accent-info)] font-terminal">
+              ACT
             </span>
           )}
           {row.breakout && (

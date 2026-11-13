@@ -177,21 +177,14 @@ def build_card(
     vote = (vote or "").upper() or None
     if vote not in ("BUY", "SELL", "HOLD"):
         score = 0
-        if last > sma50_l:
-            score += 1
-        else:
-            score -= 1
-        if macd_l > 0:
-            score += 1
-        else:
-            score -= 1
-        if rsi_l < 30:
-            score += 1
-        elif rsi_l > 70:
-            score -= 1
-        vote = "BUY" if score > 0 else "SELL" if score < 0 else "HOLD"
-        buy_count = max(buy_count, 1 if vote == "BUY" else 0)
-        sell_count = max(sell_count, 1 if vote == "SELL" else 0)
+        bull = int(last > sma50_l) + int(macd_l > 0) + int(rsi_l < 30)
+        bear = int(last <= sma50_l) + int(macd_l <= 0) + int(rsi_l > 70)
+        score = bull - bear
+        # One vote is not a side. Long needs both trend tools and an RSI that
+        # is not extended. The mirror is short. Anything weaker stays flat.
+        vote = "BUY" if score >= 2 else "SELL" if score <= -2 else "HOLD"
+        buy_count = max(buy_count, bull if vote == "BUY" else 0)
+        sell_count = max(sell_count, bear if vote == "SELL" else 0)
 
     if vote == "BUY":
         bias = "LONG"

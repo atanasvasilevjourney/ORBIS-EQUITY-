@@ -127,7 +127,7 @@ export async function GET() {
     const gatedNames = fresh.signalsSuppressed
       ? names.map((n) => ({
           ...n,
-          vote: 3,
+          vote: "HOLD",
           buyCount: 0,
           sellCount: 0,
         }))

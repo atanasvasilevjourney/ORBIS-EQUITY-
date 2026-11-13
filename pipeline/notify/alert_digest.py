@@ -27,6 +27,8 @@ from typing import Any
 
 import requests
 
+from pipeline.utils.supabase import fetch_all
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_MIN_RANK = 60
@@ -86,10 +88,15 @@ def filter_alert_rows(
         if rank < min_rank or conv < min_convergence:
             continue
         timing = str(r.get("entry_timing") or "ok")
-        if timing == "too_late":
-            continue
-        if skip_wait_pullback and timing == "wait_pullback":
-            continue
+        if timing in ("hot", "watch", "off"):
+            # Production scan labels. Email the hot name that also closed near the high.
+            if timing != "hot" or not r.get("breakout_active"):
+                continue
+        else:
+            if timing == "too_late":
+                continue
+            if skip_wait_pullback and timing == "wait_pullback":
+                continue
         out.append(r)
     out.sort(key=lambda x: (-int(x.get("quality_rank") or 0), x.get("symbol") or ""))
     return out
@@ -276,13 +283,14 @@ def fetch_radar_and_universe(sb: Any) -> tuple[list[dict], dict[str, dict]]:
             break
         offset += page
 
-    uni_resp = (
-        sb.table("universe_members")
-        .select("symbol,company_name,sector")
-        .eq("is_active", True)
-        .execute()
+    uni_rows = fetch_all(
+        sb,
+        "universe_members",
+        "symbol,company_name,sector",
+        filters=lambda q: q.eq("is_active", True),
+        order=("symbol", False),
     )
-    uni_map = {r["symbol"]: r for r in (uni_resp.data or [])}
+    uni_map = {r["symbol"]: r for r in uni_rows}
     return radar, uni_map
 
 

@@ -6,6 +6,8 @@ export type LoopOrder = {
   action: string;
   shares: number;
   limitPrice: number | null;
+  fillPrice?: number | null;
+  costUsd?: number | null;
   reason: string | null;
   sector: string | null;
   createdAt: string | null;
@@ -27,11 +29,25 @@ export type ClosedLoopTrade = {
   exitOrderId: string | null;
 };
 
-function parseExitPrice(order: LoopOrder): number | null {
-  if (order.limitPrice != null) return order.limitPrice;
+function positive(value: number | null | undefined): number | null {
+  if (value == null || !Number.isFinite(value) || value <= 0) return null;
+  return value;
+}
+
+function reasonPrice(order: LoopOrder): number | null {
   const reason = order.reason ?? "";
   const m = /last\s+([\d.]+)/i.exec(reason);
-  return m ? Number(m[1]) : null;
+  return m ? positive(Number(m[1])) : null;
+}
+
+/** Modeled fill when the book stored one, otherwise the signal limit. */
+export function executionPrice(order: LoopOrder): number | null {
+  return positive(order.fillPrice) ?? positive(order.limitPrice) ?? reasonPrice(order);
+}
+
+function allocatedCost(cost: number | null | undefined, take: number, legShares: number): number {
+  if (cost == null || !Number.isFinite(cost) || legShares <= 0 || take <= 0) return 0;
+  return (cost * take) / legShares;
 }
 
 function journalId(row: {
@@ -51,31 +67,47 @@ export function closedTradesFromOrders(orders: LoopOrder[]): ClosedLoopTrade[] {
   const sorted = [...orders].sort((a, b) =>
     String(a.createdAt ?? "").localeCompare(String(b.createdAt ?? ""))
   );
-  const lots: Record<string, Array<{ shares: number; entry: number; entryReason: string | null; enteredAt: string | null }>> = {};
+  const lots: Record<
+    string,
+    Array<{
+      shares: number;
+      lotShares: number;
+      entry: number;
+      entryCost: number;
+      entryReason: string | null;
+      enteredAt: string | null;
+    }>
+  > = {};
   const closed: ClosedLoopTrade[] = [];
 
   for (const o of sorted) {
     const ticker = o.ticker;
     const shares = o.shares;
     if (o.action === "BUY") {
-      if (o.limitPrice == null) continue;
+      const entryPx = executionPrice(o);
+      if (entryPx == null) continue;
       if (!lots[ticker]) lots[ticker] = [];
       lots[ticker].push({
         shares,
-        entry: o.limitPrice,
+        lotShares: shares,
+        entry: entryPx,
+        entryCost: o.costUsd ?? 0,
         entryReason: o.reason,
         enteredAt: o.createdAt,
       });
       continue;
     }
-    const exitPx = parseExitPrice(o);
+    const exitPx = executionPrice(o);
     if (exitPx == null) continue;
     let remaining = shares;
     const queue = lots[ticker] ?? [];
     while (remaining > 0 && queue.length > 0) {
       const lot = queue[0];
       const take = Math.min(remaining, lot.shares);
-      const pnl = (exitPx - lot.entry) * take;
+      const pnl =
+        (exitPx - lot.entry) * take -
+        allocatedCost(lot.entryCost, take, lot.lotShares) -
+        allocatedCost(o.costUsd, take, shares);
       const row = {
         exitOrderId: o.id,
         ticker,
@@ -90,7 +122,7 @@ export function closedTradesFromOrders(orders: LoopOrder[]): ClosedLoopTrade[] {
         entry: lot.entry,
         exit: exitPx,
         pnlUsd: pnl,
-        returnPct: (exitPx / lot.entry - 1) * 100,
+        returnPct: lot.entry ? (pnl / (lot.entry * take)) * 100 : 0,
         entryReason: lot.entryReason,
         exitReason: o.reason,
         enteredAt: lot.enteredAt,

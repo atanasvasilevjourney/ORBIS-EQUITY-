@@ -371,9 +371,12 @@ export function PortfolioStudio() {
 
         <aside className="pf-card h-fit xl:sticky xl:top-20">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Live metrics</h2>
+            <h2 className="text-lg font-semibold">Model metrics</h2>
             <span className="pf-kicker">{windowId}</span>
           </div>
+          <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+            Seeded model path. These are not live market marks.
+          </p>
           <dl className="mt-3 divide-y divide-[var(--border)]">
             <Metric label="Historical return" value={pct(snap.kpis.annReturn)} className={tone(snap.kpis.annReturn)} />
             <Metric label="Volatility" value={pct(snap.kpis.vol, 1, false)} />

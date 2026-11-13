@@ -134,6 +134,38 @@ def parse_exit_price(order: dict) -> float | None:
     return float(m.group(1)) if m else None
 
 
+def _positive(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number > 0:
+        return number
+    return None
+
+
+def execution_price(order: dict) -> float | None:
+    """Modeled fill when the book stored one, otherwise the signal limit."""
+    filled = _positive(order.get("fill_price"))
+    if filled is not None:
+        return filled
+    limited = _positive(order.get("limit_price"))
+    if limited is not None:
+        return limited
+    return parse_exit_price(order)
+
+
+def _allocated_cost(cost: Any, take: int, leg_shares: int) -> float:
+    if cost is None or leg_shares <= 0 or take <= 0:
+        return 0.0
+    try:
+        return float(cost) * take / leg_shares
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def flatten_run_logs(runs: list[dict]) -> pd.DataFrame:
     rows: list[dict] = []
     for run in runs:
@@ -157,16 +189,21 @@ def closed_trades(orders: list[dict]) -> pd.DataFrame:
         ticker = o["ticker"]
         shares = int(o["shares"])
         if o["action"] == "BUY":
+            entry_px = execution_price(o)
+            if entry_px is None:
+                continue
             lots[ticker].append(
                 {
                     "shares": shares,
-                    "entry": float(o["limit_price"]),
+                    "lot_shares": shares,
+                    "entry": entry_px,
+                    "entry_cost": float(o.get("cost_usd") or 0),
                     "entry_reason": o.get("reason"),
                     "entered_at": o["created_at"],
                 }
             )
             continue
-        exit_px = parse_exit_price(o)
+        exit_px = execution_price(o)
         if exit_px is None:
             continue
         exit_order_id = o.get("id")
@@ -174,7 +211,10 @@ def closed_trades(orders: list[dict]) -> pd.DataFrame:
         while remaining > 0 and lots[ticker]:
             lot = lots[ticker][0]
             take = min(remaining, lot["shares"])
-            pnl = (exit_px - lot["entry"]) * take
+            lot_shares = int(lot["lot_shares"]) or take
+            entry_cost = _allocated_cost(lot.get("entry_cost"), take, lot_shares)
+            exit_cost = _allocated_cost(o.get("cost_usd"), take, shares)
+            pnl = (exit_px - lot["entry"]) * take - entry_cost - exit_cost
             closed.append(
                 {
                     "ticker": ticker,
@@ -182,7 +222,7 @@ def closed_trades(orders: list[dict]) -> pd.DataFrame:
                     "entry": lot["entry"],
                     "exit": exit_px,
                     "pnl_usd": pnl,
-                    "return_pct": (exit_px / lot["entry"] - 1) * 100,
+                    "return_pct": (pnl / (lot["entry"] * take) * 100) if lot["entry"] else None,
                     "entry_reason": lot["entry_reason"],
                     "exit_reason": o.get("reason"),
                     "entered_at": lot["entered_at"],
@@ -205,12 +245,14 @@ def portfolio_snapshot(orders: list[dict], book: list[dict]) -> dict[str, Any]:
     deployed = float(sum((p.get("last") or 0) * p["shares"] for p in book))
     cash = EQUITY_START
     for o in sorted(orders, key=lambda x: x["created_at"]):
+        px = execution_price(o)
+        if px is None:
+            continue
+        cost = float(o.get("cost_usd") or 0)
         if o["action"] == "BUY":
-            cash -= int(o["shares"]) * float(o["limit_price"])
+            cash -= int(o["shares"]) * px + cost
         else:
-            px = parse_exit_price(o)
-            if px is not None:
-                cash += int(o["shares"]) * px
+            cash += int(o["shares"]) * px - cost
     mtm_equity = cash + deployed
     total_pnl = mtm_equity - EQUITY_START
     return {

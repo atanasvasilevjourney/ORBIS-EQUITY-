@@ -24,8 +24,9 @@ calendar. Subtracting SPY alone does not reorder names that share those dates.
 
 - The percentile leads the XS sort only when at least 80% of the in-universe
   rows have a score. Below that, the sleeve falls back to the +4% gapper list.
-- A +4% day with 2× volume (`state == 1`) breaks ties. It does not decide eligibility
-  once coverage is wide enough.
+- A +4% day with 2× volume breaks a tie only when the close also finished within
+  1% of the session high. A spike that faded does not jump the queue. It does not
+  decide eligibility once coverage is wide enough.
 - A down close does not sell. Exits are the wide SMA20 trail, or leaving the
   top basket on the 5-session rebalance.
 - `paper_book_xs.n` stores the percentile. The desk shows it as RS.

@@ -133,6 +133,8 @@ export async function GET() {
       action: o.action,
       shares: o.shares,
       limitPrice: o.limit_price,
+      fillPrice: o.fill_price,
+      costUsd: o.cost_usd,
       reason: o.reason,
       sector: o.sector,
       createdAt: o.created_at,

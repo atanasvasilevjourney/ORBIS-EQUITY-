@@ -9,7 +9,9 @@ from pipeline.compute.trend_radar import (
     WATCH_MIN_DAY_PCT,
     WATCH_MIN_REL_VOLUME,
     day_percent_change,
+    is_actionable,
     on_watchlist,
+    price_zscore,
     process_ticker,
     relative_volume,
     watch_rank,
@@ -75,7 +77,10 @@ class TestProcessTicker:
         assert result["z_mom"] == pytest.approx(12.0)
         assert result["f_ewmac"] == pytest.approx(6.0)
         assert result["quality_rank"] >= 70
-        assert result["kama_regime"] == 0
+        # The jump is today. Regime and z use the prior bar, which is still flat
+        # on the long KAMA, so the name is not in a bull regime yet.
+        assert result["kama_regime"] == -1
+        assert result["price_z"] == pytest.approx(0.0, abs=0.05)
 
     def test_watch_name_is_on_list_but_not_hot(self):
         n = MIN_HISTORY_DAYS
@@ -100,6 +105,26 @@ class TestProcessTicker:
         assert result["state"] == -1
         assert result["entry_timing"] == "off"
         assert on_watchlist(result["z_mom"], result["f_ewmac"]) is False
+
+    def test_uptrend_is_bull_regime_and_above_fair(self):
+        n = 80
+        closes = list(100.0 * (1.004 ** pd.Series(range(n))))
+        highs = [c * 1.002 for c in closes]
+        volumes = [1_000_000.0] * n
+        result = process_ticker(_frame(closes, highs, volumes))
+        assert result is not None
+        assert result["kama_regime"] == 1
+        assert result["price_z"] is not None
+        assert result["price_z"] > 0
+
+    def test_short_history_has_no_zscore(self):
+        close = pd.Series([100.0] * 20)
+        assert price_zscore(close) is None
+
+    def test_actionable_requires_the_close_near_the_high(self):
+        assert is_actionable(1, True)
+        assert not is_actionable(1, False)
+        assert not is_actionable(0, True)
 
     def test_thresholds_match_watchlist_contract(self):
         assert WATCH_MIN_DAY_PCT == 4.0

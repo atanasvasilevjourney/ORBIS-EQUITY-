@@ -1,7 +1,8 @@
 """Cross-sectional LOOP sleeve selection.
 
 When residual-strength coverage is wide enough, rank the tradable universe
-by that percentile. A +4% day (watchlist state 1) only breaks ties.
+by that percentile. A +4% day breaks a tie only when that close also held
+the session high. A spike that faded does not jump the queue.
 
 Below the coverage floor, fall back to the gapper list: on-list, rank >= 60,
 positive day, and positive relative volume. That keeps a thin tape from
@@ -48,9 +49,11 @@ def xs_eligible(row: Mapping, *, min_rank: int = MIN_RANK, require_rs: bool = Fa
     return True
 
 
-def _timing_flag(row_state: int) -> int:
-    """0 sorts first. State 1 is the +4% / 2× volume day."""
-    return 0 if row_state == 1 else 1
+def _timing_flag(row: Mapping) -> int:
+    """0 sorts first. A +4% day breaks a tie only when the close held the high."""
+    on_list = int(row.get("state") or 0) == 1
+    near_high = bool(row.get("breakout_active"))
+    return 0 if on_list and near_high else 1
 
 
 def select_xs_targets(
@@ -83,7 +86,7 @@ def select_xs_targets(
                 int(row.get("convergence_count") or 0),
                 float(row.get("f_ewmac") or 0),
                 rs,
-                _timing_flag(int(row.get("state") or 0)),
+                _timing_flag(row),
             )
         )
 

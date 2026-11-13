@@ -167,33 +167,6 @@ def run_donchian_vwap_portfolio(
 
     for i, d in enumerate(days):
         start_holdings = list(holdings.keys())
-        # exits between rebalances
-        to_drop = []
-        for sym in list(holdings.keys()):
-            sig = signals.get(sym)
-            ohlcv = panels.get(sym)
-            row = _bar_on(sig, d) if sig is not None else None
-            dc_exit = row is not None and bool(row.get("exit_signal", False))
-            atr_exit = False
-            if exit_mode in ("atr_trail", "tighter") and ohlcv is not None:
-                bar = _bar_ohlc(ohlcv, d)
-                if bar is not None and sym in trails:
-                    hi, _, close = bar
-                    atr = _atr_on_bar(ohlcv, d, atr_period)
-                    if atr is not None:
-                        trails[sym] = _update_trail(trails[sym], hi, atr, atr_mult)
-                        if close < trails[sym].stop_price:
-                            atr_exit = True
-            if exit_mode == "donchian20" and dc_exit:
-                to_drop.append(sym)
-            elif exit_mode == "atr_trail" and atr_exit:
-                to_drop.append(sym)
-            elif exit_mode == "tighter" and (dc_exit or atr_exit):
-                to_drop.append(sym)
-        for sym in to_drop:
-            holdings.pop(sym, None)
-            trails.pop(sym, None)
-
         signal_day = days[max(0, i - 1)]  # prior close — no same-bar lookahead
         if i % REBALANCE_DAYS == 0 or not holdings:
             sector_count: dict[str, int] = {}
@@ -243,6 +216,34 @@ def run_donchian_vwap_portfolio(
         equity *= 1 + day_ret
         eq_rows.append({"date": d, "equity": equity, "daily_return": day_ret, "names": len(holdings)})
         prev_eq = equity
+
+        # The exit is known at today's close, so the name keeps today's return
+        # and is out for the next session. Dropping it first skipped that day.
+        to_drop = []
+        for sym in list(holdings.keys()):
+            sig = signals.get(sym)
+            ohlcv = panels.get(sym)
+            row = _bar_on(sig, d) if sig is not None else None
+            dc_exit = row is not None and bool(row.get("exit_signal", False))
+            atr_exit = False
+            if exit_mode in ("atr_trail", "tighter") and ohlcv is not None:
+                bar = _bar_ohlc(ohlcv, d)
+                if bar is not None and sym in trails:
+                    hi, _, close = bar
+                    atr = _atr_on_bar(ohlcv, d, atr_period)
+                    if atr is not None:
+                        trails[sym] = _update_trail(trails[sym], hi, atr, atr_mult)
+                        if close < trails[sym].stop_price:
+                            atr_exit = True
+            if exit_mode == "donchian20" and dc_exit:
+                to_drop.append(sym)
+            elif exit_mode == "atr_trail" and atr_exit:
+                to_drop.append(sym)
+            elif exit_mode == "tighter" and (dc_exit or atr_exit):
+                to_drop.append(sym)
+        for sym in to_drop:
+            holdings.pop(sym, None)
+            trails.pop(sym, None)
 
     if not eq_rows:
         return pd.Series(dtype=float), pd.DataFrame()

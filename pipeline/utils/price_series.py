@@ -41,14 +41,14 @@ def finalize_price_row(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def ohlcv_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
-    """Build OHLCV frame using adjusted closes for signal math."""
+    """Build OHLCV frame on the adjusted-close scale for signal math.
+
+    Open, high, and low are scaled by ``adj_close / close`` so Donchian and
+    VWAP stay on one scale after splits and dividends.
+    """
     if not rows:
         return pd.DataFrame()
-    df = pd.DataFrame(rows)
-    if "adj_close" in df.columns:
-        df = df.copy()
-        df["close"] = df["adj_close"].where(df["adj_close"].notna(), df["close"])
-    for col in ("open", "high", "low", "close", "volume"):
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+    from pipeline.ema200_scanner.data.adjust import scale_ohlcv_frame
+
+    df = scale_ohlcv_frame(pd.DataFrame(rows))
     return df.sort_values("date") if "date" in df.columns else df
