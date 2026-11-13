@@ -17,6 +17,7 @@ const NAV_PRIMARY = [
 ];
 
 const NAV_MORE = [
+  { href: "/diagnostics", label: "TREND", title: "Nine-asset trend diagnostics" },
   { href: "/ema200", label: "EMA200", title: "Watchlist only" },
   { href: "/orb", label: "ORB", title: "Research sleeve" },
   { href: "/skew", label: "SKEW", title: "Research sleeve" },

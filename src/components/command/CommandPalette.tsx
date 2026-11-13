@@ -19,6 +19,7 @@ const STATIC_ITEMS: PaletteItem[] = [
   { id: "watchlist-edit", label: "Edit my watchlist", hint: "DESK", href: "/?desk=edit", group: "Navigate" },
   { id: "trade", label: "Trade desk (TOS)", hint: "TOS", href: "/trade", group: "Navigate" },
   { id: "screener", label: "Watchlist", hint: "SCR", href: "/screener", group: "Navigate" },
+  { id: "diagnostics", label: "Trend diagnostics", hint: "TREND", href: "/diagnostics", group: "Navigate" },
   { id: "ema200", label: "EMA200", hint: "EMA", href: "/ema200", group: "Navigate" },
   { id: "triangle", label: "Triangle Breakout", hint: "TRI", href: "/triangle", group: "Navigate" },
   { id: "fundamentals", label: "Fundamentals", hint: "FA", href: "/fundamentals", group: "Navigate" },

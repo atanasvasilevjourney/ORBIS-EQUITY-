@@ -22,6 +22,7 @@ Systematic equity research terminal — momentum screener, multi-factor fundamen
 10. **Daily Bias** — TradingView-style chart, key levels, paper trade ideas (ANALYZE vote + ATR pivots)
 11. **TEMA + Carver Cash** — TEMA 9/99/199 swing with MACD(12,26,9) close, and Carver EWMAC, sized as fully funded cash shares at the listed close
 12. **Beta Rotation** — macro canaries → GICS sector → nested sub-sectors → TEMA ensemble, then Carver D-rungs (DCA on the bigger trend) rotate into the leading sleeve / names
+13. **Trend Diagnostics** — nine asset-class Carver forecasts (EWMAC, breakout, acceleration) on one ±20 scale. State only, no orders
 
 ## Setup
 
@@ -271,6 +272,27 @@ python -m pipeline.compute.sector_rotation
 ```
 
 Surfaced at `/rotate` and `GET /api/rotate`. Paper diagnostic. Not investment advice.
+
+## Trend diagnostics (nine asset classes)
+
+A daily reading of where trend stands, in the form of the [Quant Rick Trend Diagnostics](https://www.tradingview.com/script/OUgjD1sH-Quant-Rick-Trend-Diagnostics/) script. It does not place orders and it does not claim a backtested edge.
+
+Proxies: SPY, MDY, RSP, IWM, TLT, GLD, DBC, UUP, BTC-USD.
+
+| Column | Rule |
+|---|---|
+| EWMAC | Fast EMA minus slow EMA, divided by the stdev of daily price changes. Speeds 8/32, 16/64, 32/128, 64/256, averaged after each is scaled |
+| Breakout | Close inside its rolling high-low range (20, 40, 80, 160), smoothed, then scaled |
+| Accel | Change in the EWMAC forecast over 16, 32, and 64 days |
+| Combined | 40% EWMAC, 40% breakout, 20% acceleration |
+| Agree | How many of the three rules share Combined's sign |
+| State | EWMAC outside ±5 is a trend. Accel outside ±2 is building or fading. Breakout past ±15 adds "+ breakout" or "+ breakdown" |
+
+Each forecast is rescaled on that series alone, using only bars up to the current one, so the average absolute value is 10. The cap is ±20. Crypto lookbacks are stretched by 365/252 in absolute mode (8/32 becomes 12/46) and left alone in relative mode. Relative mode divides each close by SPY. The SPY row is blank there.
+
+The chart shades the 32/128 EMA ribbon (stretched for crypto). Green means the fast average is above the slow one.
+
+Surfaced at `/diagnostics` and `GET /api/diagnostics`. Live Yahoo daily bars. Not investment advice.
 
 ## Factor Scores
 
