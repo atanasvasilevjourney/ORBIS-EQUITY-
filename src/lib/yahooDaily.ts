@@ -11,15 +11,33 @@ export type YahooDailyBar = {
   volume: number;
 };
 
-/** Split- and dividend-adjusted daily OHLCV from Yahoo (Pine-compatible EMA input). */
+/**
+ * Split- and dividend-adjusted daily OHLCV from Yahoo (Pine-compatible EMA input).
+ *
+ * `range=max` on this endpoint is downsampled to monthly bars. A max request
+ * uses period1/period2 so the series stays daily for the whole listed history.
+ */
 export async function fetchYahooDaily(symbol: string, range = "2y"): Promise<YahooDailyBar[]> {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${encodeURIComponent(range)}&events=history&includeAdjustedClose=true&includePrePost=false`;
+  const params = new URLSearchParams({
+    interval: "1d",
+    events: "history",
+    includeAdjustedClose: "true",
+    includePrePost: "false",
+  });
+  if (range === "max") {
+    params.set("period1", "0");
+    params.set("period2", String(Math.floor(Date.now() / 1000) + 86_400));
+  } else {
+    params.set("range", range);
+  }
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?${params.toString()}`;
+  const cacheKey = range === "max" ? `daily:${symbol}:max-daily` : `daily:${symbol}:${range}`;
   try {
-    const body = await cachedYahooJson(`daily:${symbol}:${range}`, 5 * 60_000, async () => {
+    const body = await cachedYahooJson(cacheKey, 5 * 60_000, async () => {
       const res = await fetch(url, {
         headers: { "User-Agent": "Mozilla/5.0 OrbisEquity-Terminal" },
         cache: "no-store",
-        signal: AbortSignal.timeout(12000),
+        signal: AbortSignal.timeout(range === "max" ? 20_000 : 12_000),
       });
       if (!res.ok) return null;
       return res.json();
