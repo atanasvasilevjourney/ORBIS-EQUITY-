@@ -139,9 +139,42 @@ class TestPipelineDAGSmoke:
             ):
                 stack.enter_context(patch.object(mod, "LSEClient", return_value=mock_lse))
 
+            if module_path == "pipeline.ingest.earnings":
+                from pipeline.clients.yahoo_earnings import YahooEarningsBatchResult
+
+                stack.enter_context(
+                    patch.object(
+                        mod,
+                        "fetch_yahoo_earnings_batch",
+                        return_value=YahooEarningsBatchResult(
+                            rows=[
+                                {
+                                    "ticker": "AAPL",
+                                    "event_date": "2025-01-15",
+                                    "confirmed": True,
+                                    "source": "yahoo",
+                                    "eps_est": 1.0,
+                                    "eps_actual": 1.1,
+                                    "surprise_pct": 10.0,
+                                    "revenue_est": None,
+                                    "revenue_actual": None,
+                                }
+                            ],
+                            symbols_ok=1,
+                            symbols_failed=0,
+                        ),
+                    )
+                )
+                stack.enter_context(
+                    patch.object(mod, "fetch_research_desk_symbols", return_value=["AAPL"])
+                )
+
             if module_path == "pipeline.ingest.news":
                 stack.enter_context(
                     patch.object(mod, "fetch_news_for_ticker", return_value=[])
+                )
+                stack.enter_context(
+                    patch("pipeline.ingest.news.fetch_yahoo_news_for_ticker", return_value=[])
                 )
 
             if hasattr(mod, "main"):

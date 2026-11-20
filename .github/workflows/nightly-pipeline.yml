@@ -419,14 +419,16 @@ jobs:
       - name: Install dependencies
         run: pip install -r pipeline/requirements.txt
 
-      - name: Ingest earnings from LSE
+      - name: Ingest earnings (LSE + Yahoo fallback)
         run: python -m pipeline.ingest.earnings
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           LSE_API_KEY: ${{ secrets.LSE_API_KEY }}
+          EARNINGS_YAHOO_WORKERS: "8"
+          EARNINGS_YAHOO_MAX_SYMBOLS: "500"
 
-      - name: Ingest news from GDELT
+      - name: Ingest news (GDELT + Yahoo fallback)
         run: python -m pipeline.ingest.news
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

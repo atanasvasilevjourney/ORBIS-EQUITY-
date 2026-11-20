@@ -5,7 +5,11 @@ Returns articles with tone scores (positive/negative sentiment).
 
 API docs: https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/
 """
+from __future__ import annotations
+
+import json
 import logging
+import os
 import time
 from typing import Any
 
@@ -14,7 +18,18 @@ import requests
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
-REQUEST_DELAY = 5.5  # seconds between requests (GDELT limit is 5s)
+REQUEST_DELAY = float(os.getenv("GDELT_REQUEST_DELAY_SEC", "5.5"))
+MAX_ATTEMPTS = int(os.getenv("GDELT_MAX_ATTEMPTS", "3"))
+
+
+def _parse_gdelt_payload(text: str) -> dict[str, Any] | None:
+    stripped = (text or "").strip()
+    if not stripped:
+        return None
+    try:
+        return json.loads(stripped)
+    except json.JSONDecodeError:
+        return None
 
 
 def fetch_news_for_ticker(
@@ -22,17 +37,7 @@ def fetch_news_for_ticker(
     max_records: int = 10,
     timespan: str = "7d",
 ) -> list[dict]:
-    """Fetch recent news articles for a ticker from GDELT.
-
-    Args:
-        ticker: Stock ticker symbol (e.g., "AAPL")
-        max_records: Maximum articles to return
-        timespan: Time window (e.g., "7d", "30d")
-
-    Returns:
-        List of article dicts with url, title, source, tone, datetime
-    """
-    # Strip exchange suffixes for search; quote to avoid false positives
+    """Fetch recent news articles for a ticker from GDELT."""
     raw_term = ticker.split(".")[0]
     if len(raw_term) <= 2:
         search_term = f'"{raw_term}" stock OR shares'
@@ -47,38 +52,70 @@ def fetch_news_for_ticker(
         "timespan": timespan,
     }
 
-    try:
-        resp = requests.get(BASE_URL, params=params, timeout=30)
-        if resp.status_code == 429:
-            logger.warning("GDELT rate limited for %s, skipping", ticker)
-            time.sleep(REQUEST_DELAY)
+    data: dict[str, Any] | None = None
+    for attempt in range(MAX_ATTEMPTS):
+        try:
+            resp = requests.get(BASE_URL, params=params, timeout=30)
+            if resp.status_code == 429:
+                wait = REQUEST_DELAY * (attempt + 2)
+                logger.warning("GDELT rate limited for %s (attempt %d), sleeping %.1fs", ticker, attempt + 1, wait)
+                time.sleep(wait)
+                continue
+            if resp.status_code >= 500:
+                wait = REQUEST_DELAY * (attempt + 1)
+                logger.warning(
+                    "GDELT HTTP %s for %s (attempt %d), sleeping %.1fs",
+                    resp.status_code,
+                    ticker,
+                    attempt + 1,
+                    wait,
+                )
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            data = _parse_gdelt_payload(resp.text)
+            if data is None:
+                logger.warning(
+                    "GDELT empty/non-JSON body for %s (attempt %d), len=%d",
+                    ticker,
+                    attempt + 1,
+                    len(resp.text or ""),
+                )
+                time.sleep(REQUEST_DELAY * (attempt + 1))
+                continue
+            break
+        except requests.RequestException:
+            logger.warning("GDELT request failed for %s (attempt %d)", ticker, attempt + 1, exc_info=True)
+            time.sleep(REQUEST_DELAY * (attempt + 1))
+        except Exception:
+            logger.exception("Unexpected GDELT error for %s", ticker)
             return []
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception:
-        logger.exception("Failed to fetch GDELT news for %s", ticker)
+
+    if not data:
+        time.sleep(REQUEST_DELAY)
         return []
 
-    articles = data.get("articles", [])
+    articles = data.get("articles") or []
     results: list[dict] = []
 
     for art in articles:
         tone_str = art.get("tone", "0")
         try:
-            # GDELT tone is a comma-separated string: tone,positive,negative,...
             tone_parts = str(tone_str).split(",")
             tone = float(tone_parts[0])
         except (ValueError, IndexError):
             tone = 0.0
 
-        results.append({
-            "url": art.get("url", ""),
-            "title": (art.get("title") or "")[:200],
-            "source": (art.get("domain") or art.get("source", ""))[:100],
-            "tone": round(tone, 2),
-            "datetime": art.get("seendate", ""),
-            "language": art.get("language", "English"),
-        })
+        results.append(
+            {
+                "url": art.get("url", ""),
+                "title": (art.get("title") or "")[:200],
+                "source": (art.get("domain") or art.get("source", ""))[:100],
+                "tone": round(tone, 2),
+                "datetime": art.get("seendate", ""),
+                "language": art.get("language", "English"),
+            }
+        )
 
     time.sleep(REQUEST_DELAY)
     return results
