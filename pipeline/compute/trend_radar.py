@@ -183,13 +183,15 @@ def _run_trend_radar(sb, run) -> None:
 
     from pipeline.utils.supabase import fetch_all
 
+    from pipeline.universe_filters import is_loop_tradable
+
     universe_rows = fetch_all(
         sb,
         "universe_members",
-        "symbol",
+        "symbol, tier, sector, industry, is_active",
         filters=lambda q: q.eq("is_active", True),
     )
-    symbols = [r["symbol"] for r in universe_rows]
+    symbols = [r["symbol"] for r in universe_rows if is_loop_tradable(r)]
     active_symbols = set(symbols)
     logger.info("Computing watchlist for %d tickers", len(symbols))
 

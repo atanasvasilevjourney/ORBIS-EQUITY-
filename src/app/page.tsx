@@ -26,6 +26,8 @@ type DashData = {
     advancersPct?: number;
     downDay?: number;
     downDayPct?: number;
+    onListDown?: number;
+    onListDownPct?: number;
     greens: number;
     reds: number;
     pctGreen: number;
@@ -384,7 +386,7 @@ export default function Home() {
               barColor="var(--accent-info)"
             />
             <MetricCard
-              label="DOWN DAY"
+              label="DECLINERS"
               value={
                 d?.breadth?.downDayPct != null
                   ? `${d.breadth.downDayPct}%`
@@ -392,7 +394,11 @@ export default function Home() {
                     ? `${d.breadth.pctRed}%`
                     : "—"
               }
-              sub={d?.breadth ? `${d.breadth.downDay ?? d.breadth.reds} names` : undefined}
+              sub={
+                d?.breadth
+                  ? `${d.breadth.downDay ?? d.breadth.reds} declining · ${d.breadth.onListDown ?? d.breadth.reds} watch down-day`
+                  : undefined
+              }
               color="var(--accent-bear)"
               bar={d?.breadth?.downDayPct ?? d?.breadth?.pctRed}
               barColor="var(--accent-bear)"

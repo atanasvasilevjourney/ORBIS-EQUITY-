@@ -3,6 +3,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { evaluateFreshness } from "@/lib/freshness";
 import { gateSide, staleHeadline } from "@/lib/signalGate";
+import { isResearchDeskEligible } from "@/lib/equityUniverseFilter";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -75,9 +76,21 @@ export async function GET() {
     if (!latest) {
       return NextResponse.json({ summary: null, names: [], headline: null, stale: true });
     }
+    const universe = await fetchAll<{
+      symbol: string;
+      tier?: string | null;
+      company_name?: string | null;
+      sector?: string | null;
+      industry?: string | null;
+      is_active?: boolean | null;
+    }>(sb, "universe_members", "symbol, tier, company_name, sector, industry, is_active", (q) =>
+      q.eq("is_active", true)
+    );
+    const eligible = new Set(universe.filter(isResearchDeskEligible).map((u) => u.symbol));
+
     const rows = await fetchAll<NameRow>(sb, "bias_names", "*");
     const names = rows
-      .filter((r) => r.run_id === latest.run_id)
+      .filter((r) => r.run_id === latest.run_id && eligible.has(r.symbol))
       .map(mapBiasName)
       .sort((a, b) => {
         const rank = (x: string | null) => (x === "LONG" ? 0 : x === "SHORT" ? 1 : 2);

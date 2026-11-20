@@ -18,7 +18,7 @@ async function loadSeries(): Promise<{ series: Record<string, PriceBar[]>; missi
   const missing: string[] = [];
   await Promise.all(
     TREND_ASSETS.map(async (asset) => {
-      const bars = await fetchYahooDaily(asset.symbol, "max");
+      const bars = await fetchYahooDaily(asset.symbol, "5y");
       if (bars.length < 2) {
         missing.push(asset.symbol);
         series[asset.symbol] = [];

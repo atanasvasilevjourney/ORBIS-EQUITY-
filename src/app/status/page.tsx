@@ -15,7 +15,7 @@ export default async function StatusPage() {
         SYSTEM STATUS
       </h1>
       <p className="text-xs text-[var(--text-secondary)] mb-4">
-        EOD delayed tape · NY session {s.nowNy} · expected latest bar ≥ {f.minFreshDate}
+        EOD delayed tape · NY session {s.nowNy} · expected latest bar ≥ {f.expectedEodDate}
       </p>
 
       <div

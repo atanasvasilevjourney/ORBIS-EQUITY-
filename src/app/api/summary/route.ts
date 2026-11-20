@@ -25,6 +25,7 @@ export async function GET() {
     const total = radar.length;
     const greens = radar.filter((r) => r.state === 1).length;
     const reds = radar.filter((r) => r.state === -1).length;
+    const decliners = radar.filter((r) => (r.z_mom ?? 0) < 0).length;
     const advancers = radar.filter((r) => (r.z_mom ?? 0) > 0).length;
     const avgRank = total > 0
       ? Math.round(radar.reduce((s, r) => s + r.quality_rank, 0) / total)
@@ -57,8 +58,10 @@ export async function GET() {
         onList: greens,
         onListPct: total > 0 ? Math.round((greens / total) * 100) : 0,
         /** Names with a down day (close below prior close). */
-        downDay: reds,
-        downDayPct: total > 0 ? Math.round((reds / total) * 100) : 0,
+        downDay: decliners,
+        downDayPct: total > 0 ? Math.round((decliners / total) * 100) : 0,
+        onListDown: reds,
+        onListDownPct: total > 0 ? Math.round((reds / total) * 100) : 0,
         /** Share of universe up on the day — matches pipeline posture. */
         advancersPct: total > 0 ? Math.round((advancers / total) * 100) : 0,
         /** @deprecated Use onListPct — old label implied market breadth. */

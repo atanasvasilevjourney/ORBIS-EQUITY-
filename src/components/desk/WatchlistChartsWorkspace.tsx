@@ -10,6 +10,8 @@ import { ModulePanel } from "@/components/ui/ModulePanel";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { FilterChip } from "@/components/ui/FilterChip";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { MetricSkeletonGrid, TableSkeleton } from "@/components/ui/TableSkeleton";
+import { fetchJson } from "@/lib/clientFetch";
 import { FocusUniverseModuleBanner } from "@/components/universe/FocusUniverseModuleBanner";
 import { useFocusUniverse } from "@/hooks/useFocusUniverse";
 import { ChartPane } from "@/components/desk/ChartPane";
@@ -118,7 +120,8 @@ export function WatchlistChartsWorkspace({ variant = "tc2000" }: Props) {
   const [layoutMode, setLayoutMode] = useState<DeskLayoutMode>("split");
 
   const fetchData = useCallback(async () => {
-    setLoading(true);
+    const hadData = rows.length > 0 || summary != null;
+    if (!hadData) setLoading(true);
     setError(false);
     const params = new URLSearchParams();
     if (filters.direction !== "all") params.set("direction", filters.direction);
@@ -129,21 +132,23 @@ export function WatchlistChartsWorkspace({ variant = "tc2000" }: Props) {
 
     try {
       const [screenerRes, summaryRes] = await Promise.all([
-        fetch(`/api/screener?${params}`),
-        fetch("/api/summary"),
+        fetchJson<ScreenerRow[]>(`/api/screener?${params}`, undefined, { timeoutMs: 60_000 }),
+        fetchJson<Summary>("/api/summary", undefined, { timeoutMs: 30_000 }),
       ]);
-      const screenerData = await screenerRes.json();
-      const summaryData = await summaryRes.json();
-      if (Array.isArray(screenerData)) setRows(screenerData);
-      else setRows([]);
-      setSummary(summaryData);
+      if (screenerRes.timedOut || summaryRes.timedOut) {
+        setError(true);
+        return;
+      }
+      if (screenerRes.ok && Array.isArray(screenerRes.data)) setRows(screenerRes.data);
+      else if (!screenerRes.ok) setError(true);
+      if (summaryRes.ok && summaryRes.data) setSummary(summaryRes.data);
     } catch (e) {
       console.error("Failed to fetch screener data:", e);
       setError(true);
     } finally {
       setLoading(false);
     }
-  }, [filters, isFocusActive, symbolsParam, universeParam]);
+  }, [filters, isFocusActive, symbolsParam, universeParam, rows.length, summary]);
 
   useEffect(() => {
     fetchData();
@@ -205,6 +210,10 @@ export function WatchlistChartsWorkspace({ variant = "tc2000" }: Props) {
       />
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+        {loading && !summary ? (
+          <MetricSkeletonGrid count={5} />
+        ) : (
+          <>
         <MetricCard
           label="POSTURE"
           value={summary?.posture ?? "—"}
@@ -224,6 +233,8 @@ export function WatchlistChartsWorkspace({ variant = "tc2000" }: Props) {
         <MetricCard label="ON LIST" value={summary?.breadth?.greens ?? "—"} sub="Day + volume" color="var(--accent-bull)" />
         <MetricCard label="BEST" value={summary?.bestSector ?? "—"} sub="Avg day" color="var(--accent-bull)" />
         <MetricCard label="WORST" value={summary?.worstSector ?? "—"} sub="Avg day" color="var(--accent-bear)" />
+          </>
+        )}
       </div>
 
       {summary?.briefText && (
@@ -295,12 +306,8 @@ export function WatchlistChartsWorkspace({ variant = "tc2000" }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {loading ? (
-                    <tr>
-                      <td colSpan={9} className="px-3 py-8 text-center text-[var(--text-muted)]">
-                        Loading scoreboard…
-                      </td>
-                    </tr>
+                  {loading && sortedRows.length === 0 ? (
+                    <TableSkeleton rows={10} cols={9} />
                   ) : sortedRows.length === 0 ? (
                     <tr>
                       <td colSpan={9} className="px-3 py-4">

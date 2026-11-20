@@ -8,6 +8,8 @@ body {
   background-color: var(--surface);
   color: var(--text-primary);
   font-family: "Inter", system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
 }
 
 .app-shell {

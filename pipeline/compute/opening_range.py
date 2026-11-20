@@ -40,7 +40,7 @@ OR_END_MIN = 9 * 60 + 45
 EQUITY = 100_000.0
 RISK_FRAC = 0.05  # 5% of equity per name (original)
 MAX_NAMES = 8
-MIN_PRICE = 2.0
+MIN_PRICE = 10.0
 LIQUID = [
     "SPY", "QQQ", "IWM", "AAPL", "MSFT", "NVDA", "TSLA", "AMD", "META", "AMZN",
     "GOOGL", "NFLX", "AVGO", "AMAT", "MU", "INTC", "BA", "DIS", "UBER", "COIN",

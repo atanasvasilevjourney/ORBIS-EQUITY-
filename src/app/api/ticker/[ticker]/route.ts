@@ -34,24 +34,31 @@ export async function GET(
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 
-  const universe =
-    universeRes.data ??
-    ({
-      symbol: ticker,
-      company_name: null,
-      sector: null,
-      industry: null,
-      country: "US",
-      exchange: "NASDAQ",
-      tier: "desk",
-      is_active: true,
-    } as const);
+  const hasUniverse = Boolean(universeRes.data);
+  const hasTape = Boolean(radarRes.data || fundRes.data);
+  if (!hasUniverse && !hasTape) {
+    return NextResponse.json(
+      { error: "Ticker not found", symbol: ticker },
+      { status: 404 }
+    );
+  }
+
+  const universe = universeRes.data ?? {
+    symbol: ticker,
+    company_name: null,
+    sector: null,
+    industry: null,
+    country: null,
+    exchange: null,
+    tier: null,
+    is_active: false,
+  };
 
   return NextResponse.json({
     radar: radarRes.data,
     fundamentals: fundRes.data,
     universe,
-    offIndexDesk: !universeRes.data,
+    offIndexDesk: !hasUniverse,
     earnings: earningsRes.data ?? [],
     insiderTrades: insiderRes.data ?? [],
   });

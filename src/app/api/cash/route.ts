@@ -4,6 +4,7 @@ import { fetchAll } from "@/lib/supabase/paginate";
 import { EMPTY_CASH } from "@/lib/liteDeskApi";
 import { evaluateFreshness } from "@/lib/freshness";
 import { gateSide, staleHeadline } from "@/lib/signalGate";
+import { isResearchDeskEligible } from "@/lib/equityUniverseFilter";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -69,6 +70,8 @@ type NameRow = {
 };
 
 function mapName(r: NameRow) {
+  const temaShort = r.tema_side === "SELL";
+  const carverShort = r.carver_side === "SELL";
   return {
     ticker: r.symbol,
     companyName: r.company_name ?? "",
@@ -80,7 +83,7 @@ function mapName(r: NameRow) {
     mark: r.mark_px,
     funding8h: r.funding_8h,
     fundingAnn: r.funding_ann,
-    temaSide: r.tema_side,
+    temaSide: temaShort ? "FLAT" : r.tema_side,
     temaGrade: r.tema_grade,
     temaScore: r.tema_score,
     temaT9: r.tema_t8,
@@ -96,7 +99,7 @@ function mapName(r: NameRow) {
     macdHist: r.macd_hist,
     macdAction: r.macd_action,
     temaWeightPct: r.tema_weight_pct,
-    temaNotional: r.tema_notional,
+    temaNotional: temaShort ? 0 : r.tema_notional,
     temaLeverage: r.tema_leverage,
     temaMargin: r.tema_margin,
     temaLiq: r.tema_liq,
@@ -105,16 +108,16 @@ function mapName(r: NameRow) {
     carverEwmacFast: r.carver_ewmac_fast,
     carverEwmacSlow: r.carver_ewmac_slow,
     carverVol: r.carver_vol,
-    carverSide: r.carver_side,
-    carverNotional: r.carver_notional,
+    carverSide: carverShort ? "FLAT" : r.carver_side,
+    carverNotional: carverShort ? 0 : r.carver_notional,
     carverLeverage: r.carver_leverage,
     carverMargin: r.carver_margin,
     carverLiq: r.carver_liq,
     carverShares: r.carver_shares,
     atr: r.atr,
     atrPct: r.atr_pct,
-    inTemaBook: Boolean(r.in_tema_book),
-    inCarverBook: Boolean(r.in_carver_book),
+    inTemaBook: Boolean(r.in_tema_book) && !temaShort,
+    inCarverBook: Boolean(r.in_carver_book) && !carverShort,
     skipReason: r.skip_reason,
     rationale: r.rationale,
   };
@@ -142,8 +145,22 @@ export async function GET() {
         stale: true,
       });
     }
+    const universe = await fetchAll<{
+      symbol: string;
+      tier?: string | null;
+      company_name?: string | null;
+      sector?: string | null;
+      industry?: string | null;
+      is_active?: boolean | null;
+    }>(sb, "universe_members", "symbol, tier, company_name, sector, industry, is_active", (q) =>
+      q.eq("is_active", true)
+    );
+    const eligible = new Set(universe.filter(isResearchDeskEligible).map((u) => u.symbol));
+
     const rows = await fetchAll<NameRow>(sb, "perp_names", "*");
-    const names = rows.filter((r) => r.run_id === latest.run_id).map(mapName);
+    const names = rows
+      .filter((r) => r.run_id === latest.run_id && eligible.has(r.symbol))
+      .map(mapName);
     const temaBook = names
       .filter((n) => n.inTemaBook)
       .sort((a, b) => (b.temaScore ?? 0) - (a.temaScore ?? 0));

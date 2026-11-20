@@ -25,7 +25,19 @@ type UniverseRow = {
   symbol: string;
   company_name: string | null;
   sector: string | null;
+  industry: string | null;
 };
+
+function displaySector(row: UniverseRow): string {
+  const sector = (row.sector ?? "").trim();
+  if (sector) return sector;
+  const industry = (row.industry ?? "").trim();
+  if (!industry) return "Unclassified";
+  return industry
+    .split(/[,\/]/)
+    .map((part) => part.trim())
+    .filter(Boolean)[0] ?? "Unclassified";
+}
 
 function toScores(f: FundRow): FactorRowScores {
   return {
@@ -57,7 +69,7 @@ export async function GET() {
       fetchAll<UniverseRow>(
         sb,
         "universe_members",
-        "symbol, company_name, sector",
+        "symbol, company_name, sector, industry",
         (q) => q.eq("is_active", true)
       ),
     ]);
@@ -70,7 +82,7 @@ export async function GET() {
         return {
           ...toScores(f),
           companyName: u.company_name ?? "",
-          sector: u.sector ?? "",
+          sector: displaySector(u),
           factorComputedAt: f.factor_computed_at,
         };
       });
