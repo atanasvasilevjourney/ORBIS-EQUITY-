@@ -41,6 +41,7 @@ import {
   Treemap,
 } from "@/components/portfolio/charts";
 import { num, pct, tone, usd } from "@/components/portfolio/format";
+import { ActiveTrading } from "@/components/portfolio/ActiveTrading";
 
 const STORE = "orbis-portfolio-studio-v1";
 
@@ -150,7 +151,7 @@ export function PortfolioStudio() {
           <h1 className="font-display text-3xl font-semibold tracking-tight mt-1">Portfolio Studio</h1>
           <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
             {pro
-              ? "Systematic sleeves rewrite the mix from trailing momentum, risk, and quality. The quant stack reads the basket in the sliders."
+              ? "Systematic sleeves rewrite the long-term mix. Active Trading lists the open short-term paper books beside that mix. The quant stack still reads the sliders."
               : "Pick stocks, set the mix, and leave it alone. This book is built for multi-year compounding."}
           </p>
         </div>
@@ -230,10 +231,12 @@ export function PortfolioStudio() {
         </section>
       )}
 
+      {pro && <ActiveTrading />}
+
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.8fr)] gap-4">
         <section className="pf-card">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">Your basket</h2>
+            <h2 className="text-lg font-semibold">{pro ? "Long-term basket" : "Your basket"}</h2>
             <div className="inline-flex rounded-full bg-[var(--surface-alt)] p-1">
               <button type="button" className="pf-pill" data-active={sleeve === "hold"} onClick={() => arm("hold")}>Manual</button>
               <button type="button" className="pf-pill" data-active={sleeve === "equal"} onClick={() => arm("equal")}>Equal</button>
