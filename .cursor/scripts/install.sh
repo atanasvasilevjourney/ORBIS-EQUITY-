@@ -22,7 +22,11 @@ if [ "$NEED_APT" = "1" ]; then
     postgresql postgresql-contrib nginx jq python3-venv python3-full
 fi
 # refresh PGBIN now that postgres is installed
-PGBIN="$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1)"; export PGBIN
+PGBIN="$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1 || true)"; export PGBIN
+if [ -z "$PGBIN" ]; then
+  echo "PostgreSQL binaries not found after apt install (postgresql package missing?)" >&2
+  exit 1
+fi
 
 echo "== 2/9 PostgREST binary =="
 if ! command -v postgrest >/dev/null 2>&1; then
