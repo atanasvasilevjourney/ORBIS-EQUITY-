@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import date
-
 import pandas as pd
+import pytest
 
 from pipeline.research.donchian_vwap_backtest import run_donchian_vwap_portfolio
+from pipeline.strategies.costs import DEFAULT_LOOP_COSTS
 
 
 def _panel(days, opens, closes):
@@ -77,3 +77,69 @@ def test_backtest_runs_with_injected_universe():
     )
     assert len(daily) == len(eq)
     assert float(eq["equity"].iloc[-1]) > 0
+
+
+def _ohlc(days, opens, highs, lows, closes):
+    return pd.DataFrame(
+        {
+            "open": opens,
+            "high": highs,
+            "low": lows,
+            "close": closes,
+            "volume": 1_000_000,
+        },
+        index=pd.DatetimeIndex(days),
+    )
+
+
+def test_donchian_exit_books_the_breach_session():
+    """A close through the exit still pays that session. The name is out afterwards."""
+    days = pd.bdate_range("2024-01-02", periods=8)
+    closes = [100, 102, 104, 106, 108, 110, 112, 90.0]
+    opens = [100, 100, 102, 104, 106, 108, 110, 112.0]
+    highs = [c + 0.4 for c in closes[:-1]] + [112.0]
+    lows = [c - 0.4 for c in closes[:-1]] + [88.0]
+    signals = _signals(days, eligible_from=0)
+    signals["exit_signal"] = [False] * 7 + [True]
+    panels = {
+        "SPY": _ohlc(days, [100] * 8, [100] * 8, [100] * 8, [100] * 8),
+        "AAA": _ohlc(days, opens, highs, lows, closes),
+    }
+    daily, _ = run_donchian_vwap_portfolio(
+        days[0].date(),
+        days[-1].date(),
+        panels=panels,
+        signals={"AAA": signals},
+        sym_sector={"AAA": "Technology"},
+        exit_mode="donchian20",
+    )
+    breach = closes[-1] / closes[-2] - 1
+    exit_cost = DEFAULT_LOOP_COSTS.bps_per_side / 10_000.0
+    assert float(daily.iloc[-1]) == pytest.approx(breach - exit_cost)
+
+
+def test_atr_exit_books_the_breach_session():
+    """Chandelier uses the breach close for P&L, then drops the name."""
+    days = pd.bdate_range("2024-01-02", periods=8)
+    closes = [100, 102, 104, 106, 108, 110, 112, 90.0]
+    opens = [100, 100, 102, 104, 106, 108, 110, 112.0]
+    highs = [c + 0.4 for c in closes[:-1]] + [112.0]
+    lows = [c - 0.4 for c in closes[:-1]] + [88.0]
+    panels = {
+        "SPY": _ohlc(days, [100] * 8, [100] * 8, [100] * 8, [100] * 8),
+        "AAA": _ohlc(days, opens, highs, lows, closes),
+    }
+    daily, eq = run_donchian_vwap_portfolio(
+        days[0].date(),
+        days[-1].date(),
+        panels=panels,
+        signals={"AAA": _signals(days, eligible_from=0)},
+        sym_sector={"AAA": "Technology"},
+        exit_mode="atr_trail",
+        atr_period=2,
+        atr_mult=2.0,
+    )
+    breach = closes[-1] / closes[-2] - 1
+    exit_cost = DEFAULT_LOOP_COSTS.bps_per_side / 10_000.0
+    assert float(daily.iloc[-1]) == pytest.approx(breach - exit_cost)
+    assert int(eq["names"].iloc[-1]) == 0

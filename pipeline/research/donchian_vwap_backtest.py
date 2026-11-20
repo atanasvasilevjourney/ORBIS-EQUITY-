@@ -24,6 +24,7 @@ from pipeline.compute.donchian_vwap import (
 )
 from pipeline.ingest.us_index_universe import build_merged_universe
 from pipeline.research.loop_backtest import _bar_on, _download_panel
+from pipeline.strategies.execution import equal_weight_portfolio_return, turnover_cost_fraction
 from pipeline.universe_filters import is_loop_tradable, is_pharma_stock
 
 ExitMode = Literal["donchian20", "atr_trail", "tighter"]
@@ -144,11 +145,12 @@ def run_donchian_vwap_portfolio(
 ) -> tuple[pd.Series, pd.DataFrame]:
     """
     Weekly rebalance: hold up to TOP_N names with Donchian(55) break + close > 20d VWAP.
-    Exit between rebalances:
+    Exit between rebalances, known at the close and filled there:
       - donchian20: close < 20-day Donchian lower
       - atr_trail: close < ratcheting chandelier (peak - atr_mult * ATR)
       - tighter: either exit fires
-    Equal weight; max MAX_PER_SECTOR per sector.
+    The session that breaks the stop is marked to that close, then the name
+    is out. Equal weight; max MAX_PER_SECTOR per sector.
     Returns (daily_return_series indexed by date, equity_curve dataframe).
     """
     if sym_sector is None:
@@ -167,33 +169,6 @@ def run_donchian_vwap_portfolio(
 
     for i, d in enumerate(days):
         start_holdings = list(holdings.keys())
-        # exits between rebalances
-        to_drop = []
-        for sym in list(holdings.keys()):
-            sig = signals.get(sym)
-            ohlcv = panels.get(sym)
-            row = _bar_on(sig, d) if sig is not None else None
-            dc_exit = row is not None and bool(row.get("exit_signal", False))
-            atr_exit = False
-            if exit_mode in ("atr_trail", "tighter") and ohlcv is not None:
-                bar = _bar_ohlc(ohlcv, d)
-                if bar is not None and sym in trails:
-                    hi, _, close = bar
-                    atr = _atr_on_bar(ohlcv, d, atr_period)
-                    if atr is not None:
-                        trails[sym] = _update_trail(trails[sym], hi, atr, atr_mult)
-                        if close < trails[sym].stop_price:
-                            atr_exit = True
-            if exit_mode == "donchian20" and dc_exit:
-                to_drop.append(sym)
-            elif exit_mode == "atr_trail" and atr_exit:
-                to_drop.append(sym)
-            elif exit_mode == "tighter" and (dc_exit or atr_exit):
-                to_drop.append(sym)
-        for sym in to_drop:
-            holdings.pop(sym, None)
-            trails.pop(sym, None)
-
         signal_day = days[max(0, i - 1)]  # prior close — no same-bar lookahead
         if i % REBALANCE_DAYS == 0 or not holdings:
             sector_count: dict[str, int] = {}
@@ -234,15 +209,40 @@ def run_donchian_vwap_portfolio(
                 for sym in prev_syms - set(new_hold.keys()):
                     trails.pop(sym, None)
 
-        from pipeline.strategies.execution import equal_weight_portfolio_return
-
+        # Book the session first. The stop is only known at this close.
         day_ret = equal_weight_portfolio_return(
             panels, d, list(holdings.keys()), prev_holdings=start_holdings
         )
+        to_drop: list[str] = []
+        for sym in list(holdings.keys()):
+            sig = signals.get(sym)
+            ohlcv = panels.get(sym)
+            row = _bar_on(sig, d) if sig is not None else None
+            dc_exit = row is not None and bool(row.get("exit_signal", False))
+            atr_exit = False
+            if exit_mode in ("atr_trail", "tighter") and ohlcv is not None and sym in trails:
+                bar = _bar_ohlc(ohlcv, d)
+                atr = _atr_on_bar(ohlcv, d, atr_period)
+                if bar is not None and atr is not None:
+                    hi, _, close = bar
+                    trails[sym] = _update_trail(trails[sym], hi, atr, atr_mult)
+                    if close < trails[sym].stop_price:
+                        atr_exit = True
+            if exit_mode == "donchian20" and dc_exit:
+                to_drop.append(sym)
+            elif exit_mode == "atr_trail" and atr_exit:
+                to_drop.append(sym)
+            elif exit_mode == "tighter" and (dc_exit or atr_exit):
+                to_drop.append(sym)
+        if to_drop:
+            kept = [sym for sym in holdings if sym not in to_drop]
+            day_ret -= turnover_cost_fraction(list(holdings.keys()), kept)
+            for sym in to_drop:
+                holdings.pop(sym, None)
+                trails.pop(sym, None)
 
         equity *= 1 + day_ret
         eq_rows.append({"date": d, "equity": equity, "daily_return": day_ret, "names": len(holdings)})
-        prev_eq = equity
 
     if not eq_rows:
         return pd.Series(dtype=float), pd.DataFrame()
