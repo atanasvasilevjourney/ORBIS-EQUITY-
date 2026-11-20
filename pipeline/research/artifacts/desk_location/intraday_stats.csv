@@ -1,0 +1,10 @@
+variant,side,trades,win_rate_pct,avg_trade_pct,median_trade_pct,profit_factor,session_book_pct
+strict,all,266,16.17,0.075,-0.145,1.35,2.17
+strict,long,0,0.0,0.0,0.0,,
+strict,short,266,16.17,0.075,-0.145,1.35,
+ribbon,all,404,17.08,0.012,-0.145,1.05,1.84
+ribbon,long,138,18.84,-0.11,-0.142,0.5,
+ribbon,short,266,16.17,0.075,-0.145,1.35,
+location,all,2321,14.48,-0.078,-0.138,0.66,-4.05
+location,long,1219,15.75,-0.095,-0.131,0.57,
+location,short,1102,13.07,-0.06,-0.144,0.75,
