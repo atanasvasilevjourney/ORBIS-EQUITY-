@@ -28,6 +28,7 @@ from pipeline.compute.donchian_vwap import (
     prior_bar_snapshot,
 )
 from pipeline.universe_filters import is_loop_tradable
+from pipeline.compute.sync_loop_journal import sync_loop_trading_journal
 from pipeline.utils.supabase import fetch_all
 
 load_dotenv()
@@ -126,6 +127,7 @@ def flatten() -> None:
         "status": "OK",
         "headline": f"Reset to ${EQUITY:,.0f} · {len(book)} closed · waiting for {session.isoformat()} open",
         "harness": {
+            "bookEpoch": session.isoformat(),
             "lastRebalanceDate": session.isoformat(),
             "config": {
                 "engine": "donchian_vwap",
@@ -144,7 +146,10 @@ def flatten() -> None:
         "log": [{
             "at": now.isoformat(),
             "level": "INFO",
-            "message": "Equity reset to 100000. Old book closed. New book fills at today's open.",
+            "message": (
+                f"Book reset · ${EQUITY:,.0f} cash · {len(book)} position(s) closed · "
+                f"journal epoch {session.isoformat()} · new entries at session open when filled"
+            ),
         }],
         "computed_at": now.isoformat(),
     }, on_conflict="run_id").execute()
@@ -152,6 +157,10 @@ def flatten() -> None:
         sb.table("paper_book").delete().eq("symbol", pos["symbol"]).execute()
     if orders:
         sb.table("paper_orders").upsert(orders, on_conflict="id").execute()
+    try:
+        sync_loop_trading_journal(sb)
+    except Exception as exc:
+        print(f"WARN trading_journal sync failed: {exc}")
     print(f"FLAT {run_id} closed {len(book)}")
 
 

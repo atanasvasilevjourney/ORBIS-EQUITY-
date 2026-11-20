@@ -24,6 +24,12 @@ After deploying migration `028_trading_journal.sql`, backfill closed LOOP trades
 
 `python -m pipeline.compute.sync_loop_journal`
 
+**LOOP fresh book (ops):** To flat the paper book to $100k and set a journal epoch for new traders, run on Render (needs **service_role**):
+
+`python -m pipeline.compute.reset_open_book --flatten`
+
+Or run `supabase/scripts/loop_fresh_book_reset.sql` in the Supabase SQL editor, then `python -m pipeline.compute.sync_loop_journal`.
+
 If Supabase emailed `rls_disabled_in_public`, run `supabase/migrations/021_rls_lockdown.sql` in the SQL editor immediately. A git deploy does not enable RLS.
 
 ---

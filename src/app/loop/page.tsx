@@ -36,10 +36,12 @@ type OrderRow = {
   shares: number;
   type: string;
   limitPrice: number | null;
+  fillPrice?: number | null;
   reason: string | null;
   sector: string | null;
-  riskUsd: number | null;
+  riskUsd?: number | null;
   createdAt: string | null;
+  runAsOf?: string | null;
 };
 
 type SectorExp = { sector: string; exposurePct: number; capPct: number; utilizationPct: number; names: number };
@@ -84,7 +86,14 @@ type LoopData = {
   priceStaleDays?: number | null;
   loopRunStaleDays?: number | null;
   journal?: JournalRow[];
-  journalSummary?: { closedTrades: number; realizedPnlUsd: number; winRatePct: number | null };
+  journalSummary?: {
+    closedTrades: number;
+    realizedPnlUsd: number;
+    winRatePct: number | null;
+    priorEpochTrades?: number;
+  };
+  recentOrders?: OrderRow[];
+  bookEpoch?: string | null;
   strategy?: {
     donchianVwap?: {
       asOf: string | null;
@@ -213,6 +222,17 @@ export default function LoopPage() {
         </div>
       </DeskPageHeader>
 
+      {sleeve === "donchian" && d?.bookEpoch && (
+        <div className="px-4 py-3 mb-4 rounded border border-[var(--accent-info)] bg-[var(--badge-bg)] text-xs font-terminal text-[var(--text-secondary)] leading-relaxed">
+          <strong className="text-[var(--text-primary)]">Fresh book since {d.bookEpoch}.</strong>{" "}
+          Paper equity is reset to {usd(s?.equity ?? 100000, 0)} cash. The journal below shows closed trades from this epoch only
+          {(d.journalSummary?.priorEpochTrades ?? 0) > 0 && (
+            <> ({d.journalSummary?.priorEpochTrades} older closes hidden)</>
+          )}
+          . New LOOP entries appear after the nightly harness passes Donchian + VWAP filters (posture ≥ 50).
+        </div>
+      )}
+
       {headline && (
         <div className="glass-panel px-4 py-3 mb-4 text-sm text-[var(--text-secondary)] font-terminal">
           <span style={{ color: "var(--accent-warning)" }}>
@@ -311,10 +331,12 @@ export default function LoopPage() {
                 <td colSpan={12} className="px-3 py-8 text-center text-[var(--text-muted)] text-xs leading-relaxed">
                   {d?.summary ? (
                     <>
-                      No open positions. Loop ran on <strong>{d.summary.asOfDate}</strong>
-                      {d.headline ? <> ({d.headline})</> : null}.
+                      <strong className="text-[var(--text-secondary)]">All cash — no open LOOP positions.</strong>
                       <br />
-                      No names in the rebalance basket — prior bar must close above the 55-day Donchian upper band and 20-day VWAP (posture ≥ 50).
+                      Last harness run: <strong>{d.summary.asOfDate}</strong>
+                      {d.headline ? <> · {d.headline}</> : null}.
+                      <br />
+                      Entries require prior-bar close above the 55-day Donchian upper band and 20-day VWAP, with posture ≥ 50 and sector caps.
                     </>
                   ) : (
                     <>No loop run yet. Run: python -m pipeline.compute.portfolio_loop</>
@@ -456,7 +478,8 @@ export default function LoopPage() {
         <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest">TRADING JOURNAL</h2>
         {d?.journalSummary && d.journalSummary.closedTrades > 0 && (
           <p className="text-[10px] font-terminal text-[var(--text-muted)]">
-            {d.journalSummary.closedTrades} closed · realized {usd(d.journalSummary.realizedPnlUsd, 0)}
+            {d.journalSummary.closedTrades} closed{d.bookEpoch ? ` since ${d.bookEpoch}` : ""} · realized{" "}
+            {usd(d.journalSummary.realizedPnlUsd, 0)}
             {d.journalSummary.winRatePct != null && (
               <> · win {d.journalSummary.winRatePct.toFixed(0)}%</>
             )}
@@ -467,6 +490,7 @@ export default function LoopPage() {
         <table className="w-full text-sm font-terminal">
           <thead>
             <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
+              <th className="text-left px-3 py-2">ENTER</th>
               <th className="text-left px-3 py-2">EXIT</th>
               <th className="text-left px-3 py-2">TICKER</th>
               <th className="text-right px-3 py-2">SHARES</th>
@@ -479,11 +503,11 @@ export default function LoopPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
+              <tr><td colSpan={9} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
             ) : !d?.journal?.length ? (
               <tr>
-                <td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)] text-xs leading-relaxed">
-                  No closed LOOP trades yet. Exits are recorded here when the nightly harness sells (ATR trail or rebalance).
+                <td colSpan={9} className="px-3 py-8 text-center text-[var(--text-muted)] text-xs leading-relaxed">
+                  No closed trades{d?.bookEpoch ? ` since ${d.bookEpoch}` : ""} yet. When the harness exits a name (ATR trail or rebalance), you will see entry/exit prices, P&amp;L, and the exit reason here.
                 </td>
               </tr>
             ) : (
@@ -491,6 +515,7 @@ export default function LoopPage() {
                 const pnlColor = (j.pnlUsd ?? 0) >= 0 ? "var(--accent-bull)" : "var(--accent-bear)";
                 return (
                   <tr key={j.id} className="border-b border-[var(--border)] hover:bg-[var(--surface-alt)]">
+                    <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{j.enteredAt ?? "—"}</td>
                     <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{j.exitedAt ?? "—"}</td>
                     <td className="px-3 py-2 font-bold">
                       <Link href={`/ticker/${j.ticker}`} className="hover:text-[var(--accent-info)]">{j.ticker}</Link>
@@ -513,38 +538,43 @@ export default function LoopPage() {
         </table>
       </div>
 
-      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">LAST LOOP ORDERS</h2>
+      <h2 className="text-xs font-terminal text-[var(--text-muted)] tracking-widest mb-2">RECENT ACTIVITY</h2>
+      <p className="text-[10px] font-terminal text-[var(--text-muted)] mb-2 max-w-3xl">
+        Last 40 paper orders across nightly runs (newest first). The headline above reflects only the latest run; this feed helps you see resets, exits, and entries in order.
+      </p>
       <div className="overflow-x-auto rounded border border-[var(--border)] mb-6">
         <table className="w-full text-sm font-terminal">
           <thead>
             <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
               <th className="text-left px-3 py-2">DATE</th>
+              <th className="text-left px-3 py-2">AS OF</th>
               <th className="text-left px-3 py-2">ACTION</th>
               <th className="text-left px-3 py-2">TICKER</th>
               <th className="text-left px-3 py-2">TYPE</th>
               <th className="text-right px-3 py-2">SHARES</th>
-              <th className="text-right px-3 py-2">LIMIT</th>
-              <th className="text-right px-3 py-2">RISK $</th>
+              <th className="text-right px-3 py-2">PX</th>
               <th className="text-left px-3 py-2">REASON</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">Loading…</td></tr>
-            ) : !d?.orders?.length ? (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">No orders this run — book unchanged.</td></tr>
+            ) : !(d?.recentOrders?.length ?? d?.orders?.length) ? (
+              <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">No paper orders yet.</td></tr>
             ) : (
-              d.orders.map((o) => (
+              (d.recentOrders ?? d.orders).map((o) => (
                 <tr key={o.id} className="border-b border-[var(--border)]">
-                  <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{o.createdAt ?? s?.asOfDate ?? "—"}</td>
+                  <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{o.createdAt ?? "—"}</td>
+                  <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{o.runAsOf ?? s?.asOfDate ?? "—"}</td>
                   <td className="px-3 py-2 font-bold" style={{ color: o.action === "BUY" ? "var(--accent-bull)" : "var(--accent-bear)" }}>{o.action}</td>
                   <td className="px-3 py-2 font-bold">
                     <Link href={`/ticker/${o.ticker}`} className="hover:text-[var(--accent-info)]">{o.ticker}</Link>
                   </td>
                   <td className="px-3 py-2 text-xs">{o.type}</td>
                   <td className="px-3 py-2 text-right">{o.shares}</td>
-                  <td className="px-3 py-2 text-right">{o.limitPrice == null ? "MKT" : px(o.limitPrice)}</td>
-                  <td className="px-3 py-2 text-right">{usd(o.riskUsd, 0)}</td>
+                  <td className="px-3 py-2 text-right">
+                    {o.fillPrice != null ? px(o.fillPrice) : o.limitPrice == null ? "—" : px(o.limitPrice)}
+                  </td>
                   <td className="px-3 py-2 text-xs text-[var(--text-secondary)]">{o.reason}</td>
                 </tr>
               ))

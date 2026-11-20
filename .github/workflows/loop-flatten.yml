@@ -1,0 +1,29 @@
+# Flat LOOP paper book to $100k cash and set journal bookEpoch (service_role required).
+# Trigger manually from GitHub Actions → "LOOP book flatten".
+
+name: LOOP book flatten
+
+on:
+  workflow_dispatch:
+
+jobs:
+  flatten:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Flatten LOOP paper book
+        run: python -m pipeline.compute.reset_open_book --flatten
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
