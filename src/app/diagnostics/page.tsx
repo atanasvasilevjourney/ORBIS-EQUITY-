@@ -79,8 +79,8 @@ export default function DiagnosticsPage() {
   return (
     <div className="px-4 py-6 space-y-4">
       <ModuleHeader
-        module="TREND"
-        title="Trend diagnostics"
+        module="MACRO"
+        title="Trend diagnostic on macro"
         description="Where large caps, mid caps, small caps, equal weight, bonds, gold, commodities, the dollar, and crypto sit on trend. EWMAC, breakout, and acceleration, each on the same ±20 scale. The blend is 40% EWMAC, 40% breakout, 20% acceleration."
         source="Carver rules · daily · not a signal"
         accent="var(--accent-info)"

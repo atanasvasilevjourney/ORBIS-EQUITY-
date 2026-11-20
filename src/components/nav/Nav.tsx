@@ -7,6 +7,7 @@ import { ThemeToggle } from "@/components/cards/ThemeToggle";
 
 const NAV_PRIMARY = [
   { href: "/", label: "COCKPIT", title: "Market cockpit" },
+  { href: "/diagnostics", label: "TREND", title: "Trend diagnostic on macro" },
   { href: "/portfolio", label: "PORTFOLIO", title: "Simple long-term book and Pro quant studio" },
   { href: "/trade", label: "TRADE", title: "MarketWatch + Charts (thinkorswim-style)" },
   { href: "/screener", label: "WATCHLIST", title: "Watchlist screener (TC2000 layout)" },
@@ -17,7 +18,6 @@ const NAV_PRIMARY = [
 ];
 
 const NAV_MORE = [
-  { href: "/diagnostics", label: "TREND", title: "Nine-asset trend diagnostics" },
   { href: "/ema200", label: "EMA200", title: "Watchlist only" },
   { href: "/orb", label: "ORB", title: "Research sleeve" },
   { href: "/skew", label: "SKEW", title: "Research sleeve" },

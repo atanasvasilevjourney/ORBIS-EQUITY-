@@ -526,6 +526,15 @@ export default function Home() {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {([
           {
+            href: "/diagnostics", title: "TREND DIAGNOSTIC", badge: "MACRO",
+            subtitle: "Large caps through crypto on one trend scale", accent: "var(--accent-info)", source: "MACRO",
+            metrics: [
+              { label: "ASSETS", value: "9" },
+              { label: "SCALE", value: "±20", color: "var(--accent-info)" },
+              { label: "READ", value: "STATE" },
+            ],
+          },
+          {
             href: "/portfolio", title: "PORTFOLIO STUDIO", badge: "STUDIO",
             subtitle: "Simple long-term book · Pro systematic quant", accent: "var(--module-1)", source: "PORTFOLIO",
             metrics: [
