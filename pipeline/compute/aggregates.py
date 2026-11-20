@@ -140,7 +140,9 @@ def compute_posture_pillars(breadth: dict, radar_rows: list[dict], avg_rank: flo
     if trend >= 55 and leadership < 45:
         guidance = "Uptrend under pressure — trim size, add cautiously"
     elif adv >= 60 and participation >= 10:
-        guidance = "Broad up day with active watchlist — stay selective"
+        guidance = "Participation firm with active watchlist — stay selective"
+    elif adv >= 60 and participation < 10:
+        guidance = "Tape mixed — advancers strong but few hot names on list"
     elif adv <= 40:
         guidance = "Defensive tape — reduce heat, wait for breadth repair"
     else:

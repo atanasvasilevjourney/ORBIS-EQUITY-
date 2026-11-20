@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { ModuleHeader } from "@/components/ui/ModuleHeader";
 import { ModulePanel } from "@/components/ui/ModulePanel";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PanelLoadingSkeleton } from "@/components/ui/TableSkeleton";
+import { fetchJson } from "@/lib/clientFetch";
 import { TrendRibbonChart } from "@/components/diagnostics/TrendRibbonChart";
 import type { DiagnosticChart, DiagnosticRow } from "@/lib/trendDiagnostics";
 
@@ -47,20 +49,25 @@ export default function DiagnosticsPage() {
   const [error, setError] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    const hadData = data != null;
+    if (!hadData) setLoading(true);
     setError(false);
     try {
       const params = new URLSearchParams({ mode, focus });
-      const res = await fetch(`/api/diagnostics?${params.toString()}`);
-      if (!res.ok) throw new Error(String(res.status));
-      const body = (await res.json()) as Payload;
-      setData(body);
+      const res = await fetchJson<Payload>(`/api/diagnostics?${params.toString()}`, undefined, {
+        timeoutMs: 70_000,
+      });
+      if (res.timedOut || !res.ok || !res.data) {
+        setError(true);
+        return;
+      }
+      setData(res.data);
     } catch {
       setError(true);
     } finally {
       setLoading(false);
     }
-  }, [mode, focus]);
+  }, [mode, focus, data]);
 
   useEffect(() => {
     load();

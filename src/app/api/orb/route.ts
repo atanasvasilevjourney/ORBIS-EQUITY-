@@ -85,8 +85,10 @@ export async function GET() {
       ),
     ]);
 
+    const ORB_MIN_PRICE = 10;
     const names = watch
       .filter((w) => w.run_id === latest.run_id)
+      .filter((w) => (w.prev_close ?? w.last_px ?? 0) >= ORB_MIN_PRICE)
       .map((w) => ({
         ticker: w.symbol,
         companyName: w.company_name ?? "",

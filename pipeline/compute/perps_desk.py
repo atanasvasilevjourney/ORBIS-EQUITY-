@@ -61,6 +61,7 @@ from pipeline.compute.perps_math import (
     pick_ranked,
     wilder_atr,
 )
+from pipeline.universe_filters import research_desk_symbols
 from pipeline.utils.supabase import fetch_all
 
 load_dotenv()
@@ -89,16 +90,19 @@ def run() -> dict:
     logger.info("=== Cash desk (TEMA + Carver) start ===")
 
     uni = fetch_all(
-        sb, "universe_members",
-        "symbol, company_name, sector",
+        sb,
+        "universe_members",
+        "symbol, company_name, sector, tier, industry, is_active",
         filters=lambda q: q.eq("is_active", True),
     )
+    eligible = research_desk_symbols(uni)
     meta = {
         r["symbol"]: {
             "name": r.get("company_name") or "",
             "sector": r.get("sector") or "Other",
         }
-        for r in uni if r.get("symbol")
+        for r in uni
+        if r.get("symbol") in eligible
     }
     prices = fetch_all(
         sb, "prices_daily",
@@ -119,6 +123,8 @@ def run() -> dict:
 
     scanned: list[dict] = []
     for sym, pts in sorted(by_sym.items()):
+        if sym not in eligible:
+            continue
         pts = sorted(pts)
         if len(pts) < MIN_BARS:
             continue
@@ -185,12 +191,10 @@ def run() -> dict:
         [r for r in eligible if r["tema"].side == "BUY"],
         key=lambda r: (-r["tema"].score, r["symbol"]),
     )
-    shorts = sorted(
-        [r for r in eligible if r["tema"].side == "SELL"],
-        key=lambda r: (-r["tema"].score, r["symbol"]),
-    )
+    # Cash book is long-only funded shares — no short borrow model.
+    shorts: list = []
     top_l = TEMA_TOP_LONG
-    top_s = TEMA_TOP_SHORT
+    top_s = 0
     if regime == "REDUCE":
         top_l = min(top_l, CARVER_REDUCE_TOP)
         top_s = min(top_s, CARVER_REDUCE_TOP)
@@ -263,8 +267,8 @@ def run() -> dict:
         cv_side = "FLAT"
         n_carver = sum(1 for v in carver_ntl.values() if abs(v) > 0)
         if skip is None and abs(r["forecast"]) >= CARVER_MIN_ABS:
-            cv_side = "BUY" if r["forecast"] > 0 else "SELL"
-            raw = carver_ntl.get(sym, 0.0)
+            cv_side = "BUY" if r["forecast"] > 0 else "FLAT"
+            raw = carver_ntl.get(sym, 0.0) if cv_side == "BUY" else 0.0
             allocated = carver_equity / max(1, n_carver)
             sized = size_cash(raw, allocated, last, cv_side)
             cv_ntl = sized.notional

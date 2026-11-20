@@ -13,6 +13,7 @@ import { finiteNumber } from "@/lib/adjustOhlc";
 import { ema200SupplementSet } from "@/lib/ema200Config";
 import { selectScanUniverse } from "@/lib/ema200ScanSelect";
 import { computeEma200FeaturesForSymbols, computeEma200FeaturesLive } from "@/lib/ema200LiveScan";
+import { fetchRecentEma200Features } from "@/lib/ema200FeaturesLoad";
 import { parseSymbolsQueryParam } from "@/lib/symbolsQuery";
 import { resolveUniverseDesk } from "@/lib/resolveIndexDesk";
 import {
@@ -196,11 +197,7 @@ export async function GET(req: NextRequest) {
     let features: FeatureDbRow[] = [];
     let dataSource: "ema200_features" | "prices_daily_live" = "ema200_features";
     try {
-      features = await fetchAll<FeatureDbRow>(
-        sb,
-        "ema200_features",
-        "symbol, bar_date, close, ema200, ema200_high, dist_atr, ribbon_dist_atr, days_above, ema200_slope, rvol, regime"
-      );
+      features = await fetchRecentEma200Features(sb);
     } catch (err) {
       if (!isMissingRelation(err)) throw err;
     }
@@ -214,11 +211,8 @@ export async function GET(req: NextRequest) {
       } catch (liveErr) {
         console.error("EMA200 live scan failed:", liveErr);
       }
-    }
-
-    if (deskSymbols.length) {
-      // Recompute the desk from adjusted history. Cached ema200_features can be a
-      // short-window EMA or a ribbon built on raw highs, which mis-tags touches.
+    } else if (deskSymbols.length) {
+      // Recompute watchlist symbols from adjusted history when cached ribbon can be stale.
       try {
         const extra = await computeEma200FeaturesForSymbols(sb, deskSymbols);
         if (extra.length) {

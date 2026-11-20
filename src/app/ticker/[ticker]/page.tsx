@@ -12,6 +12,8 @@ import {
   type SwingEmaLines,
 } from "@/components/chart/TradingChart";
 import { recordRecentTicker } from "@/components/command/CommandPalette";
+import { formatMarketCap } from "@/lib/marketCap";
+import { sessionMove } from "@/lib/rotationDesk";
 
 type TickerData = {
   radar: any;
@@ -382,6 +384,7 @@ export default function TickerPage() {
   const [data, setData] = useState<TickerData | null>(null);
   const [tab, setTab] = useState<"chart" | "swing" | "fundamentals" | "earnings" | "insider">("chart");
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [upcomingEarnings, setUpcomingEarnings] = useState(0);
   const [bias, setBias] = useState<any>(null);
   const [chartTf, setChartTf] = useState<"1d" | "5m">("1d");
@@ -401,9 +404,18 @@ export default function TickerPage() {
   }, [swingChart, ticker]);
 
   useEffect(() => {
+    setNotFound(false);
     fetch(`/api/ticker/${ticker}`)
-      .then((r) => r.json())
-      .then((d) => { setData(d); if (d && !d.error) recordRecentTicker(String(ticker)); })
+      .then(async (r) => {
+        const d = await r.json();
+        if (r.status === 404) {
+          setNotFound(true);
+          setData(null);
+          return;
+        }
+        setData(d);
+        if (d && !d.error) recordRecentTicker(String(ticker));
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
 
@@ -475,9 +487,38 @@ export default function TickerPage() {
     return <div className="px-4 py-12 text-center text-[var(--text-muted)] font-terminal">Loading {ticker}...</div>;
   }
 
+  if (notFound) {
+    return (
+      <div className="py-16 px-4 text-center font-terminal">
+        <h1 className="text-xl font-bold mb-2" style={{ color: "var(--accent-warning)" }}>
+          {ticker} not found
+        </h1>
+        <p className="text-sm text-[var(--text-secondary)] mb-4">
+          No universe row, tape, or fundamentals for this symbol on the index desk.
+        </p>
+        <Link href="/" className="text-sm text-[var(--accent-info)] hover:underline">
+          ← Cockpit
+        </Link>
+      </div>
+    );
+  }
+
   const r = data?.radar;
   const f = data?.fundamentals;
   const u = data?.universe;
+  const dailyMove =
+    chart?.interval === "1d" && chart?.candles?.length
+      ? sessionMove(
+          chart.candles.map((c: Candle) => ({
+            date:
+              typeof c.time === "string"
+                ? c.time
+                : new Date((c.time as number) * 1000).toISOString().slice(0, 10),
+            close: c.close,
+          }))
+        )
+      : null;
+  const watchDayPct = dailyMove?.dayPct ?? (typeof r?.z_mom === "number" ? r.z_mom : null);
 
   const signals = r
     ? [
@@ -551,7 +592,7 @@ export default function TickerPage() {
         <div className="text-right">
           <div className="text-2xl font-terminal font-bold">{formatVal(f?.price)}</div>
           <div className="text-xs text-[var(--text-muted)]">
-            MktCap: {f?.market_cap ? `${(f.market_cap / 1e9).toFixed(0)}B` : "—"}
+            MktCap: {formatMarketCap(f?.market_cap)}
           </div>
         </div>
       </div>
@@ -660,7 +701,19 @@ export default function TickerPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {[
             { label: "SORT", value: r.quality_rank, color: r.quality_rank >= 70 ? "var(--accent-bull)" : r.quality_rank <= 30 ? "var(--accent-bear)" : "" },
-            { label: "DAY %", value: `${r.z_mom > 0 ? "+" : ""}${r.z_mom?.toFixed(1)}%`, color: r.z_mom > 0 ? "var(--accent-bull)" : "var(--accent-bear)" },
+            {
+              label: "DAY %",
+              value:
+                watchDayPct != null && Number.isFinite(watchDayPct)
+                  ? `${watchDayPct > 0 ? "+" : ""}${watchDayPct.toFixed(1)}%`
+                  : "—",
+              color:
+                watchDayPct != null && watchDayPct > 0
+                  ? "var(--accent-bull)"
+                  : watchDayPct != null && watchDayPct < 0
+                    ? "var(--accent-bear)"
+                    : "",
+            },
             { label: "REL VOL", value: `${r.f_ewmac?.toFixed(1)}×`, color: r.f_ewmac >= 5 ? "var(--accent-bull)" : r.f_ewmac >= 2 ? "var(--accent-warning)" : "" },
             { label: "OFF HIGH", value: `${(r.z_52 * 100).toFixed(1)}%`, color: r.z_52 >= -0.01 ? "var(--accent-bull)" : "" },
             {

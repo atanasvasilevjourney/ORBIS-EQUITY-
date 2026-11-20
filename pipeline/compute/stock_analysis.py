@@ -34,6 +34,7 @@ from pipeline.compute.tech_signals import (
     signal_linear_regression,
     signal_moving_averages_long_term,
 )
+from pipeline.universe_filters import research_desk_symbols
 from pipeline.utils.supabase import fetch_all
 
 load_dotenv()
@@ -145,9 +146,14 @@ def run() -> dict:
     sb = _sb()
     logger.info("=== Stock analysis start ===")
 
-    uni = fetch_all(sb, "universe_members", "symbol, company_name",
-                    filters=lambda q: q.eq("is_active", True))
-    names = {r["symbol"]: r.get("company_name") or "" for r in uni if r.get("symbol")}
+    uni = fetch_all(
+        sb,
+        "universe_members",
+        "symbol, company_name, tier, sector, industry, is_active",
+        filters=lambda q: q.eq("is_active", True),
+    )
+    eligible = research_desk_symbols(uni)
+    names = {r["symbol"]: r.get("company_name") or "" for r in uni if r.get("symbol") in eligible}
     prices = fetch_all(
         sb, "prices_daily", "symbol, date, close, volume",
         order=("date", False),
@@ -169,6 +175,8 @@ def run() -> dict:
 
     rows: list[dict] = []
     for sym, pts in by_sym.items():
+        if sym not in eligible:
+            continue
         pts = sorted(pts, key=lambda r: r["date"])
         close = np.array([float(p["close"]) for p in pts], dtype=float)
         vol = np.array([float(p["volume"] or 0) for p in pts], dtype=float)

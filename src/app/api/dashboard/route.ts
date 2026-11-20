@@ -264,6 +264,7 @@ export async function GET() {
     const total = radar.length;
     const greens = radar.filter((r) => r.state === 1).length;
     const reds = radar.filter((r) => r.state === -1).length;
+    const decliners = radar.filter((r) => (r.z_mom ?? 0) < 0).length;
     const advancers = radar.filter((r) => (r.z_mom ?? 0) > 0).length;
 
     const inputs = (brief?.inputs && typeof brief.inputs === "object")
@@ -385,7 +386,14 @@ export async function GET() {
       quotes: crossAsset,
     });
 
-    const fresh = evaluateFreshness(brief?.asof_date);
+    const priceRow = await sb
+      .from("prices_daily")
+      .select("date")
+      .order("date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const pricesAsOf = priceRow.data?.date?.slice?.(0, 10) ?? (priceRow.data?.date as string | null) ?? null;
+    const fresh = evaluateFreshness(brief?.asof_date, pricesAsOf);
 
     return NextResponse.json({
       degraded: false,
@@ -401,8 +409,10 @@ export async function GET() {
         total,
         onList: greens,
         onListPct: total > 0 ? Math.round((greens / total) * 100) : 0,
-        downDay: reds,
-        downDayPct: total > 0 ? Math.round((reds / total) * 100) : 0,
+        downDay: decliners,
+        downDayPct: total > 0 ? Math.round((decliners / total) * 100) : 0,
+        onListDown: reds,
+        onListDownPct: total > 0 ? Math.round((reds / total) * 100) : 0,
         advancersPct: total > 0 ? Math.round((advancers / total) * 100) : 0,
         greens,
         reds,

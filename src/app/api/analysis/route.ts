@@ -3,6 +3,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { evaluateFreshness } from "@/lib/freshness";
 import { staleHeadline } from "@/lib/signalGate";
+import { isResearchDeskEligible } from "@/lib/equityUniverseFilter";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -109,6 +110,14 @@ export async function GET() {
       });
     }
 
+    const universe = await fetchAll<{ symbol: string; tier?: string | null; company_name?: string | null; sector?: string | null; industry?: string | null; is_active?: boolean | null }>(
+      sb,
+      "universe_members",
+      "symbol, tier, company_name, sector, industry, is_active",
+      (q) => q.eq("is_active", true)
+    );
+    const eligible = new Set(universe.filter(isResearchDeskEligible).map((u) => u.symbol));
+
     const rows = await fetchAll<NameRow>(
       sb,
       "analysis_names",
@@ -118,7 +127,7 @@ export async function GET() {
        buy_count, sell_count, hold_count, composite_score, f_score, pe_ratio, spark`
     );
     const names = rows
-      .filter((r) => r.run_id === latest.run_id)
+      .filter((r) => r.run_id === latest.run_id && eligible.has(r.symbol))
       .map(mapName)
       .sort((a, b) => (b.buyCount ?? 0) - (a.buyCount ?? 0) || a.ticker.localeCompare(b.ticker));
 

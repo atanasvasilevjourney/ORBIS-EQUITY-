@@ -130,8 +130,14 @@ export function CommandPalette() {
 
     const symbolActions: PaletteItem[] = [];
     const symbolsToOffer = new Set<string>();
-    if (looksLikeTicker) symbolsToOffer.add(q);
-    for (const h of searchHits) symbolsToOffer.add(h.symbol);
+    for (const h of searchHits) {
+      if (h.symbol) symbolsToOffer.add(h.symbol.toUpperCase());
+    }
+    if (looksLikeTicker) {
+      const exactHit = searchHits.some((h) => h.symbol?.toUpperCase() === q);
+      const recentHit = recentHits.some((i) => i.label === q);
+      if (exactHit || recentHit) symbolsToOffer.add(q);
+    }
 
     for (const sym of Array.from(symbolsToOffer)) {
       const onList = getFocusSymbols().includes(sym);

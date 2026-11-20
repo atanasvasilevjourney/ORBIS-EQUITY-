@@ -307,8 +307,16 @@ def run() -> dict:
     sb = _sb()
     logger.info("=== Daily bias start ===")
 
-    uni = fetch_all(sb, "universe_members", "symbol, company_name", filters=lambda q: q.eq("is_active", True))
-    names = {r["symbol"]: r.get("company_name") or "" for r in uni if r.get("symbol")}
+    from pipeline.universe_filters import research_desk_symbols
+
+    uni = fetch_all(
+        sb,
+        "universe_members",
+        "symbol, company_name, tier, sector, industry, is_active",
+        filters=lambda q: q.eq("is_active", True),
+    )
+    eligible = research_desk_symbols(uni)
+    names = {r["symbol"]: r.get("company_name") or "" for r in uni if r.get("symbol") in eligible}
     analysis = {r["symbol"]: r for r in fetch_all(sb, "analysis_names", "*") if r.get("symbol")}
     orb = {r["symbol"]: r for r in fetch_all(sb, "orb_watch", "symbol, or_high, or_low") if r.get("symbol")}
     prices = fetch_all(sb, "prices_daily", "symbol, date, open, high, low, close", order=("date", False))
@@ -326,6 +334,8 @@ def run() -> dict:
 
     rows = []
     for sym, pts in sorted(by_sym.items()):
+        if sym not in eligible:
+            continue
         pts = sorted(pts)
         if len(pts) < MIN_BARS:
             continue

@@ -5,6 +5,8 @@ import { NASDAQ_VENUE_DISCLAIMER } from "@/lib/focusUniverse";
 import { ModuleHeader } from "@/components/ui/ModuleHeader";
 import { ModulePanel } from "@/components/ui/ModulePanel";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PanelLoadingSkeleton } from "@/components/ui/TableSkeleton";
+import { fetchJson } from "@/lib/clientFetch";
 import { Ema200WatchTable, type Ema200TableRow } from "@/components/ema200/Ema200WatchTable";
 import { FocusUniverseModuleBanner } from "@/components/universe/FocusUniverseModuleBanner";
 import { useFocusUniverse } from "@/hooks/useFocusUniverse";
@@ -32,7 +34,8 @@ export default function Ema200WatchlistPage() {
   const [deskOtherOpen, setDeskOtherOpen] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    const hadData = data != null;
+    if (!hadData) setLoading(true);
     setError(false);
     try {
       const params = new URLSearchParams();
@@ -43,14 +46,20 @@ export default function Ema200WatchlistPage() {
         params.set("universe", universeParam);
       }
       const qs = params.toString();
-      const res = await fetch(`/api/ema200${qs ? `?${qs}` : ""}`);
-      setData(await res.json());
+      const res = await fetchJson<ApiPayload>(`/api/ema200${qs ? `?${qs}` : ""}`, undefined, {
+        timeoutMs: 75_000,
+      });
+      if (res.timedOut || !res.ok || !res.data) {
+        setError(true);
+        return;
+      }
+      setData(res.data);
     } catch {
       setError(true);
     } finally {
       setLoading(false);
     }
-  }, [isFocusActive, symbolsParam, universeParam]);
+  }, [isFocusActive, symbolsParam, universeParam, data]);
 
   useEffect(() => {
     load();
@@ -95,8 +104,8 @@ export default function Ema200WatchlistPage() {
       <ModulePanel title="AT 200 EMA · ON WATCH" badge="≤1.5 ATR" accent="var(--accent-info)" source={`${watch.length} names`}>
         {error ? (
           <EmptyState title="Failed to load watchlist" detail="Check API and Supabase connectivity." />
-        ) : loading ? (
-          <p className="px-3 py-8 text-center text-[var(--text-muted)] font-terminal text-sm">Loading…</p>
+        ) : loading && !data ? (
+          <PanelLoadingSkeleton label="Loading EMA200 watchlist…" />
         ) : watch.length === 0 ? (
           <EmptyState
             title="No retracements today"
@@ -113,8 +122,8 @@ export default function Ema200WatchlistPage() {
         accent="var(--accent-warning)"
         source={`${approaching.length} names`}
       >
-        {loading ? (
-          <p className="px-3 py-8 text-center text-[var(--text-muted)] font-terminal text-sm">Loading…</p>
+        {loading && !data ? (
+          <PanelLoadingSkeleton label="Loading approaching names…" />
         ) : approaching.length === 0 ? (
           <EmptyState
             title="No names in the approach zone"

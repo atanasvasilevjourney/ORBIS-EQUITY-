@@ -48,10 +48,37 @@ function postureLine(input: MarketBriefInput): string | null {
   return `${bits.join(", ")}.`;
 }
 
+function reconcilePostureWithTape(
+  label: string | null,
+  advancersPct: number | null,
+  quotes: BriefQuote[]
+): string | null {
+  if (!label) return label;
+  const spy = quotes.find((q) => q.symbol === "SPY")?.dayPct;
+  const qqq = quotes.find((q) => q.symbol === "QQQ")?.dayPct;
+  const iwm = quotes.find((q) => q.symbol === "IWM")?.dayPct;
+  const idx = [spy, qqq, iwm].filter((v): v is number => v != null && Number.isFinite(v));
+  if (!idx.length) return label;
+  const avg = idx.reduce((s, v) => s + v, 0) / idx.length;
+  const bulls = /bullish/i.test(label);
+  const bears = /bearish/i.test(label);
+  if (avg <= -0.75 && bulls) return label.replace(/bullish/i, "bearish");
+  if (avg >= 0.75 && bears) return label.replace(/bearish/i, "bullish");
+  if (avg <= -0.75 && advancersPct != null && advancersPct >= 55) {
+    return label.replace(/slight bullish|bullish/i, "mixed");
+  }
+  return label;
+}
+
 export function composeMarketBrief(input: MarketBriefInput): MarketBrief {
   const pipeline = input.pipelineBrief?.trim() || null;
   const tape = tapeLine(input.quotes);
-  const posture = postureLine(input);
+  const postureLabel = reconcilePostureWithTape(
+    input.postureLabel,
+    input.advancersPct,
+    input.quotes
+  );
+  const posture = postureLine({ ...input, postureLabel });
   const regime =
     input.regime && input.regime.trim() ? `Rotation regime ${input.regime.trim()}.` : null;
 
