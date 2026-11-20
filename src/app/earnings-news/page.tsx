@@ -18,12 +18,12 @@ type EarningsRow = {
 };
 
 type NewsRow = {
-  id: number;
-  ticker: string;
-  publishedAt: string;
+  id: number | string;
+  ticker: string | null;
+  publishedAt: string | null;
   source: string;
   headline: string;
-  url: string;
+  url: string | null;
   tone: number | null;
   badge: string | null;
 };
@@ -36,6 +36,7 @@ type Summary = {
   misses: number;
   avgSurprise: number;
   totalNews: number;
+  source?: string;
 };
 
 function formatRev(v: number | null): string {
@@ -93,8 +94,8 @@ function EarningsNewsPageInner() {
 <ModuleHeader
         module="MODULE 4"
         title="EARNINGS & NEWS"
-        description="Earnings calendar with surprise tracking — GDELT news with tone scores"
-        source="LSE · GDELT · EOD"
+        description="Nearby earnings, with the brief headlines for those names"
+        source={summary?.source === "nasdaq" ? "NASDAQ · YAHOO" : summary?.source === "mixed" ? "DESK · NASDAQ" : "DESK · NASDAQ"}
         accent="var(--module-4)"
       />
 
@@ -172,7 +173,7 @@ function EarningsNewsPageInner() {
                 {earnings.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-3 py-8 text-center text-[var(--text-muted)]">
-                      No earnings data. Run pipeline to populate.
+                      No earnings in this window.
                     </td>
                   </tr>
                 ) : (
@@ -209,24 +210,29 @@ function EarningsNewsPageInner() {
         <div className="rounded border border-[var(--border)] bg-[var(--card-bg)]">
           <div className="px-4 py-3 border-b border-[var(--border)]">
             <h2 className="text-sm font-terminal font-semibold tracking-wider">NEWS FEED</h2>
-            <p className="text-[10px] text-[var(--text-muted)] mt-0.5">GDELT — last 7 days</p>
+            <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Headlines for the names in this calendar</p>
           </div>
           <div className="p-4 space-y-3 max-h-[600px] overflow-y-auto">
             {news.length === 0 ? (
               <p className="text-center text-[var(--text-muted)] py-8">
-                No news data. Run pipeline to populate.
+                No headlines for these earnings names.
               </p>
             ) : (
               news.map((n) => (
                 <div key={n.id} className="text-sm py-2 border-b border-[var(--border)] last:border-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <Link
-                      href={`/ticker/${n.ticker}`}
-                      className="text-xs font-terminal font-semibold text-[var(--accent-info)] hover:underline"
-                    >
-                      {n.ticker}
-                    </Link>
-                    <span className="text-[10px] text-[var(--text-muted)]">{timeAgo(n.publishedAt)}</span>
+                    {n.ticker && (
+                      <Link
+                        href={`/ticker/${n.ticker}`}
+                        className="text-xs font-terminal font-semibold text-[var(--accent-info)] hover:underline"
+                      >
+                        {n.ticker}
+                      </Link>
+                    )}
+                    {n.badge === "earnings" && (
+                      <span className="text-[10px] font-terminal" style={{ color: "var(--accent-info)" }}>EARN</span>
+                    )}
+                    <span className="text-[10px] text-[var(--text-muted)]">{n.publishedAt ? timeAgo(n.publishedAt) : ""}</span>
                     <span className="text-[10px] text-[var(--text-muted)]">{n.source}</span>
                     {n.tone != null && (
                       <span
@@ -245,14 +251,18 @@ function EarningsNewsPageInner() {
                       </span>
                     )}
                   </div>
-                  <a
-                    href={n.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[var(--text-secondary)] text-xs leading-relaxed hover:text-[var(--text-primary)] transition-colors"
-                  >
-                    {n.headline}
-                  </a>
+                  {n.url ? (
+                    <a
+                      href={n.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[var(--text-secondary)] text-xs leading-relaxed hover:text-[var(--text-primary)] transition-colors"
+                    >
+                      {n.headline}
+                    </a>
+                  ) : (
+                    <p className="text-[var(--text-secondary)] text-xs leading-relaxed">{n.headline}</p>
+                  )}
                 </div>
               ))
             )}
@@ -261,7 +271,7 @@ function EarningsNewsPageInner() {
       </div>
 
       <p className="text-xs text-[var(--text-muted)] mt-3 font-terminal">
-        Earnings: LSE Company Calendar. News: GDELT DOC API (tone = sentiment score).
+        Nearby sessions from the desk calendar, filled from Nasdaq for listings above $5B. Headlines follow those names.
       </p>
     </div>
   );

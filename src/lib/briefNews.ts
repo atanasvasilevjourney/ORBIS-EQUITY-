@@ -13,6 +13,7 @@ export type BriefNewsItem = {
   ticker: string | null;
   tone: number | null;
   origin: NewsOrigin;
+  badge?: "earnings" | null;
 };
 
 export type StoredNewsRow = {
@@ -128,9 +129,15 @@ async function fetchQuery(query: string): Promise<BriefNewsItem[]> {
   return yahooNewsItems(body);
 }
 
-export async function fetchYahooHeadlines(): Promise<BriefNewsItem[]> {
+export async function fetchYahooHeadlines(queries: string[] = QUERIES): Promise<BriefNewsItem[]> {
+  const unique: string[] = [];
+  for (const query of queries) {
+    const trimmed = query.trim();
+    if (!trimmed || unique.includes(trimmed)) continue;
+    unique.push(trimmed);
+  }
   const batches = await Promise.all(
-    QUERIES.map(async (query) => {
+    unique.slice(0, 6).map(async (query) => {
       try {
         return await fetchQuery(query);
       } catch {
@@ -138,20 +145,23 @@ export async function fetchYahooHeadlines(): Promise<BriefNewsItem[]> {
       }
     })
   );
-  return dedupeNews(batches.flat(), 12);
+  return dedupeNews(batches.flat(), 18);
 }
 
 export async function loadMarketHeadlines(
   stored: BriefNewsItem[],
-  limit = 6
+  limit = 6,
+  focus: string[] = []
 ): Promise<BriefNewsItem[]> {
-  const desk = dedupeNews(stored, limit);
-  if (desk.length >= limit) return desk;
+  const queries = [...focus, ...QUERIES];
   let live: BriefNewsItem[] = [];
-  try {
-    live = await fetchYahooHeadlines();
-  } catch {
-    live = [];
+  const desk = dedupeNews(stored, limit);
+  if (desk.length < limit || focus.length > 0) {
+    try {
+      live = await fetchYahooHeadlines(queries);
+    } catch {
+      live = [];
+    }
   }
-  return dedupeNews([...desk, ...live], limit);
+  return dedupeNews([...stored, ...live], Math.max(limit, focus.length > 0 ? 12 : limit));
 }

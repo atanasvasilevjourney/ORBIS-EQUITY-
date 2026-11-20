@@ -35,6 +35,28 @@ vi.mock("@/lib/marketTapeFill", () => ({
   },
 }));
 
+vi.mock("@/lib/earningsCalendar", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/earningsCalendar")>("@/lib/earningsCalendar");
+  return {
+    ...actual,
+    loadEarningsCalendar: async () => [
+      {
+        ticker: "NVDA",
+        name: "NVIDIA",
+        eventDate: "2026-11-03",
+        confirmed: false,
+        epsEst: 1.2,
+        epsActual: null,
+        surprisePct: null,
+        marketCap: 50_000_000_000,
+        revenueEst: null,
+        revenueActual: null,
+        source: "nasdaq" as const,
+      },
+    ],
+  };
+});
+
 vi.mock("@/lib/briefNews", async () => {
   const actual = await vi.importActual<typeof import("@/lib/briefNews")>("@/lib/briefNews");
   return {
@@ -498,6 +520,10 @@ describe("GET /api/dashboard", () => {
     );
     expect(body.crossAsset.find((row: { symbol: string }) => row.symbol === "QQQ").source).toBe("yahoo");
     expect(body.intelligence.news[0].headline).toBe("Chip demand holds");
+    expect(body.intelligence.news[0].badge).toBe("earnings");
+    expect(body.intelligence.earnings.upcoming).toBe(1);
+    expect(body.intelligence.earnings.names[0].ticker).toBe("NVDA");
+    expect(body.desks.earningsUpcoming).toBe(1);
     expect(body.intelligence.marketBrief).toContain("Risk-on tape");
     expect(body.intelligence.marketBrief).toContain("QQQ -3.59%");
     expect(body.capital.sleeves).toHaveLength(4);
@@ -518,5 +544,6 @@ describe("GET /api/dashboard", () => {
     );
     expect(body.intelligence.marketBrief).toContain("Session tape");
     expect(body.intelligence.briefSource).toBe("tape");
+    expect(body.desks.earningsUpcoming).toBe(1);
   });
 });
