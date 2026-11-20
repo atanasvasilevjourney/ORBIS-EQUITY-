@@ -24,7 +24,9 @@ export DBUSER="ubuntu"
 
 # Newest installed PostgreSQL bin dir (e.g. /usr/lib/postgresql/16/bin)
 if [ -z "${PGBIN:-}" ]; then
-  PGBIN="$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1)"
+  # Postgres may not be installed yet (install.sh sources this file first).
+  # ls exits 2 when the glob has no matches; with pipefail that would abort install.
+  PGBIN="$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1 || true)"
 fi
 export PGBIN
 
