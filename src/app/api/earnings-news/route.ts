@@ -64,6 +64,7 @@ export async function GET(req: NextRequest) {
   const earnings = (earningsRes.data ?? []).map((e: any) => ({
     ticker: e.ticker,
     eventDate: e.event_date,
+    source: e.source ?? null,
     confirmed: e.confirmed,
     epsEst: e.eps_est,
     epsActual: e.eps_actual,
