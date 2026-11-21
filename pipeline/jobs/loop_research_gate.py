@@ -15,6 +15,7 @@ def main() -> int:
         "pytest",
         "pipeline/tests/test_top_green_lag.py",
         "pipeline/tests/test_donchian_vwap_backtest_smoke.py",
+        "pipeline/tests/test_fill_rules.py",
         "pipeline/tests/test_backtest_regime_gate.py",
         "-q",
         "--tb=short",

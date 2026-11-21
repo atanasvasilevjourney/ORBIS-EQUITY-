@@ -1,4 +1,6 @@
 {
+  "INVALID": true,
+  "invalid_reason": "See donchian_atr_trail_grid.INVALID.md — exit-day bug, re-leverage, OOS-tuned grid",
   "exit_mode": "atr_trail",
   "best_atr_period": 14,
   "best_atr_mult": 2.0,

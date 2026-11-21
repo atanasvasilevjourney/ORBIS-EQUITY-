@@ -61,7 +61,7 @@ def chandelier_trail_snapshot(
         return None
 
     peak = float(entry_price)
-    stop = float(entry_price)
+    stop = float("-inf")  # first chandelier bar sets entry - k*ATR (not breakeven floor)
     atr_val = float("nan")
     close = float(window.iloc[-1]["close"])
     for i in range(len(d)):
@@ -78,9 +78,12 @@ def chandelier_trail_snapshot(
         atr_val = float(atr_s.iloc[-1])
         if not np.isfinite(atr_val) or atr_val <= 0:
             continue
-        stop = max(stop, peak - atr_mult * atr_val)
+        chandelier = peak - atr_mult * atr_val
+        if not np.isfinite(stop) or stop == float("-inf"):
+            stop = entry_price - atr_mult * atr_val
+        stop = max(stop, chandelier)
 
-    if not np.isfinite(stop):
+    if not np.isfinite(stop) or stop == float("-inf"):
         stop = entry_price - atr_mult * (atr_val if np.isfinite(atr_val) else 0)
     return AtrTrailSnapshot(
         peak_price=round(peak, 4),
