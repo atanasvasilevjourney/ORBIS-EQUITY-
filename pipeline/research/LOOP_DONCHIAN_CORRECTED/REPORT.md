@@ -1,43 +1,44 @@
-# LOOP Donchian + VWAP — corrected research (2023-01-03 → 2026-11-21)
+# LOOP Donchian + VWAP — corrected research
 
-## Invalid prior headline
+**Headline window:** 2023-01-03 → 2026-11-21 · **PIT / long history:** from 2010-01-04
 
-Artifacts claiming **+307%** OOS return and **3.73** OOS Sharpe (`pipeline/research/artifacts/donchian_atr_trail_grid.json`) are **invalid** (see `donchian_atr_trail_grid.INVALID.md`).
+## Why +54% sits next to +14%–+121% weekday range
 
-## Fill rules
+The reported **headline** (+54.4%) is the **mean of five daily return series**, one per rebalance weekday (Mon–Fri), hold-until-stop, ATR×3. Single-weekday totals on the same calendar window run from **+14.0% to +120.8%** ({"dow_0": 20.5, "dow_1": 53.8, "dow_2": 14.0, "dow_3": 120.8, "dow_4": 69.2}). We report the average because rebalance weekday alone can move full-period totals by an order of magnitude; the dispersion table is mandatory context, not a contradiction.
 
-Documented in `pipeline/strategies/fill_rules.py`: signal at close *t*, entry at open *t+1*, exit-day P&L booked, rotate at open, **1/8 slots + cash**, default **10 bps/side**.
+## Walk-forward (15 ATR grid trials each selection)
 
-## Headline results (from harness JSON)
+**Frozen:** train 2010-01-04–2018-12-31, frozen test 2019-01-02→2026-11-21. Chosen **ATR(14)×3.5** (hold_until_stop). Test return **+91.3%**, Sharpe **0.51**, **deflated Sharpe 0.46** (n_trials=15).
+
+**Rolling 3y train / 1y test:**
+
+- 2019: return +14.3%, Sharpe 1.07, deflated 0.92, ATR(14)×3.5 (15 trials)
+- 2020: return -8.8%, Sharpe -0.37, deflated -0.52, ATR(20)×4.0 (15 trials)
+- 2021: return +50.4%, Sharpe 2.15, deflated 2.01, ATR(10)×4.0 (15 trials)
+- 2022: return -1.0%, Sharpe 0.04, deflated -0.11, ATR(10)×4.0 (15 trials)
+- 2023: return +4.1%, Sharpe 0.34, deflated 0.20, ATR(10)×4.0 (15 trials)
+- 2024: return +37.3%, Sharpe 1.62, deflated 1.48, ATR(10)×4.0 (15 trials)
+- 2025: return +6.1%, Sharpe 0.37, deflated 0.22, ATR(10)×4.0 (15 trials)
+- 2026: return +2.4%, Sharpe 0.23, deflated 0.08, ATR(10)×4.0 (15 trials)
+
+![Walk-forward](walk_forward.png)
+
+## Headline table (2023-01-03 → 2026-11-21)
 
 | Series | Total return | Sharpe | Max DD |
 |--------|-------------|--------|--------|
-| **Corrected — avg 5 rebalance weekdays, hold-until-stop, ATR×3** | +54.3% | 0.77 | -21.5% |
-| Corrected weekly forced rotation, ATR×2 (single Monday anchor) | +104.0% | 1.08 | -14.9% |
-| Legacy broken exit-day + re-leverage | +132.9% | 1.07 | -19.4% |
+| Corrected avg weekday, hold-until-stop, ATR×3 | +54.4% | 0.77 | -21.5% |
+| Legacy broken accounting | +132.9% | 1.07 | -19.4% |
 | SPY | +89.9% | 1.17 | -18.8% |
-| QQQ | +135.0% | 1.17 | -22.8% |
-| RSP | +56.4% | 0.89 | -17.8% |
 
-**Rebalance weekday sensitivity (still material):** total return ranges **+14% (Wed anchor)** to **+121% (Thu)** for the same ruleset — always report weekday-averaged or tranche-averaged headlines.
+## Survivorship (2010 → 2026-11-21)
 
-**Cost stress (avg weekday, weekly rotation, default slots):**
+| Universe | Total return | Sharpe | Max DD |
+|----------|-------------|--------|--------|
+| Live S&P500 ∪ Nasdaq-100 | +355.0% | 0.71 | -21.5% |
+| PIT S&P 500 only (fja05680/sp500 GitHub daily membership from 1996) | +53.0% | 0.26 | -29.3% |
 
-| Cost/side | Total return | Sharpe |
-|-----------|-------------|--------|
-| 10 bps | -5.0% | -0.03 |
-| 25 bps | -46.2% | -1.12 |
-| 50 bps | -79.1% | -2.91 |
-
-## Universe caveat
-
-Membership is the **live** S&P 500 ∪ Nasdaq-100 scrape (survivorship bias). Point-in-time CSV membership is supported via harness config.
-
-## Walk-forward
-
-Full frozen walk-forward (train ≤2018, test 2019+) is implemented in `loop_donchian_harness.py`; this report bundle used cached panels with `--quick` (walk-forward grid skipped for runtime). Re-run:
-
-`python3 -m pipeline.research.run_loop_donchian_report --start 2023-01-03`
+**Delta (live − PIT):** +302.1% return, +0.45 Sharpe.
 
 ## Charts
 
@@ -45,4 +46,4 @@ Full frozen walk-forward (train ≤2018, test 2019+) is implemented in `loop_don
 
 ## Conclusion
 
-Corrected accounting removes the **+307% / 3.73 Sharpe** artifact, but **survivorship-biased universe** and **rebalance weekday** still move headline performance by orders of magnitude. With default costs on weekday-averaged weekly rotation, the book is **negative to flat**; hold-until-stop + wider ATR is less turnover-sensitive but **does not reliably beat SPY/QQQ** on risk-adjusted terms over 2023–2026 without cherry-picking a single weekday.
+Corrected accounting removes bogus +300% headlines. Deflated OOS Sharpes and cost stress weaken the case vs SPY/QQQ; survivorship and weekday choice remain dominant effects.

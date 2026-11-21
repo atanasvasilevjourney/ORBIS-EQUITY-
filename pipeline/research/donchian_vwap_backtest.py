@@ -10,6 +10,7 @@ below applies **corrected** exit-day P&L and slot cash (no re-leverage) by defau
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from typing import Literal
@@ -109,11 +110,25 @@ def _bar_ohlc(ohlcv: pd.DataFrame, d: date) -> tuple[float, float, float] | None
     return float(row["high"]), float(row["low"]), float(row["close"])
 
 
-def build_research_panels(data_start: str = "2022-06-01") -> tuple[dict[str, pd.DataFrame], dict[str, pd.DataFrame]]:
+def build_research_panels(
+    data_start: str = "2022-06-01",
+    *,
+    sym_sector: dict[str, str] | None = None,
+    symbols: list[str] | None = None,
+) -> tuple[dict[str, pd.DataFrame], dict[str, pd.DataFrame]]:
     """Download universe OHLCV and precompute Donchian signal frames."""
-    sym_sector = _universe()
-    symbols = sorted(sym_sector.keys())
+    if sym_sector is None:
+        sym_sector = _universe()
+    if symbols is None:
+        symbols = sorted(sym_sector.keys())
+    else:
+        symbols = sorted(set(symbols) & set(sym_sector.keys()))
+    import logging
+
+    log = logging.getLogger(__name__)
+    log.info("Downloading OHLCV for %s symbols from %s", len(symbols), data_start)
     panels = _download_panel(symbols, data_start)
+    log.info("Downloaded %s panels", len(panels))
     if "SPY" not in panels:
         spy = yf.download("SPY", start=data_start, progress=False, auto_adjust=True)
         panels["SPY"] = spy.rename(columns=str.lower)[["open", "high", "low", "close", "volume"]].dropna()
@@ -126,7 +141,7 @@ def build_research_panels(data_start: str = "2022-06-01") -> tuple[dict[str, pd.
             signals[sym] = _donchian_signals(ohlcv)
         except Exception:
             continue
-    return panels, signals
+    return panels, signals, sym_sector
 
 
 def _metrics(label: str, start: date, end: date, daily_returns: pd.Series) -> PeriodMetrics:
@@ -156,6 +171,7 @@ def run_donchian_vwap_portfolio(
     rotation_mode: str = "weekly",
     cost: CostModel | None = DEFAULT_LOOP_COSTS,
     legacy_accounting: bool = False,
+    membership_lookup: Callable[[date], set[str]] | None = None,
 ) -> tuple[pd.Series, pd.DataFrame]:
     """
     Weekly rebalance: hold up to TOP_N names with Donchian(55) break + close > 20d VWAP.
@@ -169,7 +185,7 @@ def run_donchian_vwap_portfolio(
     if sym_sector is None:
         sym_sector = _universe()
     if panels is None or signals is None:
-        panels, signals = build_research_panels(data_start)
+        panels, signals, _ = build_research_panels(data_start)
 
     cal = panels["SPY"]
     days = [d.date() if hasattr(d, "date") else d for d in cal.index]
@@ -243,7 +259,12 @@ def run_donchian_vwap_portfolio(
         if rebalance_today:
             sector_count: dict[str, int] = {}
             cands: list[tuple[str, float]] = []
+            pit_set = membership_lookup(signal_day) if membership_lookup else None
             for sym, sig in signals.items():
+                if sym not in sym_sector:
+                    continue
+                if pit_set is not None and sym not in pit_set:
+                    continue
                 row = _bar_on(sig, signal_day)
                 if row is None:
                     continue
@@ -375,7 +396,7 @@ def grid_search_atr_trail(
     (is_start, is_end), (oos_start, oos_end) = is_oos_split()
     full_start, full_end = is_start, oos_end
     grid = param_grid or default_atr_param_grid()
-    panels, signals = build_research_panels(data_start)
+    panels, signals, _ = build_research_panels(data_start)
 
     rows: list[GridResult] = []
     for atr_period, atr_mult in grid:
