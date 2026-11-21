@@ -39,7 +39,7 @@ from pipeline.compute.loop_atr_trail import (
     chandelier_trail_snapshot,
 )
 from pipeline.universe_filters import is_loop_tradable, is_pharma_stock
-from pipeline.compute.loop_order_economics import next_session_open, order_economics
+from pipeline.compute.loop_order_economics import next_session_date, next_session_open, order_economics
 from pipeline.compute.loop_strategy_bus import (
     donchian_buy_scores,
     latest_signal_as_of,
@@ -375,9 +375,13 @@ def _run_portfolio_loop(sb, run) -> None:
                 skip(sym, "MIN_PRICE", f"price {price}", sector)
                 continue
             entry_px = price
+            fill_day = today
             nopen, _ = next_session_open(ohlcv_sym, today)
             if nopen is not None:
                 entry_px = nopen
+                nd = next_session_date(ohlcv_sym, today)
+                if nd is not None:
+                    fill_day = nd
             shares = int(slot_equity // price)
             notional = shares * price
             if shares < 1 or notional < MIN_NOTIONAL:
@@ -386,7 +390,9 @@ def _run_portfolio_loop(sb, run) -> None:
             strength = snap.get("strength") or 0
             reason = f"DC{55}+VWAP{20} str {strength:.3f}"
             trail = (
-                chandelier_trail_snapshot(ohlcv_sym, entry_price=price, opened=today, asof=today)
+                chandelier_trail_snapshot(
+                    ohlcv_sym, entry_price=entry_px, opened=fill_day, asof=today,
+                )
                 if ohlcv_sym is not None
                 else None
             )
@@ -440,7 +446,7 @@ def _run_portfolio_loop(sb, run) -> None:
                 strength,
                 run_id,
                 now,
-                today,
+                fill_day,
                 reason,
             )
 
