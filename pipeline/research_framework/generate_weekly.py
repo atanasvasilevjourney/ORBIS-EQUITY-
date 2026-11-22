@@ -10,7 +10,8 @@ import numpy as np
 import yaml
 from supabase import Client
 
-from pipeline.research_framework.levels import long_setup_from_bars, round_px
+from pipeline.research_framework.ideas import assemble_ideas, ideas_by_horizon, rank_short_candidates
+from pipeline.research_framework.levels import round_px
 from pipeline.utils.supabase import fetch_all
 
 logger = logging.getLogger(__name__)
@@ -181,12 +182,24 @@ def rank_candidates(sb: Client, cfg: dict) -> list[dict]:
     return [{"symbol": s, "score": sc} for sc, s in scored[:80]]
 
 
-def theme_for(symbol: str, fund: dict) -> str:
-    sector = (fund.get("sector") or "").strip()
-    industry = (fund.get("industry") or "").strip()
-    if sector and industry:
-        return f"{sector} · {industry}"
-    return sector or industry or "multi-factor"
+def _carver_forecasts(sb: Client) -> tuple[dict[str, float], dict[str, float]]:
+    """Cash desk + ROTATE Carver forecasts by symbol (negative → short fuel)."""
+    cash_by: dict[str, float] = {}
+    runs = fetch_all(sb, "perp_runs", "run_id", order=("computed_at", False))
+    if runs:
+        run_id = runs[0]["run_id"]
+        for row in fetch_all(sb, "perp_names", "symbol, carver_forecast", filters=lambda q: q.eq("run_id", run_id)):
+            sym = row.get("symbol")
+            fc = row.get("carver_forecast")
+            if sym and fc is not None:
+                cash_by[sym] = float(fc)
+    rotate_by: dict[str, float] = {}
+    for row in fetch_all(sb, "sector_rotation_carver", "symbol, forecast"):
+        sym = row.get("symbol")
+        fc = row.get("forecast")
+        if sym and fc is not None:
+            rotate_by[sym] = float(fc)
+    return cash_by, rotate_by
 
 
 def generate_pack(sb: Client, cfg: dict | None = None) -> dict:
@@ -205,62 +218,34 @@ def generate_pack(sb: Client, cfg: dict | None = None) -> dict:
         )
         if r.get("symbol")
     }
-    radar = {r["symbol"]: r for r in fetch_all(sb, "trend_radar", "symbol, quality_rank") if r.get("symbol")}
+    radar = {
+        r["symbol"]: r
+        for r in fetch_all(sb, "trend_radar", "symbol, state, quality_rank")
+        if r.get("symbol")
+    }
+    analysis = {
+        r["symbol"]: r
+        for r in fetch_all(sb, "analysis_names", "symbol, vote, buy_count, composite_score")
+        if r.get("symbol")
+    }
+    cash_fc, rotate_fc = _carver_forecasts(sb)
+    short_pool = rank_short_candidates(radar, fund, analysis, cash_fc, rotate_fc, cfg)
+    short_syms = {c["symbol"] for c in short_pool}
+    symbols |= short_syms
+    bars.update(_bars_by_symbol(sb, short_syms - set(bars.keys())))
 
-    max_n = int(cfg.get("max_setups", 5))
-    max_per_sector = int(cfg.get("max_per_sector", 2))
-    sector_counts: dict[str, int] = defaultdict(int)
-    setups: list[dict] = []
-
-    for cand in candidates:
-        sym = cand["symbol"]
-        f = fund.get(sym, {})
-        sec = (f.get("sector") or "unknown").lower()
-        if sector_counts[sec] >= max_per_sector:
-            continue
-        b = bars.get(sym)
-        if not b:
-            continue
-        hi, lo, cl = b
-        levels = long_setup_from_bars(
-            hi,
-            lo,
-            cl,
-            entry_mode=str(cfg.get("entry_mode", "breakout_prior_high")),
-            stop_atr_mult=float(cfg.get("stop_atr_mult", 1.5)),
-            target_atr_mult=float(cfg.get("target_atr_mult", 2.0)),
-            atr_period=int(cfg.get("atr_period", 14)),
-        )
-        if not levels:
-            continue
-        tr = radar.get(sym, {})
-        rationale = (
-            f"ORBIS: trend radar quality {tr.get('quality_rank', '—')}, "
-            f"factor {f.get('composite_factor_score', '—')}. "
-            f"Breakout-style entry at prior session high; ATR-based stop/target."
-        )
-        setups.append(
-            {
-                "symbol": sym,
-                "company_name": f.get("company_name") or "",
-                "source": "trend_radar+factor+analyze",
-                "theme": theme_for(sym, f),
-                "side": "LONG",
-                **levels,
-                "quality_rank": tr.get("quality_rank"),
-                "factor_score": f.get("composite_factor_score"),
-                "rationale": rationale,
-                "meta": {"rank_score": cand["score"]},
-            }
-        )
-        sector_counts[sec] += 1
-        if len(setups) >= max_n:
-            break
+    ideas = assemble_ideas(candidates, short_pool, bars, fund, radar, cfg)
+    setups = ideas
+    by_horizon = ideas_by_horizon(ideas)
+    n_long = sum(1 for i in ideas if i.get("side") == "LONG")
+    n_short = sum(1 for i in ideas if i.get("side") == "SHORT")
 
     week_end = date.today()
     headline = macro.get("headline") or "Weekly research pack"
-    if setups:
-        headline = f"{headline} · {len(setups)} setup(s) ranked from ORBIS screens."
+    if ideas:
+        headline = (
+            f"{headline} · {len(ideas)} idea(s): {n_long} long / {n_short} short from ORBIS screens."
+        )
 
     return {
         "week_ending": week_end.isoformat(),
@@ -270,6 +255,9 @@ def generate_pack(sb: Client, cfg: dict | None = None) -> dict:
         "risk_notes": list(cfg.get("risk_notes") or []),
         "config": cfg,
         "setups": setups,
+        "ideas": ideas,
+        "horizons": by_horizon,
+        "shorts": [i for i in ideas if i.get("side") == "SHORT"],
     }
 
 
@@ -306,6 +294,8 @@ def persist_pack(sb: Client, pack: dict) -> str:
                 "quality_rank": s.get("quality_rank"),
                 "factor_score": s.get("factor_score"),
                 "rationale": s.get("rationale"),
+                "horizon": s.get("horizon") or "medium_term",
+                "confidence": s.get("confidence"),
                 "meta": s.get("meta") or {},
             }
         )

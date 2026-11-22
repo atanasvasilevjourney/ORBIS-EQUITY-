@@ -61,3 +61,39 @@ def long_setup_from_bars(
         "atr": round_px(atr),
         "rr": round(rr, 2),
     }
+
+
+def short_setup_from_bars(
+    highs: np.ndarray,
+    lows: np.ndarray,
+    closes: np.ndarray,
+    *,
+    entry_mode: str = "breakdown_prior_low",
+    stop_atr_mult: float = 1.5,
+    target_atr_mult: float = 2.0,
+    atr_period: int = 14,
+) -> dict[str, float] | None:
+    """Short mirror of long_setup_from_bars — entry at prior low breakdown."""
+    if len(closes) < atr_period + 2:
+        return None
+    last = float(closes[-1])
+    prior_l = float(lows[-2])
+    atr = wilder_atr(highs, lows, closes, atr_period)
+    if atr <= 0:
+        return None
+    entry = prior_l if entry_mode == "breakdown_prior_low" else last
+    stop = entry + stop_atr_mult * atr
+    target = entry - target_atr_mult * atr
+    if target <= 0 or stop <= entry:
+        return None
+    risk = stop - entry
+    reward = entry - target
+    rr = reward / risk if risk > 0 else 0.0
+    return {
+        "last_px": round_px(last),
+        "entry_px": round_px(entry),
+        "stop_px": round_px(stop),
+        "target_px": round_px(target),
+        "atr": round_px(atr),
+        "rr": round(rr, 2),
+    }

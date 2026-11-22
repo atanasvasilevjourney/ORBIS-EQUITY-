@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 
+from pipeline.research_framework.export_json import write_pack_json
 from pipeline.research_framework.generate_weekly import generate_pack, load_config, persist_pack
 from pipeline.utils.run_recorded import run_recorded
 
@@ -10,7 +11,8 @@ from pipeline.utils.run_recorded import run_recorded
 def _body(sb, _rec) -> None:
     cfg = load_config()
     pack = generate_pack(sb, cfg)
-    persist_pack(sb, pack)
+    run_id = persist_pack(sb, pack)
+    write_pack_json(pack, run_id=run_id)
 
 
 if __name__ == "__main__":

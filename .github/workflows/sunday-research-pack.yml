@@ -1,0 +1,54 @@
+# Sunday ORBIS weekly research pack — runs before Europe/Sofia Grok routine (09:00)
+name: Sunday Research Pack
+
+on:
+  schedule:
+  # 05:00 UTC Sunday = 07:00 Europe/Sofia
+    - cron: "0 5 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate-research-pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - name: Install Python dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Generate weekly research pack
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python -m pipeline.research_framework.jobs.weekly
+
+      - name: Upload research pack artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-weekly-${{ github.run_id }}
+          path: |
+            public/artifacts/research-weekly-latest.json
+            pipeline/research_framework/output/latest.json
+          retention-days: 30
+
+      - name: Commit latest pack JSON (if changed)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/artifacts/research-weekly-latest.json pipeline/research_framework/output/latest.json || true
+          if git diff --staged --quiet; then
+            echo "No pack JSON changes"
+            exit 0
+          fi
+          git commit -m "chore: update research-weekly-latest.json [skip ci]"
+          git push
