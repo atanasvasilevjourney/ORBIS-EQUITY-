@@ -1,0 +1,144 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://orbis.equity/schemas/signal.v1.json",
+  "title": "ORBIS Common Signal v1",
+  "description": "Normalized cross-app signal row for ORBIS Equity, ORBIS GEX, COT Pulse, QMIE, and public sources. Used by Sunday confluence scoring and future Grok weekly routine.",
+  "type": "object",
+  "required": [
+    "run_id",
+    "as_of",
+    "source_app",
+    "source_module",
+    "asset_class",
+    "symbol",
+    "horizon",
+    "direction",
+    "forecast",
+    "status"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "description": "Batch identifier, e.g. ISO week `2026-W48` or UUID from `signals_weekly` job.",
+      "examples": ["2026-W48", "a1b2c3d4-e5f6-7890-abcd-ef1234567890"]
+    },
+    "as_of": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when the source snapshot was valid (UTC)."
+    },
+    "source_app": {
+      "type": "string",
+      "enum": ["orbis_equity", "orbis_gex", "cot_pulse", "qmie", "public"],
+      "description": "Originating application."
+    },
+    "source_module": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Module within the app, e.g. `gex_regime`, `research_pack`, `carver_ewmac`, `cot_4w`, `qmie_4h`.",
+      "examples": [
+        "gex_regime",
+        "research_pack",
+        "carver_ewmac",
+        "cot_1w",
+        "cot_4w",
+        "qmie_grade",
+        "qmie_radar",
+        "trend_diagnostics",
+        "sector_rotation"
+      ]
+    },
+    "asset_class": {
+      "type": "string",
+      "enum": ["equity", "index", "crypto", "fx", "commodity", "rates"]
+    },
+    "symbol": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Canonical ORBIS symbol (ticker, index ETF, or perp code)."
+    },
+    "venue_symbol": {
+      "type": ["string", "null"],
+      "description": "Exchange or continuous futures code when different from `symbol`, e.g. `ES=F` for SPY context."
+    },
+    "horizon": {
+      "type": "string",
+      "enum": ["short", "medium", "long"],
+      "description": "short: days–2 weeks; medium: 2–6 weeks; long: ~2–6 months."
+    },
+    "direction": {
+      "type": "string",
+      "enum": ["long", "short", "flat"]
+    },
+    "forecast": {
+      "type": "number",
+      "minimum": -20,
+      "maximum": 20,
+      "description": "Signed conviction on the shared +/-20 scale (ORBIS Trend Diagnostics convention)."
+    },
+    "probability": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Calibrated P(up) when the source is a classifier; otherwise null."
+    },
+    "validated": {
+      "type": "boolean",
+      "default": false,
+      "description": "True when walk-forward evidence shows the source beats its baseline for this market/module."
+    },
+    "entry": {
+      "type": ["number", "null"],
+      "description": "Suggested entry price; null when not applicable."
+    },
+    "stop": {
+      "type": ["number", "null"],
+      "description": "Stop-loss price."
+    },
+    "target": {
+      "type": ["number", "null"],
+      "description": "Profit target price."
+    },
+    "invalidation": {
+      "type": ["string", "null"],
+      "description": "Plain-language rule that voids the setup (may be tighter than `stop`)."
+    },
+    "rationale": {
+      "type": ["string", "null"],
+      "description": "One-line human summary."
+    },
+    "evidence": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "required": ["label", "kind"],
+        "additionalProperties": false,
+        "properties": {
+          "label": { "type": "string" },
+          "url": { "type": ["string", "null"], "format": "uri" },
+          "as_of": { "type": ["string", "null"], "format": "date-time" },
+          "kind": {
+            "type": "string",
+            "enum": ["SOURCED", "CALCULATED", "ASSUMED"]
+          }
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["OK", "STALE", "MISSING"],
+      "description": "Freshness of underlying data. STALE/MISSING rows are dropped before confluence, not scored as neutral."
+    },
+    "confidence": {
+      "type": ["string", "null"],
+      "enum": ["high", "medium", "low", null],
+      "description": "Populated on aggregated ideas after confluence; null on raw adapter rows."
+    },
+    "wrong_test": {
+      "type": ["string", "null"],
+      "description": "Kill test: what observable outcome would falsify the thesis (routine step 5)."
+    }
+  }
+}
