@@ -1,5 +1,5 @@
 # Sunday ORBIS research + watchlist email (Resend)
-# Schedule: Sunday 08:00 UTC — before US cash open Monday prep
+# Pack is generated at 05:00 UTC (sunday-research-pack.yml); email at 08:00 UTC.
 name: Sunday Research Email
 
 on:

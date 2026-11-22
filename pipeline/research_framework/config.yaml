@@ -1,5 +1,13 @@
 # Weekly research pack — transparent ORBIS rules (Money Machine-style workflow)
 max_setups: 5
+max_short_setups: 3
+short_min_rules: 2
+max_trend_radar_quality_short: 55
+max_composite_factor_short: 48
+short_candidate_pool: 40
+short_entry_mode: breakdown_prior_low
+long_term_min_quality: 82
+long_term_min_factor: 68
 index_symbol: SPY
 min_trend_radar_quality: 65
 min_composite_factor: 55
