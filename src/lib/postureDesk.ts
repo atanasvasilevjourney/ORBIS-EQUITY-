@@ -53,11 +53,11 @@ export function sectorLeaders(
     list.push(dayPct(row));
     changes.set(sector, list);
   }
-  const scores = [...changes.entries()]
+  const scores = Array.from(changes.entries())
     .filter(([, vals]) => vals.length > 0)
     .map(([sector, vals]) => ({
       sector,
-      avg: vals.reduce((s, v) => s + v, 0) / vals.length,
+      avg: vals.reduce((s: number, v: number) => s + v, 0) / vals.length,
     }))
     .sort((a, b) => b.avg - a.avg);
   if (!scores.length) return { bestSector: null, worstSector: null };
