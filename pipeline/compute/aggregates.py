@@ -178,8 +178,28 @@ def main():
     run_recorded("compute.aggregates", _run_aggregates)
 
 
+def _latest_price_session(sb) -> date:
+    """Latest ``prices_daily`` session (trading date for posture as-of)."""
+    try:
+        resp = (
+            sb.table("prices_daily")
+            .select("date")
+            .order("date", desc=True)
+            .limit(1)
+            .execute()
+        )
+        rows = resp.data or []
+        if rows and rows[0].get("date"):
+            return date.fromisoformat(str(rows[0]["date"])[:10])
+    except Exception:
+        logger.warning("Could not read latest prices_daily date", exc_info=True)
+    return date.today()
+
+
 def _run_aggregates(sb, run) -> None:
     from pipeline.utils.supabase import fetch_all
+
+    trading_asof = _latest_price_session(sb)
 
     radar_data = fetch_all(sb, "trend_radar", "symbol,state,quality_rank,z_mom")
     universe_data = fetch_all(
@@ -236,11 +256,13 @@ def _run_aggregates(sb, run) -> None:
         "region_breadth": region_breadth,
         "avg_quality_rank": avg_rank,
         "computed_at": date.today().isoformat(),
+        "trading_date": trading_asof.isoformat(),
+        "breadth_asof": trading_asof.isoformat(),
     }
 
     # Store in daily_brief as inputs
     sb.table("daily_brief").upsert({
-        "asof_date": date.today().isoformat(),
+        "asof_date": trading_asof.isoformat(),
         "brief": (
             f"{label} — {breadth.get('advancers_pct', 0)}% of names up, "
             f"{breadth.get('greens', 0)} on the watchlist, "

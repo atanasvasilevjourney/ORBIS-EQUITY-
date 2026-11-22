@@ -139,6 +139,63 @@ class TestPipelineDAGSmoke:
             ):
                 stack.enter_context(patch.object(mod, "LSEClient", return_value=mock_lse))
 
+            if module_path == "pipeline.ingest.financial_reports":
+                from pipeline.clients.yahoo_financials import YahooFinancialsBatchResult
+
+                stack.enter_context(
+                    patch.object(mod, "fetch_active_symbols", return_value=["AAPL"])
+                )
+                stack.enter_context(
+                    patch.object(
+                        mod,
+                        "fetch_yahoo_financials_batch",
+                        return_value=YahooFinancialsBatchResult(
+                            rows=[
+                                {
+                                    "symbol": "AAPL",
+                                    "report_type": "income",
+                                    "date": "2024-09-28",
+                                    "period": "FY",
+                                    "fiscal_year": "2024",
+                                    "data": {"_source": "yahoo", "netIncome": 1},
+                                }
+                            ],
+                            symbols_ok=1,
+                            symbols_failed=0,
+                        ),
+                    )
+                )
+
+            if module_path == "pipeline.compute.f_score":
+                stack.enter_context(
+                    patch(
+                        "pipeline.compute.f_score._fetch_all_reports",
+                        side_effect=[
+                            {
+                                "AAPL": [
+                                    {"data": {"netIncome": 1, "grossProfit": 2, "revenue": 10, "weightedAverageShsOutDil": 100}},
+                                    {"data": {"netIncome": 1, "grossProfit": 2, "revenue": 9, "weightedAverageShsOutDil": 100}},
+                                ]
+                            },
+                            {
+                                "AAPL": [
+                                    {"data": {"totalAssets": 20, "longTermDebt": 1, "totalCurrentAssets": 5, "totalCurrentLiabilities": 2}},
+                                    {"data": {"totalAssets": 18, "longTermDebt": 2, "totalCurrentAssets": 4, "totalCurrentLiabilities": 2}},
+                                ]
+                            },
+                            {
+                                "AAPL": [{"data": {"operatingCashFlow": 3}}],
+                            },
+                        ],
+                    )
+                )
+                stack.enter_context(
+                    patch(
+                        "pipeline.utils.supabase.fetch_all",
+                        return_value=[{"symbol": "AAPL"}],
+                    )
+                )
+
             if module_path == "pipeline.ingest.earnings":
                 from pipeline.clients.yahoo_earnings import YahooEarningsBatchResult
 

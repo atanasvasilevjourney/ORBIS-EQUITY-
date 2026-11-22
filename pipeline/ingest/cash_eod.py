@@ -27,6 +27,8 @@ from pipeline.clients.cash_eod import (
     fetch_daily_bars,
 )
 from pipeline.config.settings import SupabaseConfig
+from pipeline.universe_filters import is_structured_product_symbol
+from pipeline.utils.ci_log import append_step_summary_json
 from pipeline.utils.supabase import fetch_all
 
 load_dotenv()
@@ -204,9 +206,11 @@ def main() -> None:
 
     ok = 0
     fail = 0
+    skipped = 0
     rows_n = 0
     sources: dict[str, int] = {}
     failures: list[str] = []
+    skipped_syms: list[str] = []
 
     for idx, m in enumerate(members, 1):
         if max_sec > 0 and (time.monotonic() - t0) >= max_sec:
@@ -217,6 +221,11 @@ def main() -> None:
             break
         symbol = (m.get("symbol") or "").strip().upper()
         if not symbol:
+            continue
+        if is_structured_product_symbol(symbol):
+            skipped += 1
+            skipped_syms.append(symbol)
+            logger.info("[%d/%d] %s skipped (structured product / warrant)", idx, len(members), symbol)
             continue
         try:
             n, source = ingest_symbol(
@@ -247,12 +256,26 @@ def main() -> None:
             logger.warning("[%d/%d] %s failed: %s", idx, len(members), symbol, exc)
 
     headline = (
-        f"{ok} ok / {fail} fail · {rows_n} rows · "
+        f"{ok} ok / {fail} fail / {skipped} skipped · {rows_n} rows · "
         + ", ".join(f"{k}={v}" for k, v in sorted(sources.items()))
     )
     logger.info("=== Cash EOD complete: %s ===", headline)
     if failures:
         logger.info("Failed: %s", ", ".join(failures[:40]))
+    if skipped_syms:
+        logger.info("Skipped: %s", ", ".join(skipped_syms[:40]))
+    append_step_summary_json(
+        "Cash EOD ingest",
+        {
+            "symbols_ok": ok,
+            "symbols_fail": fail,
+            "symbols_skipped": skipped,
+            "failures": failures[:50],
+            "skipped": skipped_syms[:50],
+            "rows_upserted": rows_n,
+            "sources": sources,
+        },
+    )
     _write_run(
         sb,
         run_id=run_id,

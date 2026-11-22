@@ -462,6 +462,17 @@ describe("GET /api/dashboard", () => {
           ],
           error: null,
         }),
+        universe_members: () => ({
+          data: [
+            { symbol: "AAPL", sector: "Technology" },
+            { symbol: "XOM", sector: "Energy" },
+          ],
+          error: null,
+        }),
+        prices_daily: () => ({
+          data: { date: asOf },
+          error: null,
+        }),
         fundamentals_snapshot: () => ({
           data: [{ composite_factor_score: 70, f_score: 8 }],
           error: null,
@@ -490,6 +501,8 @@ describe("GET /api/dashboard", () => {
     expect(body.degraded).toBe(false);
     expect(body.breadth.total).toBe(2);
     expect(body.breadth.greens).toBe(1);
+    expect(body.posture).toBe(50);
+    expect(body.breadth.advancersPct).toBe(50);
     expect(body.watchlistMovers[0].symbol).toBe("AAPL");
     expect(body.bestSector).toBe("Technology");
     expect(body.crossAsset[0].symbol).toBe("SPY");

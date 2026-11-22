@@ -14,11 +14,12 @@ describe("GET /api/summary", () => {
   });
 
   it("returns market summary with breadth stats", async () => {
+    const today = new Date().toISOString().split("T")[0];
     mockCreateServerClient.mockReturnValue(
       createMockSupabase({
         daily_brief: () => ({
           data: {
-            asof_date: new Date().toISOString().split("T")[0],
+            asof_date: today,
             brief: "Risk-On - 55% GREEN",
             inputs: {
               posture_score: 65,
@@ -31,10 +32,22 @@ describe("GET /api/summary", () => {
         }),
         trend_radar: () => ({
           data: [
-            { state: 1, quality_rank: 70, z_mom: 5 },
-            { state: -1, quality_rank: 30, z_mom: -2 },
-            { state: 0, quality_rank: 50, z_mom: 1 },
+            { symbol: "A", state: 1, quality_rank: 70, z_mom: 5 },
+            { symbol: "B", state: -1, quality_rank: 30, z_mom: -2 },
+            { symbol: "C", state: 0, quality_rank: 50, z_mom: 1 },
           ],
+          error: null,
+        }),
+        universe_members: () => ({
+          data: [
+            { symbol: "A", sector: "Tech" },
+            { symbol: "B", sector: "Energy" },
+            { symbol: "C", sector: "Tech" },
+          ],
+          error: null,
+        }),
+        prices_daily: () => ({
+          data: { date: today },
           error: null,
         }),
       })
@@ -52,8 +65,53 @@ describe("GET /api/summary", () => {
     expect(body.breadth.downDay).toBe(1);
     expect(body.breadth.greens).toBe(1);
     expect(body.breadth.reds).toBe(1);
-    expect(body.postureLabel).toBe("Risk-On");
+    expect(body.posture).toBe(67);
+    expect(body.postureLabel).toBe("Slight Bullish");
     expect(body.stale).toBe(false);
+  });
+
+  it("uses live posture when brief is older than prices", async () => {
+    mockCreateServerClient.mockReturnValue(
+      createMockSupabase({
+        daily_brief: () => ({
+          data: {
+            asof_date: "2026-11-19",
+            brief: "Slight Bullish — 68% of names up",
+            inputs: {
+              posture_score: 68,
+              posture_label: "Slight Bullish",
+              breadth: { best_sector: "Financials", worst_sector: "Tech" },
+            },
+          },
+          error: null,
+        }),
+        trend_radar: () => ({
+          data: Array.from({ length: 10 }, (_, i) => ({
+            symbol: `S${i}`,
+            state: 0,
+            quality_rank: 40,
+            z_mom: i < 2 ? 1 : -0.5,
+          })),
+          error: null,
+        }),
+        universe_members: () => ({
+          data: [{ symbol: "S0", sector: "Tech" }],
+          error: null,
+        }),
+        prices_daily: () => ({
+          data: { date: "2026-11-20" },
+          error: null,
+        }),
+      })
+    );
+
+    const { GET } = await import("../summary/route");
+    const res = await GET();
+    const body = await res.json();
+
+    expect(body.posture).toBe(20);
+    expect(body.postureBriefStale).toBe(true);
+    expect(body.briefText).toBeNull();
   });
 
   it("handles missing daily brief gracefully", async () => {

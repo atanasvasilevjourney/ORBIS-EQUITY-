@@ -296,6 +296,28 @@ def _run_f_score(sb, run) -> None:
     run.set_headline(f"{computed} scored · {dist[:120]}")
     run.set_row_counts(scored=computed, updates=len(updates))
 
+    from pipeline.utils.ci_log import append_step_summary_json, gh_error
+
+    if computed == 0:
+        msg = (
+            "F-Score scored 0 symbols — financial_reports may be empty "
+            f"(income symbols={len(income_reports)}, balance={len(balance_reports)}, "
+            f"cashflow={len(cashflow_reports)}). Renew LSE_API_KEY or run financial_reports ingest."
+        )
+        append_step_summary_json(
+            "F-Score compute",
+            {
+                "scored": 0,
+                "universe_symbols": len(symbols),
+                "income_symbols": len(income_reports),
+                "balance_symbols": len(balance_reports),
+                "cashflow_symbols": len(cashflow_reports),
+            },
+        )
+        gh_error(msg)
+        run.mark_partial("zero scores")
+        raise SystemExit(1)
+
 
 if __name__ == "__main__":
     main()
