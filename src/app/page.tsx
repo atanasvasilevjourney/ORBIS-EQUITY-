@@ -37,6 +37,10 @@ type DashData = {
   bestSector: string | null;
   worstSector: string | null;
   asOfDate: string | null;
+  pricesAsOf?: string | null;
+  postureAsOf?: string | null;
+  postureBriefAsOf?: string | null;
+  postureBriefStale?: boolean;
   regionBreadth: Record<string, number>;
   crossAsset: CrossAssetTile[];
   scoreboard: ScoreboardName[];
@@ -161,6 +165,10 @@ export default function Home() {
           bestSector: dash.bestSector ?? null,
           worstSector: dash.worstSector ?? null,
           asOfDate: dash.asOfDate ?? null,
+          pricesAsOf: dash.pricesAsOf ?? null,
+          postureAsOf: dash.postureAsOf ?? dash.asOfDate ?? null,
+          postureBriefAsOf: dash.postureBriefAsOf ?? null,
+          postureBriefStale: !!dash.postureBriefStale,
           regionBreadth: dash.regionBreadth ?? {},
           crossAsset: dash.crossAsset ?? [],
           scoreboard: dash.scoreboard ?? [],
@@ -264,7 +272,12 @@ export default function Home() {
           </p>
         </div>
         <div className="text-right font-terminal text-[10px] text-[var(--text-muted)] tracking-wider">
-          <div>AS OF {d?.asOfDate ?? "—"} EOD</div>
+          <div>AS OF {d?.postureAsOf ?? d?.asOfDate ?? "—"} EOD</div>
+          {d?.postureBriefStale && (
+            <div className="mt-0.5 font-bold" style={{ color: "var(--accent-warn, #c9a227)" }}>
+              POSTURE LIVE · BRIEF {d?.postureBriefAsOf ?? "STALE"}
+            </div>
+          )}
           {d?.signalsSuppressed && (
             <div className="mt-0.5 font-bold" style={{ color: "var(--accent-bear)" }}>BUY/SELL SIGNALS OFF</div>
           )}
@@ -305,6 +318,15 @@ export default function Home() {
           ) : (
             <>
               <PostureGauge value={d?.posture ?? null} label={d?.postureLabel} />
+              {d?.postureBriefStale ? (
+                <p className="mt-1 text-center text-[10px] font-terminal text-[var(--accent-warn,#c9a227)]">
+                  Live from tape · brief as of {d?.postureBriefAsOf ?? "—"}
+                </p>
+              ) : (
+                <p className="mt-1 text-center text-[10px] font-terminal text-[var(--text-muted)]">
+                  Breadth as of {d?.postureAsOf ?? d?.asOfDate ?? "—"}
+                </p>
+              )}
               <PostureBreakdown pillars={d?.posturePillars} />
             </>
           )}

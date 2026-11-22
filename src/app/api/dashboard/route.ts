@@ -15,6 +15,14 @@ import { evaluateFreshness, lastExpectedEodDate } from "@/lib/freshness";
 import { fillMissingTape } from "@/lib/marketTapeFill";
 import { composeMarketBrief } from "@/lib/marketBrief";
 import { deskNewsFromRows, loadMarketHeadlines, newsSource, type BriefNewsItem } from "@/lib/briefNews";
+import {
+  buildDeskPostureBrief,
+  computePostureLabel,
+  computePosturePillars,
+  computePostureScore,
+  isPostureBriefStale,
+  sectorLeaders,
+} from "@/lib/postureDesk";
 
 export const revalidate = 900;
 
@@ -261,6 +269,13 @@ export async function GET() {
       "symbol, state, quality_rank, z_mom"
     );
 
+    const universe = await fetchAll<{ symbol: string; sector: string | null }>(
+      sb,
+      "universe_members",
+      "symbol, sector",
+      (q) => q.eq("is_active", true)
+    );
+
     const total = radar.length;
     const greens = radar.filter((r) => r.state === 1).length;
     const reds = radar.filter((r) => r.state === -1).length;
@@ -372,12 +387,50 @@ export async function GET() {
     const headlines = await loadMarketHeadlines(
       deskNewsFromRows(Array.isArray(newsRes.data) ? newsRes.data : [])
     );
-    const postureLabel = typeof inputs.posture_label === "string" ? inputs.posture_label : null;
-    const bestSector = typeof breadthRaw?.best_sector === "string" ? breadthRaw.best_sector : null;
-    const worstSector = typeof breadthRaw?.worst_sector === "string" ? breadthRaw.worst_sector : null;
+    const priceRow = await sb
+      .from("prices_daily")
+      .select("date")
+      .order("date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const pricesAsOf = priceRow.data?.date?.slice?.(0, 10) ?? (priceRow.data?.date as string | null) ?? null;
+    const briefAsOf = brief?.asof_date?.slice?.(0, 10) ?? null;
+    const postureBriefStale = isPostureBriefStale(briefAsOf, pricesAsOf);
+
     const advancersPct = total > 0 ? Math.round((advancers / total) * 100) : null;
+    const onListPct = total > 0 ? Math.round((greens / total) * 100) : 0;
+    const livePosture =
+      advancersPct != null ? computePostureScore(advancersPct) : null;
+    const postureLabel =
+      livePosture != null ? computePostureLabel(livePosture) : null;
+
+    const liveSectors = sectorLeaders(radar, universe);
+    const bestSector =
+      postureBriefStale || typeof breadthRaw?.best_sector !== "string"
+        ? liveSectors.bestSector
+        : (breadthRaw.best_sector as string);
+    const worstSector =
+      postureBriefStale || typeof breadthRaw?.worst_sector !== "string"
+        ? liveSectors.worstSector
+        : (breadthRaw.worst_sector as string);
+
+    const avgRankLive =
+      total > 0 ? Math.round(radar.reduce((s, r) => s + r.quality_rank, 0) / total) : 0;
+    const livePillars =
+      advancersPct != null
+        ? computePosturePillars(advancersPct, radar, avgRankLive, onListPct)
+        : null;
+    const resolvedPillars = postureBriefStale || !posturePillars ? livePillars : posturePillars;
+
+    const pipelineBrief =
+      postureBriefStale || !brief?.brief
+        ? livePosture != null && advancersPct != null
+          ? buildDeskPostureBrief(postureLabel ?? "Neutral", advancersPct, greens, bestSector)
+          : null
+        : brief.brief;
+
     const composed = composeMarketBrief({
-      pipelineBrief: brief?.brief ?? null,
+      pipelineBrief,
       postureLabel,
       advancersPct,
       bestSector,
@@ -386,25 +439,23 @@ export async function GET() {
       quotes: crossAsset,
     });
 
-    const priceRow = await sb
-      .from("prices_daily")
-      .select("date")
-      .order("date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const pricesAsOf = priceRow.data?.date?.slice?.(0, 10) ?? (priceRow.data?.date as string | null) ?? null;
-    const fresh = evaluateFreshness(brief?.asof_date, pricesAsOf);
+    const tradingAsOf = pricesAsOf ?? briefAsOf;
+    const fresh = evaluateFreshness(tradingAsOf, pricesAsOf);
 
     return NextResponse.json({
       degraded: false,
-      asOfDate: brief?.asof_date ?? null,
-      briefText: composed.text || brief?.brief || null,
+      asOfDate: tradingAsOf,
+      pricesAsOf,
+      postureAsOf: tradingAsOf,
+      postureBriefAsOf: briefAsOf,
+      postureBriefStale,
+      briefText: composed.text || pipelineBrief || null,
       stale: fresh.stale,
       signalsSuppressed: fresh.signalsSuppressed,
       capital,
-      posture: inputs.posture_score ?? null,
+      posture: livePosture,
       postureLabel,
-      posturePillars: posturePillars ?? null,
+      posturePillars: resolvedPillars ?? null,
       breadth: {
         total,
         onList: greens,
