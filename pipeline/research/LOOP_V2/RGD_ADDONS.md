@@ -1,5 +1,7 @@
 # LOOP v2 RGD add-ons report
 
+**PR:** https://github.com/atanasvasilevjourney/ORBIS-EQUITY-/pull/129 (based on PR #128 branch)
+
 **Evaluation end:** 2026-11-21 · **Deflated Sharpe trials:** 10
 
 Pre-declared experiment on `loop_v2_full` (VWAP entry + stop). Add-ons: **A** ER≥0.30, **B** vol-switched 55/34 Donchian, **C** half at 2R + breakeven, **D** A+B+C.
