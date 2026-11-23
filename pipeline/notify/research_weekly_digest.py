@@ -25,9 +25,19 @@ from pipeline.research_framework.generate_weekly import (
     load_config,
     persist_pack,
 )
+from pipeline.research_framework.schema_preflight import (
+    ResearchWeeklySchemaError,
+    check_research_weekly_schema,
+)
 from pipeline.utils.supabase import fetch_all
+from pipeline.utils.supabase_errors import is_missing_relation
 
 logger = logging.getLogger(__name__)
+
+NO_RUN_LOG = (
+    "No research_weekly run for this week yet; generating pack inline before digest. "
+    "Sunday pack job (sunday-research-pack.yml, 05:00 UTC) can also persist a run."
+)
 
 WATCHLIST_TOP_N = 12
 PACK_MAX_AGE_DAYS = 6
@@ -44,12 +54,18 @@ def _parse_date(s: str | None) -> date | None:
 
 def load_or_refresh_pack(sb: Any) -> tuple[dict, list[dict], str | None]:
     """Return (run_row, setups, run_id). Regenerates pack if stale."""
-    runs = fetch_all(
-        sb,
-        "research_weekly_runs",
-        "run_id, week_ending, headline, macro, sectors, risk_notes, computed_at",
-        order=("computed_at", False),
-    )
+    check_research_weekly_schema(sb)
+    try:
+        runs = fetch_all(
+            sb,
+            "research_weekly_runs",
+            "run_id, week_ending, headline, macro, sectors, risk_notes, computed_at",
+            order=("computed_at", False),
+        )
+    except Exception as exc:
+        if is_missing_relation(exc):
+            raise ResearchWeeklySchemaError() from exc
+        raise
     latest = runs[0] if runs else None
     need_refresh = True
     if latest:
@@ -57,7 +73,10 @@ def load_or_refresh_pack(sb: Any) -> tuple[dict, list[dict], str | None]:
         if we and (date.today() - we).days <= PACK_MAX_AGE_DAYS:
             need_refresh = False
     if need_refresh:
-        logger.info("Research pack missing or stale — regenerating")
+        if not latest:
+            logger.info(NO_RUN_LOG)
+        else:
+            logger.info("Research pack missing or stale — regenerating")
         cfg = load_config()
         pack = generate_pack(sb, cfg)
         run_id = persist_pack(sb, pack)
@@ -276,7 +295,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--as-of", default=None, help="YYYY-MM-DD")
     args = p.parse_args(argv)
     as_of = date.fromisoformat(args.as_of) if args.as_of else None
-    run_digest(dry_run=args.dry_run, as_of=as_of)
+    try:
+        run_digest(dry_run=args.dry_run, as_of=as_of)
+    except ResearchWeeklySchemaError as exc:
+        logger.error("%s", exc)
+        return 1
     return 0
 
 

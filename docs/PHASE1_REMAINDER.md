@@ -23,6 +23,8 @@ Phase 1 **core** shipped in PR #50. This doc tracks the deferred layer.
 
 - [x] Apply **`supabase/migrations/025_fundamental_analysis_columns.sql`** (fundamental_summary / verdict columns).
 
+- [ ] Apply **`supabase/migrations/027_research_weekly.sql`** and **`035_research_weekly_horizons.sql`** on production Supabase (Sunday pack + research email + `/api/research-weekly`).
+
 ## Tests
 
 - [x] Entrypoint regression for `portfolio_loop` CLI.
