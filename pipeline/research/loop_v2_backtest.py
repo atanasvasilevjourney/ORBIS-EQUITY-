@@ -22,6 +22,12 @@ from pipeline.research.donchian_vwap_backtest import (
     run_donchian_vwap_portfolio,
 )
 from pipeline.research.loop_donchian_harness import compute_metrics, deflated_sharpe
+from pipeline.research.loop_v2_indicators import (
+    ER_MIN,
+    efficiency_ratio_smoothed,
+    atr_close_percentile_rank,
+    vol_switch_upper,
+)
 from pipeline.research.merged_pit_universe import merged_membership_lookup
 from pipeline.strategies.costs import CostModel, DEFAULT_LOOP_COSTS
 from pipeline.strategies.execution import _loc_on, turnover_cost_fraction
@@ -62,6 +68,9 @@ class OpenPosition:
     peak_close: float
     fill_mode: str  # "vwap_limit" | "next_open"
     stop_vwap_series: pd.Series | None = None
+    position_frac: float = 1.0
+    initial_stop: float | None = None
+    partial_taken: bool = False
 
 
 @dataclass
@@ -71,6 +80,9 @@ class LoopV2Config:
     use_vwap_stop: bool = True
     max_names: int = MAX_NAMES
     cost: CostModel = field(default_factory=lambda: DEFAULT_LOOP_COSTS)
+    use_er_filter: bool = False
+    use_vol_switch_channel: bool = False
+    use_partial_profit: bool = False
 
 
 def _series_close(spy: pd.DataFrame) -> pd.Series:
@@ -100,44 +112,80 @@ def _precompute_atr(ohlcv: pd.DataFrame, period: int = ATR_PERIOD) -> pd.Series:
     return atr.astype(float)
 
 
-def _precompute_features(ohlcv: pd.DataFrame) -> pd.DataFrame:
+def _precompute_features(
+    ohlcv: pd.DataFrame,
+    *,
+    use_vol_switch_channel: bool = False,
+    use_er_filter: bool = False,
+) -> pd.DataFrame:
     d = ohlcv.sort_index().copy()
     high = d["high"].astype(float)
     low = d["low"].astype(float)
     close = d["close"].astype(float)
-    upper = high.rolling(ENTRY_CHANNEL, min_periods=ENTRY_CHANNEL).max().shift(1)
+    if use_vol_switch_channel:
+        vol_rank = atr_close_percentile_rank(d)
+        upper = vol_switch_upper(high, vol_rank)
+    else:
+        upper = high.rolling(ENTRY_CHANNEL, min_periods=ENTRY_CHANNEL).max().shift(1)
     breakout = (close > upper) & upper.notna()
     ret = close.pct_change()
     spike = ret.abs().rolling(SPIKE_WINDOW, min_periods=SPIKE_WINDOW).max() >= SPIKE_THRESHOLD
     mom = close.shift(MOM_SHORT) / close.shift(MOM_LONG) - 1.0
-    return pd.DataFrame(
-        {
-            "close": close,
-            "high": high,
-            "low": low,
-            "open": d["open"].astype(float),
-            "upper": upper,
-            "breakout": breakout,
-            "spike_skip": spike.fillna(False),
-            "momentum": mom,
-        },
-        index=d.index,
-    )
+    frame: dict[str, pd.Series] = {
+        "close": close,
+        "high": high,
+        "low": low,
+        "open": d["open"].astype(float),
+        "upper": upper,
+        "breakout": breakout,
+        "spike_skip": spike.fillna(False),
+        "momentum": mom,
+    }
+    if use_er_filter:
+        frame["er_smooth"] = efficiency_ratio_smoothed(close)
+    return pd.DataFrame(frame, index=d.index)
 
 
 BreakoutEvent = tuple[str, float, float]  # sym, mom, upper
 
 
-def _build_breakout_index(features: dict[str, pd.DataFrame]) -> dict[date, list[BreakoutEvent]]:
+def _build_breakout_index(
+    features: dict[str, pd.DataFrame],
+    *,
+    use_er_filter: bool = False,
+) -> dict[date, list[BreakoutEvent]]:
     by_day: dict[date, list[BreakoutEvent]] = defaultdict(list)
     for sym, feat in features.items():
         mask = feat["breakout"] & ~feat["spike_skip"] & (feat["close"] >= MIN_PRICE)
+        if use_er_filter and "er_smooth" in feat.columns:
+            mask = mask & (feat["er_smooth"] >= ER_MIN)
         if not mask.any():
             continue
         for ts, row in feat.loc[mask].iterrows():
             d = ts.date() if hasattr(ts, "date") else pd.Timestamp(ts).date()
             by_day[d].append((sym, float(row["momentum"]), float(row["upper"])))
     return dict(by_day)
+
+
+def _occupied_slots(positions: dict[str, OpenPosition]) -> float:
+    return sum(p.position_frac for p in positions.values())
+
+
+def _set_initial_stop_on_entry(
+    pos: OpenPosition,
+    panels: dict[str, pd.DataFrame],
+    signal_day: date,
+    *,
+    use_vwap_stop: bool,
+    atr_cache: dict[str, pd.Series],
+    use_partial: bool,
+) -> None:
+    if not use_partial:
+        return
+    stop, _ = _stop_levels(
+        pos, panels, signal_day, use_vwap_stop=use_vwap_stop, atr_cache=atr_cache
+    )
+    pos.initial_stop = stop
 
 
 def _bar_feat(feat: pd.DataFrame, d: date) -> pd.Series | None:
@@ -263,12 +311,22 @@ def run_loop_v2(
         sym_sector = {k: "Unknown" for k in panels if k != "SPY"}
 
     spy = panels["SPY"]
+    feat_kw = {
+        "use_vol_switch_channel": config.use_vol_switch_channel,
+        "use_er_filter": config.use_er_filter,
+    }
     if features is None:
-        features = {sym: _precompute_features(ohlcv) for sym, ohlcv in panels.items() if sym != "SPY"}
+        features = {
+            sym: _precompute_features(ohlcv, **feat_kw)
+            for sym, ohlcv in panels.items()
+            if sym != "SPY"
+        }
     if atr_cache is None:
         atr_cache = {sym: _precompute_atr(ohlcv) for sym, ohlcv in panels.items() if sym != "SPY"}
     if breakout_index is None:
-        breakout_index = _build_breakout_index(features)
+        breakout_index = _build_breakout_index(
+            features, use_er_filter=config.use_er_filter
+        )
     if vol20_cache is None:
         vol20_cache = _precompute_vol20(panels)
 
@@ -305,11 +363,16 @@ def run_loop_v2(
         "turnover_days": 0.0,
         "holdings_sum": 0.0,
         "invested_days": 0,
+        "trade_count": 0,
+        "win_count": 0,
+        "r_sum": 0.0,
+        "r_n": 0,
     }
-
     for i, d in enumerate(days):
         signal_day = days[max(0, i - 1)]
         start_weights = dict(weights)
+        partial_scale_today = {}
+        partial_prices = {}
 
         # ---- exits ----
         to_close: list[str] = []
@@ -324,13 +387,24 @@ def run_loop_v2(
             )
             if stop is None or ohlcv is None:
                 continue
+            if pos.partial_taken:
+                stop = max(stop, pos.entry_price)
             bar = _bar_ohlc(ohlcv, d)
             if bar is None:
                 continue
-            hi, _, close = bar
+            hi, lo, close = bar
             loc = _loc_on(ohlcv, d)
             op = float(ohlcv.iloc[loc]["open"]) if loc is not None else close
             pos.peak_close = max(pos.peak_close, close)
+            if config.use_partial_profit and not pos.partial_taken and pos.initial_stop is not None:
+                risk = pos.entry_price - pos.initial_stop
+                if risk > 1e-8:
+                    target = pos.entry_price + 2.0 * risk
+                    if hi >= target:
+                        pos.partial_taken = True
+                        pos.position_frac *= 0.5
+                        partial_scale_today[sym] = 0.5
+                        partial_prices[sym] = target if lo <= target else op
             if op < stop:
                 to_close.append(sym)
                 gap_exits.append(sym)
@@ -338,6 +412,37 @@ def run_loop_v2(
                 to_close.append(sym)
                 close_exits.append(sym)
         for sym in to_close:
+            pos = positions.get(sym)
+            if pos is not None:
+                stop_ref = pos.initial_stop
+                if stop_ref is None:
+                    stop_ref, _ = _stop_levels(
+                        pos,
+                        panels,
+                        pos.entry_day,
+                        use_vwap_stop=config.use_vwap_stop,
+                        atr_cache=atr_cache,
+                    )
+                if stop_ref is None:
+                    continue
+                risk = pos.entry_price - stop_ref
+                if risk > 1e-8:
+                    ohlcv = panels.get(sym)
+                    loc = _loc_on(ohlcv, d) if ohlcv is not None else None
+                    if loc is not None and ohlcv is not None:
+                        if sym in gap_exits:
+                            exit_px = float(ohlcv.iloc[loc]["open"])
+                        else:
+                            exit_px = float(ohlcv.iloc[loc]["close"])
+                        r_mult = (exit_px - pos.entry_price) / risk
+                        if pos.partial_taken and partial_prices.get(sym):
+                            tgt = partial_prices[sym]
+                            r_mult = 0.5 * ((tgt - pos.entry_price) / risk) + 0.5 * r_mult
+                        stats["r_sum"] += r_mult
+                        stats["r_n"] += 1
+                        if r_mult > 0:
+                            stats["win_count"] += 1
+                        stats["trade_count"] += 1
             positions.pop(sym, None)
             weights.pop(sym, None)
 
@@ -345,7 +450,7 @@ def run_loop_v2(
         still_pending: list[PendingEntry] = []
         new_entries: list[str] = []
         for pe in pending:
-            if len(positions) >= config.max_names:
+            if _occupied_slots(positions) >= config.max_names:
                 still_pending.append(pe)
                 continue
             ohlcv = panels.get(pe.symbol)
@@ -364,7 +469,7 @@ def run_loop_v2(
                     stats["vwap_limit_fills"] += 1
                     op = float(ohlcv.iloc[loc]["open"])
                     fill_px = pe.vwap_limit if op > pe.vwap_limit else op
-                    positions[pe.symbol] = OpenPosition(
+                    pos_new = OpenPosition(
                         symbol=pe.symbol,
                         sector=pe.sector,
                         entry_day=d,
@@ -376,6 +481,15 @@ def run_loop_v2(
                         fill_mode="vwap_limit",
                         stop_vwap_series=anchored_vwap_series(ohlcv, pe.stop_vwap_anchor),
                     )
+                    positions[pe.symbol] = pos_new
+                    _set_initial_stop_on_entry(
+                        pos_new,
+                        panels,
+                        signal_day,
+                        use_vwap_stop=config.use_vwap_stop,
+                        atr_cache=atr_cache,
+                        use_partial=config.use_partial_profit,
+                    )
                     new_entries.append(pe.symbol)
                     continue
                 pe.sessions_left -= 1
@@ -385,7 +499,7 @@ def run_loop_v2(
                         stats["open_fallback_fills"] += 1
                         if loc is not None:
                             fill_px = float(ohlcv.iloc[loc]["open"])
-                            positions[pe.symbol] = OpenPosition(
+                            pos_new = OpenPosition(
                                 symbol=pe.symbol,
                                 sector=pe.sector,
                                 entry_day=d,
@@ -397,6 +511,15 @@ def run_loop_v2(
                                 fill_mode="next_open",
                                 stop_vwap_series=anchored_vwap_series(ohlcv, pe.stop_vwap_anchor),
                             )
+                            positions[pe.symbol] = pos_new
+                            _set_initial_stop_on_entry(
+                                pos_new,
+                                panels,
+                                signal_day,
+                                use_vwap_stop=config.use_vwap_stop,
+                                atr_cache=atr_cache,
+                                use_partial=config.use_partial_profit,
+                            )
                             new_entries.append(pe.symbol)
                         continue
                 still_pending.append(pe)
@@ -405,7 +528,7 @@ def run_loop_v2(
                     loc = _loc_on(ohlcv, d)
                     if loc is not None:
                         fill_px = float(ohlcv.iloc[loc]["open"])
-                        positions[pe.symbol] = OpenPosition(
+                        pos_new = OpenPosition(
                             symbol=pe.symbol,
                             sector=pe.sector,
                             entry_day=d,
@@ -416,6 +539,15 @@ def run_loop_v2(
                             peak_close=fill_px,
                             fill_mode="next_open",
                             stop_vwap_series=anchored_vwap_series(ohlcv, pe.stop_vwap_anchor),
+                        )
+                        positions[pe.symbol] = pos_new
+                        _set_initial_stop_on_entry(
+                            pos_new,
+                            panels,
+                            signal_day,
+                            use_vwap_stop=config.use_vwap_stop,
+                            atr_cache=atr_cache,
+                            use_partial=config.use_partial_profit,
                         )
                         new_entries.append(pe.symbol)
         pending = [p for p in still_pending if p.symbol not in positions]
@@ -438,7 +570,7 @@ def run_loop_v2(
                 if sector_count.get(sym_sector.get(sym, "Unknown"), 0) >= MAX_PER_SECTOR:
                     continue
                 cands.append((sym, mom if np.isfinite(mom) else -999.0))
-            slots = config.max_names - len(positions) - len(pending)
+            slots = int(config.max_names - _occupied_slots(positions) - len(pending))
             if slots > 0 and cands:
                 cands.sort(key=lambda x: -x[1])
                 for sym, _ in cands[:slots]:
@@ -486,7 +618,9 @@ def run_loop_v2(
             raw_w = _inverse_vol_weights(held, signal_day, vol20_cache, panels)
             gross = sum(raw_w.values())
             scale = _scale_vol_target(daily_rets, gross)
-            weights = {s: raw_w[s] * scale for s in held}
+            weights = {
+                s: raw_w[s] * scale * positions[s].position_frac for s in held
+            }
             stats["holdings_sum"] += len(held)
             if scale > 0.01:
                 stats["invested_days"] += 1
@@ -547,6 +681,16 @@ def run_loop_v2(
                     day_ret += w * (cl / fill - 1.0)
                 else:
                     day_ret += w * ((cl / op - 1.0) + (op / fill - 1.0))
+        for sym, frac_sold in partial_scale_today.items():
+            ohlcv = panels.get(sym)
+            w = start_weights.get(sym, 0.0) * frac_sold
+            tgt = partial_prices.get(sym)
+            loc = _loc_on(ohlcv, d)
+            if ohlcv is None or loc is None or w <= 0 or tgt is None:
+                continue
+            prev_c = float(ohlcv.iloc[loc - 1]["close"]) if loc > 0 else tgt
+            if prev_c > 0:
+                day_ret += w * (tgt / prev_c - 1.0)
 
         if start_syms != end_syms or new_entries or to_close:
             stats["turnover_days"] += 1.0
@@ -564,6 +708,9 @@ def run_loop_v2(
     stats["vwap_limit_fill_rate"] = (
         100.0 * stats["vwap_limit_fills"] / denom if denom else 0.0
     )
+    tc = stats["trade_count"]
+    stats["win_rate"] = 100.0 * stats["win_count"] / tc if tc else 0.0
+    stats["avg_r_per_trade"] = stats["r_sum"] / stats["r_n"] if stats["r_n"] else 0.0
     return daily, stats
 
 
@@ -628,6 +775,9 @@ def summarize_run(
         "avg_holdings": (extra or {}).get("avg_holdings", 0),
         "pct_time_invested": (extra or {}).get("pct_time_invested", 0),
         "vwap_limit_fill_rate": (extra or {}).get("vwap_limit_fill_rate", 0),
+        "trade_count": (extra or {}).get("trade_count", 0),
+        "win_rate": (extra or {}).get("win_rate", 0),
+        "avg_r_per_trade": (extra or {}).get("avg_r_per_trade", 0),
         "per_year_returns": years,
         "days": len(r),
     }
