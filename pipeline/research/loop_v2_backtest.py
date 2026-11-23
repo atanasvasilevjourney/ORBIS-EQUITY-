@@ -577,9 +577,9 @@ def run_baseline_loop(
     sym_sector=None,
     membership_lookup: Callable[[date], set[str]] | None = None,
     cost: CostModel = DEFAULT_LOOP_COSTS,
-) -> pd.Series:
+) -> tuple[pd.Series, dict]:
     """Current LOOP: Donchian 55 + VWAP(20), max 8, ATR(14)×k weekly rebalance."""
-    daily, _ = run_donchian_vwap_portfolio(
+    daily, eq_df = run_donchian_vwap_portfolio(
         start,
         end,
         data_start=data_start,
@@ -593,7 +593,11 @@ def run_baseline_loop(
         membership_lookup=membership_lookup,
         cost=cost,
     )
-    return daily
+    stats: dict = {}
+    if eq_df is not None and not eq_df.empty and "names" in eq_df.columns:
+        stats["avg_holdings"] = float(eq_df["names"].mean())
+        stats["pct_time_invested"] = 100.0 * float((eq_df["names"] > 0).mean())
+    return daily, stats
 
 
 def summarize_run(

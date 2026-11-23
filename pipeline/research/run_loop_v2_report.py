@@ -71,13 +71,45 @@ def _fmt_pct(x: float) -> str:
     return f"{100 * x:+.1f}%"
 
 
+def _row_metrics_line(row: dict) -> str:
+    ds = row.get("deflated_sharpe", 0)
+    return (
+        f"| {row.get('run_id', '')} {row.get('variant', row.get('name'))} | {row.get('period')} | "
+        f"{_fmt_pct(row.get('cagr', 0))} | {_fmt_pct(row.get('total_return', 0))} | "
+        f"{_fmt_pct(row.get('annualized_vol', 0))} | {row.get('sharpe', 0):.2f} | {ds:.2f} | "
+        f"{_fmt_pct(row.get('max_drawdown', 0))} | {row.get('turnover', 0):.1f} | "
+        f"{row.get('avg_holdings', 0):.1f} | {row.get('pct_time_invested', 0):.0f}% | "
+        f"{row.get('vwap_limit_fill_rate', 0):.0f}% |"
+    )
+
+
+def _sorted_results(rows: list[dict], cost: str) -> list[dict]:
+    out = [
+        r for r in rows
+        if r.get("cost") == cost or r.get("variant") == "SPY"
+    ]
+    return sorted(out, key=lambda r: (r.get("period", ""), str(r.get("run_id", "9"))))
+
+
 def render_report(summary: dict) -> str:
     verdict = summary.get("pass_overall", False)
     vf = summary.get("pass_fail_25bps_loop_v2_full", {})
+    header = (
+        "| Run | Period | CAGR | Total | Vol | Sharpe | D.Sharpe | MaxDD | Turnover | "
+        "Avg names | % invested | VWAP fill % |"
+    )
+    sep = (
+        "|-----|--------|------|-------|-----|--------|----------|-------|----------|"
+        "-----------|------------|-------------|"
+    )
     lines = [
         "# LOOP v2 backtest report",
         "",
+        "**PR:** https://github.com/atanasvasilevjourney/ORBIS-EQUITY-/pull/128",
+        "",
         f"**Evaluation end:** {summary['end']} · **Deflated Sharpe trials:** {summary['n_trials_deflated_sharpe']}",
+        "",
+        "Six pre-declared runs: (1) LOOP v2 full, (2–4) VWAP ablations, (5) baseline Donchian LOOP, (6) SPY.",
         "",
         "## Pass / fail (LOOP v2 full vs SPY @ 25 bps)",
         "",
@@ -89,32 +121,14 @@ def render_report(summary: dict) -> str:
         "",
         "## Results table (25 bps)",
         "",
-        "| Run | Period | CAGR | Total | Vol | Sharpe | D.Sharpe | MaxDD | Turnover | Avg names | % invested | VWAP fill % |",
-        "|-----|--------|------|-------|-----|--------|----------|-------|----------|-----------|------------|-------------|",
+        header,
+        sep,
     ]
-    for row in sorted(summary["results"], key=lambda r: (r.get("period", ""), r.get("run_id", "9"))):
-        if row.get("cost") != "25bps" and row.get("variant") != "SPY":
-            continue
-        ds = row.get("deflated_sharpe", 0)
-        lines.append(
-            f"| {row.get('variant', row.get('name'))} | {row.get('period')} | "
-            f"{_fmt_pct(row.get('cagr', 0))} | {_fmt_pct(row.get('total_return', 0))} | "
-            f"{_fmt_pct(row.get('annualized_vol', 0))} | {row.get('sharpe', 0):.2f} | {ds:.2f} | "
-            f"{_fmt_pct(row.get('max_drawdown', 0))} | {row.get('turnover', 0):.1f} | "
-            f"{row.get('avg_holdings', 0):.1f} | {row.get('pct_time_invested', 0):.0f}% | "
-            f"{row.get('vwap_limit_fill_rate', 0):.0f}% |"
-        )
-    lines.extend(["", "## Results table (10 bps)", ""])
-    lines.append("| Run | Period | CAGR | Total | Sharpe | MaxDD |")
-    lines.append("|-----|--------|------|-------|--------|-------|")
-    for row in summary["results"]:
-        if row.get("cost") != "10bps":
-            continue
-        lines.append(
-            f"| {row.get('variant')} | {row.get('period')} | {_fmt_pct(row.get('cagr', 0))} | "
-            f"{_fmt_pct(row.get('total_return', 0))} | {row.get('sharpe', 0):.2f} | "
-            f"{_fmt_pct(row.get('max_drawdown', 0))} |"
-        )
+    for row in _sorted_results(summary["results"], "25bps"):
+        lines.append(_row_metrics_line(row))
+    lines.extend(["", "## Results table (10 bps)", "", header, sep])
+    for row in _sorted_results(summary["results"], "10bps"):
+        lines.append(_row_metrics_line(row))
     lines.extend(
         [
             "",

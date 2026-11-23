@@ -97,7 +97,7 @@ def run_all(
         if not quick and not skip_baseline:
             print(f"  baseline LOOP @ {cost_label}…", flush=True)
             bkey = f"baseline_loop|{cost_label}"
-            daily_by_run[bkey] = run_baseline_loop(
+            daily, bstats = run_baseline_loop(
                 date(2010, 1, 4),
                 end,
                 panels=panels,
@@ -106,7 +106,8 @@ def run_all(
                 membership_lookup=lookup,
                 cost=cost,
             )
-            stats_by_run[bkey] = {}
+            daily_by_run[bkey] = daily
+            stats_by_run[bkey] = bstats
 
     spy_daily = benchmark_returns(date(2010, 1, 4), end, "SPY")
     daily_by_run["SPY|0bps"] = spy_daily
