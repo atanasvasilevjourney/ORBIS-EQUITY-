@@ -11,3 +11,8 @@ Cached as `sp500_historical_components.csv` in this directory (not committed; fe
 Long-format export: `python3 -c "from pipeline.research.sp500_pit import long_membership_csv; from pathlib import Path; print(long_membership_csv(Path('pipeline/research/data/sp500_membership_long.csv')))"`
 
 Report charts: `pip install -r pipeline/requirements-research.txt`
+
+## Nasdaq-100 point-in-time
+
+`pipeline/research/nasdaq100_pit.py` builds `nasdaq100_pit_events.csv` from Wikipedia change
+tables on first use. Seed membership **2008-12-22**; earlier NDX history is approximate.
