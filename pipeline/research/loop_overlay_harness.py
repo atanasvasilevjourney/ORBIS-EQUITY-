@@ -23,7 +23,6 @@ from pipeline.research.donchian_vwap_backtest import (
     _bar_on,
     benchmark_returns,
     build_research_panels,
-    run_donchian_vwap_portfolio,
 )
 from pipeline.research.loop_donchian_harness import (
     TEST_START,
