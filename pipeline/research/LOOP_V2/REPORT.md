@@ -1,5 +1,7 @@
 # LOOP v2 backtest report
 
+**PR:** https://github.com/atanasvasilevjourney/ORBIS-EQUITY-/pull/128
+
 **Evaluation end:** 2020-12-31 · **Deflated Sharpe trials:** 6
 
 > Regenerate through latest data: `python -m pipeline.research.run_loop_v2_report --end YYYY-MM-DD` (runtime ~40+ min; downloads PIT union OHLCV once).
