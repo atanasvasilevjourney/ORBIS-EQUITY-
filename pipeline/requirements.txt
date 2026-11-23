@@ -1,7 +1,6 @@
 requests>=2.31.0
 supabase>=2.0.0
 yfinance
-matplotlib>=3.8>=0.2.30
 pandas>=2.1.0
 numpy>=1.26.0
 lse-data>=0.1.0

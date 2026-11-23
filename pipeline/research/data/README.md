@@ -9,3 +9,5 @@ On first access, `pipeline/research/sp500_pit.py` downloads:
 Cached as `sp500_historical_components.csv` in this directory (not committed; fetch at runtime).
 
 Long-format export: `python3 -c "from pipeline.research.sp500_pit import long_membership_csv; from pathlib import Path; print(long_membership_csv(Path('pipeline/research/data/sp500_membership_long.csv')))"`
+
+Report charts: `pip install -r pipeline/requirements-research.txt`
