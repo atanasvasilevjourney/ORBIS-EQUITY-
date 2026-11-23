@@ -6,7 +6,9 @@ Usage:
 from __future__ import annotations
 
 import logging
+import os
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
@@ -23,6 +25,16 @@ logger = logging.getLogger(__name__)
 
 MAX_TICKERS_PER_RUN = 50
 ARTICLES_PER_TICKER = 5
+
+
+def _float_env(name: str, default: float) -> float:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
 
 
 def _get_supabase_client() -> Client:
@@ -72,9 +84,21 @@ def run_news_ingest(sb: Client | None = None) -> dict:
     gdelt_hits = 0
     yahoo_hits = 0
     failed = 0
+    stopped_early = False
     now = datetime.now(timezone.utc).isoformat()
+    max_sec = _float_env("NEWS_MAX_SEC", 0)
+    t0 = time.monotonic()
 
     for i, ticker in enumerate(tickers):
+        if max_sec > 0 and (time.monotonic() - t0) >= max_sec:
+            stopped_early = True
+            logger.warning(
+                "Stopping early after %.0fs (NEWS_MAX_SEC) · %d/%d tickers",
+                max_sec,
+                i,
+                len(tickers),
+            )
+            break
         logger.info("[%d/%d] Fetching news for %s...", i + 1, len(tickers), ticker)
         try:
             articles, src = _fetch_articles_for_ticker(ticker)
@@ -129,8 +153,15 @@ def run_news_ingest(sb: Client | None = None) -> dict:
         "gdelt_tickers": gdelt_hits,
         "yahoo_tickers": yahoo_hits,
         "empty_or_failed_tickers": failed,
+        "stopped_early": stopped_early,
     }
     append_step_summary_json("News ingest", stats)
+
+    if stopped_early:
+        gh_warning(
+            f"News ingest hit NEWS_MAX_SEC ({max_sec:.0f}s) after "
+            f"{i}/{len(tickers)} tickers; raise job timeout or lower ticker cap if this persists."
+        )
 
     if total_articles == 0:
         gh_warning(
