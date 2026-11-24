@@ -1,4 +1,4 @@
-"""Financial reports ingest: LSE primary, Yahoo fallback → Supabase.
+"""Financial reports ingest: SEC EDGAR primary, Yahoo fallback, optional LSE.
 
 Fetches income statements, balance sheets, cash flows for universe members.
 Stores in ``financial_reports`` with source noted in the JSON ``data`` blob.
@@ -17,8 +17,9 @@ from dotenv import load_dotenv
 from supabase import Client, create_client
 
 from pipeline.clients.lse_api import LSEClient
+from pipeline.clients.sec_edgar import fetch_sec_financials_batch, load_company_tickers
 from pipeline.clients.yahoo_financials import fetch_yahoo_financials_batch
-from pipeline.config.settings import FINANCIAL_REPORT_TYPES, SupabaseConfig
+from pipeline.config.settings import FINANCIAL_REPORT_TYPES, LSEConfig, SupabaseConfig
 from pipeline.utils.ci_log import append_step_summary_json, gh_error, gh_warning
 from pipeline.utils.financial_reports_health import is_lse_auth_error
 from pipeline.utils.supabase import fetch_active_symbols
@@ -29,10 +30,15 @@ logger = logging.getLogger(__name__)
 
 REPORT_TYPES = FINANCIAL_REPORT_TYPES
 BATCH_SIZE = 200
+CORE_TYPES = frozenset({"income", "balance", "cashflow"})
 
 
 @dataclass
 class FinancialReportsIngestResult:
+    sec_rows: int
+    sec_symbols_ok: int
+    sec_symbols_no_cik: int
+    sec_coverage_full: int
     lse_ok: bool
     lse_rows: int
     yahoo_symbols: int
@@ -40,6 +46,7 @@ class FinancialReportsIngestResult:
     merged_rows: int
     upserted: int
     lse_error: str | None = None
+    sec_missing_fields: dict[str, int] | None = None
 
 
 def _get_supabase_client() -> Client:
@@ -49,10 +56,14 @@ def _get_supabase_client() -> Client:
     return create_client(cfg.url, cfg.service_key)
 
 
+def _symbol_has_core_reports(rows: list[dict]) -> bool:
+    return CORE_TYPES.issubset({r.get("report_type") for r in rows})
+
+
 def _ingest_reports_for_type(
     lse: LSEClient, symbols: list[str], report_type: str
 ) -> tuple[int, list[dict]]:
-    """Fetch and upsert all reports of a given type (paginated). Returns (upserted, rows)."""
+    """Fetch and map LSE paginated reports for universe symbols."""
     logger.info("Fetching %s reports from LSE API...", report_type)
 
     universe_set = set(symbols)
@@ -109,6 +120,33 @@ def _ingest_reports_for_type(
     return len(rows), rows
 
 
+def _try_lse_financial_reports(symbols: list[str]) -> tuple[list[dict], bool, str | None]:
+    cfg = LSEConfig()
+    if not cfg.api_key:
+        logger.info("LSE_API_KEY unset — skipping optional LSE financial reports")
+        return [], False, None
+
+    lse = LSEClient()
+    try:
+        lse.get_financial_reports(report_type="income", period="FY", limit=1)
+    except Exception as exc:
+        msg = str(exc)
+        if is_lse_auth_error(exc):
+            gh_warning(
+                "LSE_API_KEY invalid or expired (401/403) — skipping optional LSE path. "
+                "SEC EDGAR + Yahoo are the primary sources."
+            )
+        else:
+            gh_warning(f"LSE financial reports unavailable ({exc}); skipping LSE path")
+        return [], False, msg
+
+    all_lse: list[dict] = []
+    for rt in REPORT_TYPES:
+        _, rows = _ingest_reports_for_type(lse, symbols, rt)
+        all_lse.extend(rows)
+    return all_lse, True, None
+
+
 def _upsert_reports(sb: Client, rows: list[dict]) -> int:
     upserted = 0
     for i in range(0, len(rows), BATCH_SIZE):
@@ -123,13 +161,20 @@ def _upsert_reports(sb: Client, rows: list[dict]) -> int:
     return upserted
 
 
-def merge_report_rows(lse_rows: list[dict], yahoo_rows: list[dict]) -> list[dict]:
-    """Prefer LSE when both sources have the same (symbol, type, date)."""
+def merge_report_rows(
+    sec_rows: list[dict],
+    yahoo_rows: list[dict],
+    lse_rows: list[dict],
+) -> list[dict]:
+    """Precedence: SEC EDGAR > Yahoo > optional LSE for each (symbol, type, date, period)."""
     merged: dict[tuple, dict] = {}
+    for r in lse_rows:
+        key = (r["symbol"], r["report_type"], r["date"], r["period"])
+        merged[key] = r
     for r in yahoo_rows:
         key = (r["symbol"], r["report_type"], r["date"], r["period"])
         merged[key] = r
-    for r in lse_rows:
+    for r in sec_rows:
         key = (r["symbol"], r["report_type"], r["date"], r["period"])
         merged[key] = r
     return list(merged.values())
@@ -140,55 +185,65 @@ def run_financial_reports_ingest(sb: Client | None = None) -> FinancialReportsIn
     symbols = fetch_active_symbols(sb)
     logger.info("Universe has %d active symbols", len(symbols))
 
-    lse_ok = False
-    lse_error: str | None = None
-    all_lse: list[dict] = []
+    ticker_index = load_company_tickers()
+    sec_batch = fetch_sec_financials_batch(symbols, ticker_index=ticker_index)
+    all_sec = sec_batch.rows
+    logger.info(
+        "SEC EDGAR: %d rows | symbols ok=%d no_cik=%d failed=%d | "
+        "full F-Score field coverage=%d partial=%d",
+        len(all_sec),
+        sec_batch.symbols_ok,
+        sec_batch.symbols_no_cik,
+        sec_batch.symbols_failed,
+        sec_batch.coverage_full,
+        sec_batch.coverage_partial,
+    )
 
-    lse = LSEClient()
-    try:
-        for rt in REPORT_TYPES:
-            _, rows = _ingest_reports_for_type(lse, symbols, rt)
-            all_lse.extend(rows)
-        lse_ok = True
-        logger.info("LSE returned %d total mapped report rows", len(all_lse))
-    except Exception as exc:
-        lse_error = str(exc)
-        logger.exception("LSE financial reports fetch failed")
-        if is_lse_auth_error(exc):
-            gh_error(
-                "LSE_API_KEY rejected by London Strategic Edge (401/403). "
-                "Renew the key in the provider dashboard and update the GitHub Actions secret "
-                "LSE_API_KEY (Settings → Secrets and variables → Actions). Yahoo fallback will run."
-            )
-        gh_warning(f"LSE financial reports unavailable ({exc}); will use Yahoo fallback")
+    sec_by_symbol: dict[str, list] = defaultdict(list)
+    for r in all_sec:
+        sec_by_symbol[r["symbol"]].append(r)
 
-    lse_by_symbol: dict[str, list] = defaultdict(list)
-    for r in all_lse:
-        lse_by_symbol[r["symbol"]].append(r)
-
-    if not lse_ok or not all_lse:
-        yahoo_targets = symbols
-    else:
-        yahoo_targets = [s for s in symbols if not lse_by_symbol.get(s)]
-
+    yahoo_targets = [s for s in symbols if not _symbol_has_core_reports(sec_by_symbol.get(s, []))]
     yahoo_rows: list[dict] = []
     if yahoo_targets:
-        logger.info("Fetching Yahoo financials for %d symbols", len(yahoo_targets))
+        logger.info("Fetching Yahoo financials for %d symbols (SEC gaps)", len(yahoo_targets))
         batch = fetch_yahoo_financials_batch(yahoo_targets)
         yahoo_rows = batch.rows
 
-    merged = merge_report_rows(all_lse, yahoo_rows)
+    yahoo_by_symbol: dict[str, list] = defaultdict(list)
+    for r in yahoo_rows:
+        yahoo_by_symbol[r["symbol"]].append(r)
+
+    lse_targets = [
+        s
+        for s in symbols
+        if not _symbol_has_core_reports(sec_by_symbol.get(s, []))
+        and not _symbol_has_core_reports(yahoo_by_symbol.get(s, []))
+    ]
+    all_lse, lse_ok, lse_error = _try_lse_financial_reports(lse_targets if lse_targets else symbols)
+    if lse_targets and lse_ok:
+        universe_set = set(lse_targets)
+        all_lse = [r for r in all_lse if r.get("symbol") in universe_set]
+
+    merged = merge_report_rows(all_sec, yahoo_rows, all_lse)
     upserted = _upsert_reports(sb, merged) if merged else 0
 
     logger.info(
-        "Financial reports ingest: merged=%d upserted=%d (lse=%d yahoo=%d)",
+        "Financial reports ingest: merged=%d upserted=%d (sec=%d yahoo=%d lse=%d)",
         len(merged),
         upserted,
-        len(all_lse),
+        len(all_sec),
         len(yahoo_rows),
+        len(all_lse),
     )
 
     stats = {
+        "sec_rows": len(all_sec),
+        "sec_symbols_ok": sec_batch.symbols_ok,
+        "sec_symbols_no_cik": sec_batch.symbols_no_cik,
+        "sec_coverage_full": sec_batch.coverage_full,
+        "sec_coverage_partial": sec_batch.coverage_partial,
+        "sec_missing_fields": sec_batch.missing_field_counts,
         "lse_ok": lse_ok,
         "lse_rows": len(all_lse),
         "yahoo_symbols": len(yahoo_targets),
@@ -200,6 +255,10 @@ def run_financial_reports_ingest(sb: Client | None = None) -> FinancialReportsIn
     append_step_summary_json("Financial reports ingest", stats)
 
     return FinancialReportsIngestResult(
+        sec_rows=len(all_sec),
+        sec_symbols_ok=sec_batch.symbols_ok,
+        sec_symbols_no_cik=sec_batch.symbols_no_cik,
+        sec_coverage_full=sec_batch.coverage_full,
         lse_ok=lse_ok,
         lse_rows=len(all_lse),
         yahoo_symbols=len(yahoo_targets),
@@ -207,6 +266,7 @@ def run_financial_reports_ingest(sb: Client | None = None) -> FinancialReportsIn
         merged_rows=len(merged),
         upserted=upserted,
         lse_error=lse_error,
+        sec_missing_fields=sec_batch.missing_field_counts,
     )
 
 
@@ -227,19 +287,14 @@ def main() -> None:
     if result.upserted == 0:
         msg = (
             "Financial reports ingest wrote 0 rows — "
-            f"LSE ok={result.lse_ok} rows={result.lse_rows}, "
-            f"Yahoo symbols={result.yahoo_symbols} rows={result.yahoo_rows}. "
-            "Renew LSE_API_KEY or check yfinance connectivity."
+            f"SEC rows={result.sec_rows} ok={result.sec_symbols_ok}, "
+            f"Yahoo symbols={result.yahoo_symbols} rows={result.yahoo_rows}, "
+            f"LSE ok={result.lse_ok} rows={result.lse_rows}. "
+            "Check SEC_USER_AGENT, Yahoo connectivity, or universe CIK mapping."
         )
         gh_error(msg)
         logger.error("=== Financial Reports Ingest FAILED: 0 rows upserted ===")
         sys.exit(1)
-
-    if is_lse_auth_error(result.lse_error):
-        gh_error(
-            "Financial reports ingest used Yahoo fallback only — LSE_API_KEY is invalid or expired. "
-            "Renew at London Strategic Edge and update GitHub secret LSE_API_KEY."
-        )
 
     logger.info("=== Financial Reports Ingest Complete: %d upserted ===", result.upserted)
 

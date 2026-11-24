@@ -236,6 +236,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           LSE_API_KEY: ${{ secrets.LSE_API_KEY }}
+          SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
 
   # ---------------------------------------------------------------------------
   # 5. Compute Signals — after prices; on Mondays wait for weekly financial reports
