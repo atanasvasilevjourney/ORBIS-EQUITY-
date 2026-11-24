@@ -1,4 +1,4 @@
-"""Trend-band pullback + band-flip detection (pure, no I/O)."""
+"""Trend-band pullback on pb_ema EMA200 high/low band (daily or weekly bars)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,59 +7,64 @@ from typing import Any, Literal
 import numpy as np
 import pandas as pd
 
-from pipeline.trend_band_scanner.indicators.band import compute_band_frame
+from pipeline.trend_band_scanner.indicators.band import compute_pb_ema_band_frame
 
 SetupKind = Literal["pullback", "band_flip"]
+Timeframe = Literal["1d", "1wk"]
 
 
 @dataclass(frozen=True)
 class PullbackParams:
-    ema_fast: int = 20
-    ema_slow: int = 50
-    slope_lookback: int = 5
-    min_band_slope_pct: float = 0.02
+    ema_period: int = 200
+    history_min_bars: int = 200
+    slope_lookback: int = 20
+    min_band_slope_pct: float = 0.0
     swing_high_lookback: int = 40
     min_advance_pct: float = 6.0
     min_pullback_pct: float = 2.5
-    max_pullback_pct: float = 22.0
-    proximity_pct: float = 2.5
+    max_pullback_pct: float = 28.0
+    proximity_pct: float = 3.0
     low_touch_extra_pct: float = 1.5
     flip_lookback_days: int = 12
     spark_bars: int = 90
 
 
-def _cfg_params(cfg: dict) -> PullbackParams:
+def params_for_timeframe(cfg: dict, timeframe: Timeframe) -> PullbackParams:
     pb = cfg.get("pullback") or {}
     flip = cfg.get("band_flip") or {}
+    band = cfg.get("band") or {}
     scan = cfg.get("scan") or {}
+    weekly = timeframe == "1wk"
     return PullbackParams(
-        ema_fast=int(cfg.get("ema_fast", 20)),
-        ema_slow=int(cfg.get("ema_slow", 50)),
-        slope_lookback=int(cfg.get("slope_lookback", 5)),
-        min_band_slope_pct=float(cfg.get("min_band_slope_pct", 0.02)),
-        swing_high_lookback=int(pb.get("swing_high_lookback", 40)),
+        ema_period=int(cfg.get("ema_period", 200)),
+        history_min_bars=int(
+            cfg.get("weekly_history_min_bars" if weekly else "history_min_bars", 220 if weekly else 200)
+        ),
+        slope_lookback=int(
+            band.get("slope_lookback_weekly" if weekly else "slope_lookback_daily", 8 if weekly else 20)
+        ),
+        min_band_slope_pct=float(band.get("min_band_slope_pct", 0.0)),
+        swing_high_lookback=int(
+            pb.get("swing_high_lookback_weekly" if weekly else "swing_high_lookback_daily", 16 if weekly else 40)
+        ),
         min_advance_pct=float(pb.get("min_advance_pct", 6.0)),
         min_pullback_pct=float(pb.get("min_pullback_pct", 2.5)),
-        max_pullback_pct=float(pb.get("max_pullback_pct", 22.0)),
-        proximity_pct=float(pb.get("proximity_pct", 2.5)),
+        max_pullback_pct=float(pb.get("max_pullback_pct", 28.0)),
+        proximity_pct=float(pb.get("proximity_pct", 3.0)),
         low_touch_extra_pct=float(pb.get("low_touch_extra_pct", 1.5)),
-        flip_lookback_days=int(flip.get("flip_lookback_days", 12)),
-        spark_bars=int(scan.get("spark_bars", 90)),
+        flip_lookback_days=int(flip.get("flip_lookback_weekly" if weekly else "flip_lookback_daily", 6 if weekly else 12)),
+        spark_bars=int(scan.get("spark_bars_weekly" if weekly else "spark_bars_daily", 52 if weekly else 90)),
     )
 
 
-def _spark_payload(
-    df: pd.DataFrame,
-    band: pd.DataFrame,
-    n: int,
-) -> list[dict[str, Any]]:
+def _spark_payload(df: pd.DataFrame, band: pd.DataFrame, n: int) -> list[dict[str, Any]]:
     tail = df.tail(n).reset_index(drop=True)
     band_tail = band.tail(n).reset_index(drop=True)
     out: list[dict[str, Any]] = []
     for j in range(len(tail)):
         row = tail.iloc[j]
         b = band_tail.iloc[j]
-        if pd.isna(b["ema_fast"]) or pd.isna(b["ema_slow"]):
+        if pd.isna(b["ema200_high"]) or pd.isna(b["ema200_low"]):
             continue
         d = row["date"] if "date" in tail.columns else j
         if hasattr(d, "isoformat"):
@@ -70,8 +75,8 @@ def _spark_payload(
             {
                 "date": d,
                 "close": float(row["close"]),
-                "emaFast": float(b["ema_fast"]),
-                "emaSlow": float(b["ema_slow"]),
+                "ema200High": float(b["ema200_high"]),
+                "ema200Low": float(b["ema200_low"]),
                 "rising": bool(b["band_rising"]),
             }
         )
@@ -88,7 +93,7 @@ def _score(
 ) -> float:
     prox = max(0.0, 100.0 - dist_pct * (100.0 / max(params.proximity_pct * 2, 0.01)))
     prox = float(np.clip(prox * 0.4, 0, 40))
-    trend = float(np.clip(slope_pct * 8.0, 0, 25))
+    trend = float(np.clip(abs(slope_pct) * 4.0, 0, 25))
     sweet = 10.0
     pb_dist = abs(pullback_pct - sweet)
     pull = float(np.clip(20.0 - pb_dist * 1.5, 0, 20))
@@ -96,27 +101,35 @@ def _score(
     return round(prox + trend + pull + flip_bonus, 2)
 
 
-def scan_frame(ohlcv: pd.DataFrame, cfg: dict) -> dict[str, Any] | None:
-    """Return one setup dict for the last bar, or None."""
-    params = _cfg_params(cfg)
+def scan_frame(
+    ohlcv: pd.DataFrame,
+    cfg: dict,
+    *,
+    timeframe: Timeframe = "1d",
+) -> dict[str, Any] | None:
+    params = params_for_timeframe(cfg, timeframe)
     if "date" in ohlcv.columns:
         df = ohlcv.sort_values("date").reset_index(drop=True)
     else:
         df = ohlcv.sort_index().reset_index(drop=True)
-    if len(df) < params.ema_slow + params.swing_high_lookback + 5:
+
+    need = params.history_min_bars + params.swing_high_lookback + 5
+    if len(df) < need:
         return None
 
     close = df["close"].astype(float)
     low = df["low"].astype(float)
     high = df["high"].astype(float)
 
-    band = compute_band_frame(
-        close,
-        ema_fast=params.ema_fast,
-        ema_slow=params.ema_slow,
+    ohlc = pd.DataFrame({"close": close, "high": high, "low": low})
+    band = compute_pb_ema_band_frame(
+        ohlc,
+        ema_period=params.ema_period,
+        history_min_bars=params.history_min_bars,
         slope_lookback=params.slope_lookback,
         min_band_slope_pct=params.min_band_slope_pct,
     )
+
     i = -1
     rising = bool(band["band_rising"].iloc[i])
     if not rising:
@@ -132,8 +145,7 @@ def scan_frame(ohlcv: pd.DataFrame, cfg: dict) -> dict[str, Any] | None:
     if not np.isfinite(band_lo) or band_lo <= 0:
         return None
 
-    # Invalidation: decisive close below band support
-    if last_close < band_lo * (1.0 - params.low_touch_extra_pct / 100.0):
+    if last_close < band_lo:
         return None
 
     look = params.swing_high_lookback
@@ -156,13 +168,7 @@ def scan_frame(ohlcv: pd.DataFrame, cfg: dict) -> dict[str, Any] | None:
     if not (touched or near):
         return None
 
-    mid_lag = band["band_mid"].iloc[i - params.slope_lookback] if len(band) > params.slope_lookback else np.nan
-    mid_now = float(band["band_mid"].iloc[i])
-    slope_pct = (
-        (mid_now - float(mid_lag)) / float(mid_lag) * 100.0
-        if mid_lag and np.isfinite(mid_lag) and float(mid_lag) > 0
-        else 0.0
-    )
+    slope_pct = float(band["band_slope_pct"].iloc[i] or 0.0)
 
     flip_age_val = band["days_since_flip"].iloc[i]
     band_flip = (
@@ -184,11 +190,14 @@ def scan_frame(ohlcv: pd.DataFrame, cfg: dict) -> dict[str, Any] | None:
     spark = _spark_payload(df, band, params.spark_bars)
 
     return {
+        "timeframe": timeframe,
         "setup_kind": setup_kind,
         "score": score,
         "close": last_close,
         "band_lo": band_lo,
         "band_hi": band_hi,
+        "ema200_high": band_hi,
+        "ema200_low": band_lo,
         "invalidation": band_lo,
         "dist_to_band_pct": round(dist_to_band, 3),
         "pullback_pct": round(pullback_pct, 3),
@@ -198,6 +207,5 @@ def scan_frame(ohlcv: pd.DataFrame, cfg: dict) -> dict[str, Any] | None:
         "band_flip": band_flip,
         "days_since_flip": int(flip_age_val) if band_flip and not pd.isna(flip_age_val) else None,
         "spark": spark,
-        "ema_fast": params.ema_fast,
-        "ema_slow": params.ema_slow,
+        "ema_period": params.ema_period,
     }

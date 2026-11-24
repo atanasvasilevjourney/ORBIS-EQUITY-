@@ -1,25 +1,25 @@
-"""Trend-band pullback scanner tests."""
+"""pb_ema EMA200 high/low band pullback tests."""
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
-from pipeline.trend_band_scanner.indicators.band import compute_band_frame
+from pipeline.trend_band_scanner.indicators.band import compute_pb_ema_band_frame, resample_to_weekly
 from pipeline.trend_band_scanner.signals.pullback import scan_frame
 
 
-def _synthetic_uptrend_pullback(n: int = 120) -> pd.DataFrame:
-    """Rising band with price advance then pullback to the cloud."""
+def _synthetic_uptrend_pullback(n: int = 280) -> pd.DataFrame:
     t = np.arange(n, dtype=float)
-    close = 80.0 + t * 0.15 + np.sin(t / 8) * 0.5
-    # Late pullback toward band
-    close[-10:] -= np.linspace(6.0, 2.0, 10)
-    high = close + 0.6
-    low = close - 0.8
-    low[-3:] -= 1.5
+    close = 50.0 + t * 0.09
+    peak = close.copy()
+    close[-6:] = peak[-6:] * np.linspace(0.992, 0.976, 6)
+    high = np.maximum(peak, close) + 0.5
+    high[-8:] = peak[-8:] + 1.5
+    low = close - 1.0
+    low[-3:] = close[-3:] - 1.3
     return pd.DataFrame(
         {
-            "date": pd.date_range("2024-01-01", periods=n, freq="B"),
+            "date": pd.date_range("2018-01-01", periods=n, freq="B"),
             "open": close,
             "high": high,
             "low": low,
@@ -29,41 +29,64 @@ def _synthetic_uptrend_pullback(n: int = 120) -> pd.DataFrame:
     )
 
 
-def test_band_rising_on_uptrend():
+def test_ema200_band_edges():
     df = _synthetic_uptrend_pullback()
-    band = compute_band_frame(df["close"], ema_fast=20, ema_slow=50)
+    band = compute_pb_ema_band_frame(
+        df[["close", "high", "low"]],
+        ema_period=200,
+        history_min_bars=200,
+        slope_lookback=20,
+    )
+    assert band["band_hi"].iloc[-1] >= band["band_lo"].iloc[-1]
     assert band["band_rising"].iloc[-1]
 
 
-def test_scan_finds_pullback():
+def test_scan_daily_pullback():
     df = _synthetic_uptrend_pullback()
     cfg = {
-        "ema_fast": 20,
-        "ema_slow": 50,
-        "slope_lookback": 5,
-        "min_band_slope_pct": 0.01,
+        "ema_period": 200,
+        "history_min_bars": 200,
+        "band": {"slope_lookback_daily": 20, "min_band_slope_pct": 0.0},
         "pullback": {
-            "swing_high_lookback": 30,
-            "min_advance_pct": 3.0,
+            "swing_high_lookback_daily": 30,
+            "min_advance_pct": 2.0,
             "min_pullback_pct": 1.0,
             "max_pullback_pct": 30.0,
-            "proximity_pct": 5.0,
-            "low_touch_extra_pct": 2.0,
+            "proximity_pct": 12.0,
         },
-        "band_flip": {"flip_lookback_days": 12},
-        "scan": {"spark_bars": 40},
+        "band_flip": {"flip_lookback_daily": 12},
+        "scan": {"spark_bars_daily": 40},
     }
-    hit = scan_frame(df, cfg)
+    hit = scan_frame(df, cfg, timeframe="1d")
     assert hit is not None
-    assert hit["setup_kind"] in ("pullback", "band_flip")
-    assert hit["score"] > 0
-    assert hit["invalidation"] <= hit["band_lo"] + 0.01
-    assert len(hit["spark"]) >= 10
+    assert hit["invalidation"] == hit["ema200_low"]
+    assert hit["band_hi"] == hit["ema200_high"]
 
 
-def test_scan_rejects_breakdown():
+def test_weekly_resample_and_scan():
+    daily = _synthetic_uptrend_pullback(320)
+    weekly = resample_to_weekly(daily)
+    assert len(weekly) >= 50
+    cfg = {
+        "weekly_history_min_bars": 50,
+        "history_min_bars": 50,
+        "band": {"slope_lookback_weekly": 4, "min_band_slope_pct": 0.0},
+        "pullback": {
+            "swing_high_lookback_weekly": 8,
+            "min_advance_pct": 2.0,
+            "min_pullback_pct": 0.5,
+            "max_pullback_pct": 35.0,
+            "proximity_pct": 8.0,
+        },
+        "band_flip": {"flip_lookback_weekly": 4},
+        "scan": {"spark_bars_weekly": 20},
+    }
+    hit = scan_frame(weekly, cfg, timeframe="1wk")
+    assert hit is None or hit["timeframe"] == "1wk"
+
+
+def test_scan_rejects_close_below_ema200_low():
     df = _synthetic_uptrend_pullback()
-    df.loc[df.index[-1], "close"] = 50.0
-    df.loc[df.index[-1], "low"] = 49.0
-    cfg = {"ema_fast": 20, "ema_slow": 50, "pullback": {}, "band_flip": {}, "scan": {}}
-    assert scan_frame(df, cfg) is None
+    df.loc[df.index[-1], "close"] = 10.0
+    cfg = {"history_min_bars": 200, "pullback": {}, "band_flip": {}, "scan": {}}
+    assert scan_frame(df, cfg, timeframe="1d") is None

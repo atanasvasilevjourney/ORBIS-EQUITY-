@@ -1,17 +1,13 @@
 "use client";
 
-import type { TrendBandSparkBar } from "@/lib/trendBandPullback";
+import type { PbEmaSparkBar } from "@/lib/trendBandPullback";
 
-export function BandPullbackSpark({
+export function Ema200BandSpark({
   bars,
-  emaFast,
-  emaSlow,
   width = 132,
   height = 44,
 }: {
-  bars: TrendBandSparkBar[];
-  emaFast: number;
-  emaSlow: number;
+  bars: PbEmaSparkBar[];
   width?: number;
   height?: number;
 }) {
@@ -24,7 +20,7 @@ export function BandPullbackSpark({
   const innerH = height - pad * 2;
   const ys: number[] = [];
   for (const b of slice) {
-    ys.push(b.close, b.emaFast, b.emaSlow);
+    ys.push(b.close, b.ema200High, b.ema200Low);
   }
   const min = Math.min(...ys);
   const max = Math.max(...ys);
@@ -42,9 +38,9 @@ export function BandPullbackSpark({
         return (
           <polygon
             key={`${b.date}-${i}`}
-            points={`${x(i - 1)},${y(a.emaFast)} ${x(i)},${y(b.emaFast)} ${x(i)},${y(b.emaSlow)} ${x(i - 1)},${y(a.emaSlow)}`}
+            points={`${x(i - 1)},${y(a.ema200High)} ${x(i)},${y(b.ema200High)} ${x(i)},${y(b.ema200Low)} ${x(i - 1)},${y(a.ema200Low)}`}
             fill={b.rising ? bull : bear}
-            opacity="0.2"
+            opacity="0.22"
           />
         );
       })}

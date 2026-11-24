@@ -1,4 +1,4 @@
--- Trend-band pullback scanner (EMA 20/50 cloud)
+-- Trend-band pullback scanner (pb_ema EMA200 high/low band)
 
 CREATE TABLE IF NOT EXISTS trend_band_scan_runs (
     asof_date       DATE PRIMARY KEY,

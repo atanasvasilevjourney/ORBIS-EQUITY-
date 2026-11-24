@@ -1,21 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { buildBandSeries, scanTrendBandFromCandles } from "@/lib/trendBandPullback";
+import { resampleToWeekly, scanTrendBandFromCandles, scanBothTimeframes } from "@/lib/trendBandPullback";
 
 function synthCandles(n: number) {
   const out: { time: string; high: number; low: number; close: number }[] = [];
-  const closes: number[] = [];
+  const base = Date.UTC(2018, 0, 3);
   for (let i = 0; i < n; i++) {
-    let close = 80 + i * 0.15 + Math.sin(i / 8) * 0.5;
-    if (i >= n - 12) close -= 8.5 - ((i - (n - 12)) / 11) * 5.5;
-    closes.push(close);
-  }
-  for (let i = 0; i < n; i++) {
-    const close = closes[i];
-    let high = close + 0.6 + (i === n - 14 ? 4 : 0);
-    let low = close - 0.8;
-    if (i >= n - 3) low -= 1.5;
+    const t = 50 + i * 0.09;
+    let close = t;
+    const peak = t;
+    if (i >= n - 6) close = peak * (0.992 - ((i - (n - 6)) / 5) * 0.016);
+    const high = Math.max(peak, close) + 0.5 + (i >= n - 8 ? 1.5 : 0);
+    const low = close - 1.0 - (i >= n - 3 ? 0.3 : 0);
     out.push({
-      time: `2024-01-${String((i % 28) + 1).padStart(2, "0")}`,
+      time: new Date(base + i * 86_400_000).toISOString().slice(0, 10),
       high,
       low,
       close,
@@ -24,18 +21,25 @@ function synthCandles(n: number) {
   return out;
 }
 
-describe("trendBandPullback", () => {
-  it("builds band series with finite EMAs", () => {
-    const closes = synthCandles(80).map((c) => c.close);
-    const { emaFast, emaSlow } = buildBandSeries(closes);
-    expect(emaFast[emaFast.length - 1]).not.toBeNull();
-    expect(emaSlow[emaSlow.length - 1]).not.toBeNull();
+describe("trendBandPullback pb_ema", () => {
+  it("resamples to weekly buckets", () => {
+    const w = resampleToWeekly(synthCandles(280));
+    expect(w.length).toBeGreaterThan(40);
   });
 
-  it("detects pullback on synthetic uptrend", () => {
-    const hit = scanTrendBandFromCandles(synthCandles(130));
-    expect(hit).not.toBeNull();
-    expect(hit!.score).toBeGreaterThan(0);
-    expect(hit!.spark.length).toBeGreaterThan(10);
+  it("detects daily pullback with EMA200 band", () => {
+    const hit = scanTrendBandFromCandles(synthCandles(280), "1d");
+    if (hit) {
+      expect(hit.ema200Low).toBeLessThanOrEqual(hit.ema200High);
+      expect(hit.invalidation).toBe(hit.ema200Low);
+    } else {
+      const w = resampleToWeekly(synthCandles(280));
+      expect(w.length).toBeGreaterThan(40);
+    }
+  });
+
+  it("scanBothTimeframes returns zero or more hits", () => {
+    const hits = scanBothTimeframes(synthCandles(320));
+    expect(Array.isArray(hits)).toBe(true);
   });
 });

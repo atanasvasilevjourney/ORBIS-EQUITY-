@@ -1,24 +1,38 @@
-# Two-EMA trend cloud (20/50): green when the band is rising, red when falling.
-# Heuristic scan only — not a trade signal.
+# pb_ema band: EMA200(high) .. EMA200(low). Heuristic scan — not a signal.
+# Runs alongside ema200 watchlist (close+high ribbon proximity); this module
+# targets pullback into the high/low band on daily and weekly.
 
-ema_fast: 20
-ema_slow: 50
-slope_lookback: 5
-min_band_slope_pct: 0.02   # mid-band must rise this % over slope_lookback bars
+ema_period: 200
+history_min_bars: 200
+# Daily loads need long warmup so weekly resample has ≥220 weeks (see ema200_scanner.yaml).
+ema_warmup_daily_bars: 1260
+weekly_history_min_bars: 220
+
+band:
+  slope_lookback_daily: 20
+  slope_lookback_weekly: 8
+  min_band_slope_pct: 0.0
 
 pullback:
-  swing_high_lookback: 40
-  min_advance_pct: 6.0      # recent high vs band low at swing low anchor
+  swing_high_lookback_daily: 40
+  swing_high_lookback_weekly: 16
+  min_advance_pct: 6.0
   min_pullback_pct: 2.5
-  max_pullback_pct: 22.0
-  proximity_pct: 2.5        # close within this % of band upper edge (touch)
-  low_touch_extra_pct: 1.5  # allow wick through band_hi by this amount
+  max_pullback_pct: 28.0
+  proximity_pct: 3.0
+  low_touch_extra_pct: 1.5
 
 band_flip:
-  flip_lookback_days: 12    # flag setups where band turned rising within N sessions
+  flip_lookback_daily: 12
+  flip_lookback_weekly: 6
+
+timeframes:
+  - "1d"
+  - "1wk"
 
 universe:
-  use_loop_universe: true
+  use_ema200_universe: true
+  include_crypto: true
   supplements:
     - USO
     - XLE
@@ -26,12 +40,23 @@ universe:
     - XLF
     - DBC
     - GLD
-    - AZN
+    - SPY
+    - QQQ
+    - IWM
+  indices:
+    - ^GSPC
+    - ^NDX
+    - ^RUT
+  crypto:
+    - BTC-USD
+    - ETH-USD
+    - SOL-USD
 
 filters:
   min_price: 5.0
-  min_history_bars: 80
 
 scan:
-  max_setups: 60
-  spark_bars: 90
+  max_setups_per_tf: 50
+  spark_bars_daily: 90
+  spark_bars_weekly: 52
+  dual_timeframe_bonus: 12
