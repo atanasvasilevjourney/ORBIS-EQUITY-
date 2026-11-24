@@ -34,4 +34,7 @@ python -m pipeline.ema200_scanner.jobs.nightly || echo "[compute] ema200 nightly
 echo "[compute] triangle pattern scan"
 python -m pipeline.triangle_scanner.jobs.nightly || echo "[compute] triangle nightly skipped"
 
+echo "[compute] trend-band pullback scan"
+python -m pipeline.trend_band_scanner.jobs.nightly || echo "[compute] trend-band nightly skipped"
+
 echo "[compute] signals done"

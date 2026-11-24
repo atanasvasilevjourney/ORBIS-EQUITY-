@@ -1,0 +1,37 @@
+# Two-EMA trend cloud (20/50): green when the band is rising, red when falling.
+# Heuristic scan only — not a trade signal.
+
+ema_fast: 20
+ema_slow: 50
+slope_lookback: 5
+min_band_slope_pct: 0.02   # mid-band must rise this % over slope_lookback bars
+
+pullback:
+  swing_high_lookback: 40
+  min_advance_pct: 6.0      # recent high vs band low at swing low anchor
+  min_pullback_pct: 2.5
+  max_pullback_pct: 22.0
+  proximity_pct: 2.5        # close within this % of band upper edge (touch)
+  low_touch_extra_pct: 1.5  # allow wick through band_hi by this amount
+
+band_flip:
+  flip_lookback_days: 12    # flag setups where band turned rising within N sessions
+
+universe:
+  use_loop_universe: true
+  supplements:
+    - USO
+    - XLE
+    - XLV
+    - XLF
+    - DBC
+    - GLD
+    - AZN
+
+filters:
+  min_price: 5.0
+  min_history_bars: 80
+
+scan:
+  max_setups: 60
+  spark_bars: 90
