@@ -20,6 +20,7 @@ from pipeline.clients.lse_api import LSEClient
 from pipeline.clients.yahoo_financials import fetch_yahoo_financials_batch
 from pipeline.config.settings import FINANCIAL_REPORT_TYPES, SupabaseConfig
 from pipeline.utils.ci_log import append_step_summary_json, gh_error, gh_warning
+from pipeline.utils.financial_reports_health import is_lse_auth_error
 from pipeline.utils.supabase import fetch_active_symbols
 
 load_dotenv()
@@ -153,6 +154,12 @@ def run_financial_reports_ingest(sb: Client | None = None) -> FinancialReportsIn
     except Exception as exc:
         lse_error = str(exc)
         logger.exception("LSE financial reports fetch failed")
+        if is_lse_auth_error(exc):
+            gh_error(
+                "LSE_API_KEY rejected by London Strategic Edge (401/403). "
+                "Renew the key in the provider dashboard and update the GitHub Actions secret "
+                "LSE_API_KEY (Settings → Secrets and variables → Actions). Yahoo fallback will run."
+            )
         gh_warning(f"LSE financial reports unavailable ({exc}); will use Yahoo fallback")
 
     lse_by_symbol: dict[str, list] = defaultdict(list)
@@ -227,6 +234,12 @@ def main() -> None:
         gh_error(msg)
         logger.error("=== Financial Reports Ingest FAILED: 0 rows upserted ===")
         sys.exit(1)
+
+    if is_lse_auth_error(result.lse_error):
+        gh_error(
+            "Financial reports ingest used Yahoo fallback only — LSE_API_KEY is invalid or expired. "
+            "Renew at London Strategic Edge and update GitHub secret LSE_API_KEY."
+        )
 
     logger.info("=== Financial Reports Ingest Complete: %d upserted ===", result.upserted)
 

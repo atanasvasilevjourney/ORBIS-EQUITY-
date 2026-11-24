@@ -296,23 +296,50 @@ def _run_f_score(sb, run) -> None:
     run.set_headline(f"{computed} scored · {dist[:120]}")
     run.set_row_counts(scored=computed, updates=len(updates))
 
-    from pipeline.utils.ci_log import append_step_summary_json, gh_error
+    from pipeline.utils.ci_log import append_step_summary_json, gh_error, gh_warning
+    from pipeline.utils.financial_reports_health import (
+        count_financial_report_rows,
+        f_score_degradation_allowed,
+        financial_reports_latest_known_on,
+    )
 
     if computed == 0:
+        report_rows = count_financial_report_rows(sb)
+        report_known = financial_reports_latest_known_on(sb)
+        degrade_ok, degrade_reason = f_score_degradation_allowed(sb, as_of=as_of)
+        summary = {
+            "scored": 0,
+            "universe_symbols": len(symbols),
+            "income_symbols": len(income_reports),
+            "balance_symbols": len(balance_reports),
+            "cashflow_symbols": len(cashflow_reports),
+            "financial_report_rows": report_rows,
+            "financial_reports_latest_known_on": (
+                report_known.isoformat() if report_known else None
+            ),
+            "degraded": degrade_ok,
+            "degrade_reason": degrade_reason,
+        }
+        append_step_summary_json("F-Score compute", summary)
+
+        if degrade_ok:
+            msg = (
+                "F-Score scored 0 symbols this run — keeping prior snapshot "
+                f"({degrade_reason}). "
+                f"DB rows={report_rows}, income/balance/cashflow symbol groups="
+                f"{len(income_reports)}/{len(balance_reports)}/{len(cashflow_reports)}."
+            )
+            gh_warning(msg)
+            logger.warning(msg)
+            run.mark_partial("degraded: reused prior F-Score snapshot")
+            run.set_headline(f"0 new scores — reused prior snapshot ({degrade_reason[:80]})")
+            return
+
         msg = (
-            "F-Score scored 0 symbols — financial_reports may be empty "
+            "F-Score scored 0 symbols — financial_reports may be empty or too stale "
             f"(income symbols={len(income_reports)}, balance={len(balance_reports)}, "
-            f"cashflow={len(cashflow_reports)}). Renew LSE_API_KEY or run financial_reports ingest."
-        )
-        append_step_summary_json(
-            "F-Score compute",
-            {
-                "scored": 0,
-                "universe_symbols": len(symbols),
-                "income_symbols": len(income_reports),
-                "balance_symbols": len(balance_reports),
-                "cashflow_symbols": len(cashflow_reports),
-            },
+            f"cashflow={len(cashflow_reports)}, db_rows={report_rows}). "
+            "Renew LSE_API_KEY or run financial_reports ingest."
         )
         gh_error(msg)
         run.mark_partial("zero scores")

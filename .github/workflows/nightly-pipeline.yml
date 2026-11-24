@@ -238,13 +238,19 @@ jobs:
           LSE_API_KEY: ${{ secrets.LSE_API_KEY }}
 
   # ---------------------------------------------------------------------------
-  # 5. Compute Signals — runs every weekday after prices are ingested
+  # 5. Compute Signals — after prices; on Mondays wait for weekly financial reports
   # ---------------------------------------------------------------------------
   compute-signals:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: ingest-prices
-    if: always() && needs.ingest-prices.result == 'success'
+    timeout-minutes: 35
+    needs: [ingest-prices, ingest-financial-reports, ingest-fundamentals]
+    if: >-
+      always()
+      && needs.ingest-prices.result == 'success'
+      && (needs.ingest-financial-reports.result == 'success'
+          || needs.ingest-financial-reports.result == 'skipped')
+      && (needs.ingest-fundamentals.result == 'success'
+          || needs.ingest-fundamentals.result == 'skipped')
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
