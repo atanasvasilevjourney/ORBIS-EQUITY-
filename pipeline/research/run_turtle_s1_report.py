@@ -21,7 +21,7 @@ from pipeline.research.turtle_s1_harness import run_all
 
 OUT = Path(__file__).resolve().parent / "TURTLE_S1"
 DEFAULT_END = date(2026, 11, 21)
-PR_URL_PLACEHOLDER = "https://github.com/atanasvasilevjourney/ORBIS-EQUITY-/pull/TBD"
+DEFAULT_PR_URL = "https://github.com/atanasvasilevjourney/ORBIS-EQUITY-/pull/131"
 
 
 def _equity_curve(daily: pd.Series) -> pd.Series:
@@ -181,7 +181,7 @@ def main() -> None:
     parser.add_argument("--end", default=DEFAULT_END.isoformat())
     parser.add_argument("--quick", action="store_true")
     parser.add_argument("--skip-loop-v2", action="store_true")
-    parser.add_argument("--pr-url", default=PR_URL_PLACEHOLDER)
+    parser.add_argument("--pr-url", default=DEFAULT_PR_URL)
     parser.add_argument("--out", type=Path, default=OUT)
     args = parser.parse_args()
     end = date.fromisoformat(args.end)

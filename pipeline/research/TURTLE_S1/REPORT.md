@@ -1,6 +1,6 @@
 # Turtle System 1 Donchian backtest
 
-**PR:** https://github.com/atanasvasilevjourney/ORBIS-EQUITY-/pull/TBD
+**PR:** https://github.com/atanasvasilevjourney/ORBIS-EQUITY-/pull/131
 
 **Evaluation end:** 2026-11-21 · **Deflated Sharpe trials:** 14
 
