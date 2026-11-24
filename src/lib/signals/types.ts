@@ -1,5 +1,5 @@
 /**
- * ORBIS common signal schema (v1) — TypeScript mirrors for adapters and API.
+ * Iskrel common signal schema (v1) — TypeScript mirrors for adapters and API.
  * Canonical JSON Schema: docs/signals/schema.signal.v1.json
  * Narrative spec: docs/signals/common-signal-schema.md
  */
@@ -39,7 +39,7 @@ export type SignalEvidence = {
 };
 
 /** Single normalized row from any upstream adapter. */
-export type OrbisSignalV1 = {
+export type IskrelSignalV1 = {
   run_id: string;
   as_of: string;
   source_app: SignalSourceApp;

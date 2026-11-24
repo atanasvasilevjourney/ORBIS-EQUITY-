@@ -1,4 +1,4 @@
-"""Orbis Equity pipeline configuration."""
+"""Iskrel Equity pipeline configuration."""
 import os
 from dataclasses import dataclass, field
 

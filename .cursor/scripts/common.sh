@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared configuration + helpers for the ORBIS EQUITY local dev stack.
+# Shared configuration + helpers for the Iskrel Equity local dev stack.
 #
 # The app (Next.js) and pipeline (Python) both talk to Supabase's PostgREST
 # HTTP API. There is no Docker in the Cloud Agent VM, so instead of the

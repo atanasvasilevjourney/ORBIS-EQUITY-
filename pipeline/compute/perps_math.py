@@ -1,7 +1,7 @@
 """TEMA + Carver math for the cash-equity paper desk.
 
 QMIE (atanasvasilevjourney/QMIE) does not ship strategies named TEMA or
-Carver. This module is the ORBIS EQUITY mapping:
+Carver. This module is the Iskrel Equity mapping:
 
   TEMA    Triple EMA swing stack (9/99/199) — 9 is the trigger,
           99 the swing, 199 the regime. MACD(12,26,9) is the

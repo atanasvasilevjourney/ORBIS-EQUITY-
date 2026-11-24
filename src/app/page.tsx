@@ -263,7 +263,7 @@ export default function Home() {
     <div className="py-6 space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3 px-1">
         <div>
-          <p className="section-label">Orbis Equity</p>
+          <p className="section-label">Iskrel Equity</p>
           <h1 className="font-display text-xl font-semibold tracking-tight text-[var(--text-primary)]">
             Financial intelligence
           </h1>
@@ -496,7 +496,7 @@ export default function Home() {
             {d!.watchlistMovers.map((m) => (
               <ChipLink key={m.symbol} href={`/ticker/${m.symbol}`}>
                 <span className="font-bold">{m.symbol}</span>
-                <span className="text-[var(--text-muted)]">O {m.orbisScore ?? "—"}</span>
+                <span className="text-[var(--text-muted)]">I {m.orbisScore ?? "—"}</span>
                 <span style={{ color: "var(--accent-bull)" }}>
                   {m.dayPct != null ? `+${m.dayPct.toFixed(1)}%` : ""}
                 </span>
@@ -538,7 +538,7 @@ export default function Home() {
 
       <section className="space-y-3">
         <div className="px-1">
-          <p className="section-label">Orbis Equity modules</p>
+          <p className="section-label">Iskrel Equity modules</p>
           <p className="mt-1 text-[11px] text-[var(--text-muted)]">
             {loading
               ? "Desk counts load with the cockpit."

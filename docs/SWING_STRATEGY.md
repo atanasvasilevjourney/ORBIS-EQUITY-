@@ -1,4 +1,4 @@
-# ORBIS EQUITY Swing Strategy
+# Iskrel Equity Swing Strategy
 
 EOD equity swing stack. Highest leverage first: relative strength and regime
 gates beat entry polish. Parameter constants are **global** and promoted only

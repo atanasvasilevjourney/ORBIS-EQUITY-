@@ -75,7 +75,7 @@ type ScreenerSortKey =
 
 const SCREENER_SORT_LABELS: Record<ScreenerSortKey, string> = {
   symbol: "Ticker",
-  orbisScore: "Orbis",
+  orbisScore: "Iskrel",
   dayPct: "Day %",
   relVolume: "Rel vol",
   pctFromHigh: "Off high",
@@ -296,7 +296,7 @@ export function WatchlistChartsWorkspace({ variant = "tc2000" }: Props) {
                   <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--panel-border)] bg-[var(--panel-header)]">
                     <SortableTh columnKey="symbol" label="TICKER" levels={levels} onSort={onHeaderClick} />
                     <th className="text-left px-3 py-2">STATUS</th>
-                    <SortableTh columnKey="orbisScore" label="ORBIS" levels={levels} align="right" onSort={onHeaderClick} />
+                    <SortableTh columnKey="orbisScore" label="ISKREL" levels={levels} align="right" onSort={onHeaderClick} />
                     <SortableTh columnKey="dayPct" label="DAY" levels={levels} align="right" onSort={onHeaderClick} />
                     <SortableTh columnKey="relVolume" label="REL VOL" levels={levels} align="right" onSort={onHeaderClick} />
                     <SortableTh columnKey="pctFromHigh" label="OFF HIGH" levels={levels} align="right" onSort={onHeaderClick} />

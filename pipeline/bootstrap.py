@@ -1,4 +1,4 @@
-"""Bootstrap: populate Orbis Equity database using yfinance (free, no API key).
+"""Bootstrap: populate Iskrel Equity database using yfinance (free, no API key).
 
 Scrapes S&P 500 tickers from Wikipedia, fetches prices + fundamentals
 via yfinance, then runs compute pipeline (trend_radar, f_score, aggregates).
