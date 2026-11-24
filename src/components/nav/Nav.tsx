@@ -24,6 +24,7 @@ const NAV_MORE = [
   { href: "/analysis", label: "ANALYZE", title: "Research sleeve" },
   { href: "/bias", label: "BIAS", title: "Research sleeve" },
   { href: "/triangle", label: "TRI", title: "Research sleeve" },
+  { href: "/trend-band", label: "BAND", title: "Trend-band pullback scanner" },
   { href: "/cash", label: "CASH", title: "Research sleeve" },
   { href: "/factors", label: "FACTORS", title: "Factor investing desk" },
   { href: "/fundamentals/screener", label: "FA SCR", title: "Factor screener" },

@@ -1,0 +1,1 @@
+"""Trend-band pullback scanner — rising EMA cloud pullbacks (pb_ema-style)."""
