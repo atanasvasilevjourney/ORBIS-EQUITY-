@@ -4,8 +4,6 @@ import { fetchAll } from "@/lib/supabase/paginate";
 import { isMissingRelation } from "@/lib/supabase/errors";
 import { fetchYahooDaily } from "@/lib/yahooDaily";
 import { scanTrendBandFromCandles, type TrendBandHit, type TrendBandSparkBar } from "@/lib/trendBandPullback";
-import type { Candle } from "@/components/chart/TradingChart";
-
 export const revalidate = 900;
 export const maxDuration = 60;
 
@@ -84,15 +82,14 @@ async function liveScanSample(symbols: string[], limit: number): Promise<TrendBa
   for (const sym of symbols.slice(0, limit)) {
     const bars = await fetchYahooDaily(sym, "2y");
     if (bars.length < 80) continue;
-    const candles: Candle[] = bars.map((b) => ({
-      time: b.date,
-      open: b.open,
-      high: b.high,
-      low: b.low,
-      close: b.close,
-      volume: b.volume,
-    }));
-    const hit = scanTrendBandFromCandles(candles);
+    const hit = scanTrendBandFromCandles(
+      bars.map((b) => ({
+        time: String(b.date).slice(0, 10),
+        high: b.high,
+        low: b.low,
+        close: b.close,
+      }))
+    );
     if (!hit) continue;
     out.push({
       symbol: sym,
@@ -161,8 +158,8 @@ export async function GET(req: NextRequest) {
 
     if (!mapped.length) {
       dataSource = "live_yahoo";
-      const syms = [
-        ...new Set([
+      const syms = Array.from(
+        new Set([
           ...uni.map((u) => u.symbol),
           "USO",
           "XLE",
@@ -170,8 +167,8 @@ export async function GET(req: NextRequest) {
           "AZN",
           "SPY",
           "QQQ",
-        ]),
-      ];
+        ])
+      );
       mapped = await liveScanSample(syms, 45);
     }
 
