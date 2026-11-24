@@ -238,13 +238,17 @@ jobs:
           LSE_API_KEY: ${{ secrets.LSE_API_KEY }}
 
   # ---------------------------------------------------------------------------
-  # 5. Compute Signals — runs every weekday after prices are ingested
+  # 5. Compute Signals — weekday after prices; Monday also after financial reports
   # ---------------------------------------------------------------------------
   compute-signals:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: ingest-prices
-    if: always() && needs.ingest-prices.result == 'success'
+    needs: [ingest-prices, ingest-financial-reports]
+    if: >-
+      always()
+      && needs.ingest-prices.result == 'success'
+      && (needs.ingest-financial-reports.result == 'success'
+          || needs.ingest-financial-reports.result == 'skipped')
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -299,6 +303,8 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: Run F-Score compute
+        id: f_score
+        continue-on-error: true
         run: python -m pipeline.compute.f_score
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -378,18 +384,22 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
-      - name: Report optional desk failures
+      - name: Report compute job status
         if: always()
         run: |
-          failed=0
+          optional_failed=0
           for pair in digest:${{ steps.digest.outcome }} skew:${{ steps.skew.outcome }} orb:${{ steps.orb.outcome }} analysis:${{ steps.analysis.outcome }} quantropy:${{ steps.quantropy.outcome }} bias:${{ steps.bias.outcome }} perps:${{ steps.perps.outcome }} rotate:${{ steps.rotate.outcome }}; do
             name="${pair%%:*}"; outcome="${pair##*:}"
             if [ "$outcome" = "failure" ]; then
               echo "::warning title=Optional desk failed::$name failed; core signals still ran"
-              failed=$((failed+1))
+              optional_failed=$((optional_failed+1))
             fi
           done
-          echo "optional desk failures: $failed" >> "$GITHUB_STEP_SUMMARY"
+          echo "optional desk failures: $optional_failed" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.f_score.outcome }}" = "failure" ]; then
+            echo "::error title=F-Score compute failed::f_score exited non-zero after factor desks were attempted"
+            exit 1
+          fi
 
   # ---------------------------------------------------------------------------
   # 6. Ingest Earnings + News — runs every weekday
@@ -397,8 +407,12 @@ jobs:
   ingest-earnings-news:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: compute-signals
-    if: always() && needs.compute-signals.result == 'success'
+    needs: [ingest-prices, compute-signals]
+    if: >-
+      always()
+      && needs.ingest-prices.result == 'success'
+      && (needs.compute-signals.result == 'success'
+          || needs.compute-signals.result == 'failure')
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
