@@ -3,6 +3,10 @@ import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { matchesScreener, parseScreenerQuery, type ScreenerQuery } from "@/lib/fundamentalsScreener";
 import { orbisScore } from "@/lib/orbisScore";
+import { fetchSessionQuotes } from "@/lib/sessionQuotes";
+import { refreshFundamentalQuotes, sanitizeMargins, sanitizePeRatio } from "@/lib/fundamentalsSanity";
+import { displaySector } from "@/lib/displaySector";
+import { isResearchDeskEligible } from "@/lib/equityUniverseFilter";
 
 export const revalidate = 900;
 
@@ -16,14 +20,27 @@ function mapRow(
     exchange: string | null;
     tier: string | null;
   },
-  radar: { state: number; quality_rank: number } | undefined
+  radar: { state: number; quality_rank: number } | undefined,
+  quote?: import("@/lib/sessionQuotes").SessionQuote
 ) {
   const rank = radar?.quality_rank ?? null;
   const composite = r.composite_factor_score as number | null;
+  const refreshed = refreshFundamentalQuotes({
+    snapshotPrice: (r.price as number | null) ?? null,
+    snapshotMarketCap: (r.market_cap as number | null) ?? null,
+    livePrice: quote?.last ?? null,
+    quoteAsOf: quote?.asOf ?? null,
+    quoteStale: quote?.stale ?? true,
+  });
+  const margins = sanitizeMargins(
+    r.gross_margin as number | null,
+    r.operating_margin as number | null,
+    r.net_margin as number | null
+  );
   return {
     symbol: r.symbol as string,
     companyName: u.company_name ?? "",
-    sector: u.sector ?? "",
+    sector: displaySector(u),
     industry: u.industry ?? "",
     country: u.country ?? "",
     exchange: u.exchange ?? "",
@@ -31,9 +48,16 @@ function mapRow(
     state: radar?.state ?? null,
     rank,
     orbisScore: orbisScore(rank ?? 0, composite),
-    price: r.price as number | null,
-    marketCap: r.market_cap as number | null,
-    pe: r.pe_ratio as number | null,
+    price: refreshed.price,
+    priceAsOf: refreshed.priceAsOf,
+    quoteStale: refreshed.quoteStale,
+    snapshotPrice: refreshed.snapshotPrice,
+    marketCap: refreshed.marketCap,
+    snapshotMarketCap: refreshed.snapshotMarketCap,
+    marketCapImpliedFromPrice: refreshed.marketCapImpliedFromPrice,
+    priceVendorMismatch: refreshed.priceVendorMismatch,
+    pe: sanitizePeRatio(r.pe_ratio as number | null),
+    snapshotPe: r.pe_ratio as number | null,
     pb: r.pb_ratio as number | null,
     ps: r.ps_ratio as number | null,
     evEbitda: r.ev_ebitda as number | null,
@@ -99,7 +123,19 @@ export async function GET(req: NextRequest) {
     const uniMap = new Map(universe.map((r) => [r.symbol, r]));
     const radarMap = new Map(radar.map((r) => [r.symbol, r]));
 
-    let filtered = fundamentals.filter((r) => uniMap.has(r.symbol as string));
+    let filtered = fundamentals.filter((r) => {
+      const sym = r.symbol as string;
+      const u = uniMap.get(sym);
+      if (!u) return false;
+      return isResearchDeskEligible({
+        symbol: sym,
+        tier: u.tier,
+        is_active: true,
+        company_name: u.company_name,
+        sector: u.sector,
+        industry: u.industry,
+      });
+    });
 
     filtered = filtered.filter((r) => {
       const sym = r.symbol as string;
@@ -122,9 +158,14 @@ export async function GET(req: NextRequest) {
     const sectors = Array.from(new Set(universe.map((r) => r.sector).filter(Boolean))).sort() as string[];
     const industries = Array.from(new Set(universe.map((r) => r.industry).filter(Boolean))).sort() as string[];
 
+    const quotes = await fetchSessionQuotes(sb, filtered.map((r) => r.symbol as string), undefined, {
+      fillMissing: true,
+      fillLimit: 80,
+    });
+
     const rows = filtered.map((r) => {
       const sym = r.symbol as string;
-      return mapRow(r, uniMap.get(sym)!, radarMap.get(sym));
+      return mapRow(r, uniMap.get(sym)!, radarMap.get(sym), quotes.get(sym));
     });
 
     return NextResponse.json({

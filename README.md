@@ -312,4 +312,24 @@ Each input is cross-sectionally percentile-ranked on its own (0–100, average r
 
 All routes under `/api/*` are readable by the UI. External access requires the `x-api-key` header when `API_SECRET` is set.
 
-The UI is recognised by the browser's `Sec-Fetch-Site` header, which any non-browser client can also send, so this is a convenience gate and not authentication. In production with no `API_SECRET`, requests that do not look like browser fetches are refused. Put real auth in front of the app if the data must be private.
+The UI is recognised by the browser's `Sec-Fetch-Site: same-origin` header on same-site fetches. Any other client without the header receives **HTTP 401** when `API_SECRET` is set in production — this is intentional (see `src/middleware.ts`), not a broken route. Unauthenticated market-report builders must set `x-api-key: $API_SECRET` or call through the public web UI origin.
+
+The gate is a shared secret, not full authentication. In production with no `API_SECRET`, requests that do not look like browser fetches are refused. Put real auth in front of the app if the data must be private.
+
+### Quote freshness on JSON APIs
+
+Screener, fundamentals, and dashboard routes overlay **`prices_daily`** session closes on top of snapshot fields:
+
+| Field | Meaning |
+|-------|---------|
+| `price` / `dayPct` | Latest ingested EOD close and close-to-close % |
+| `priceAsOf` | Session date (`YYYY-MM-DD`) for that quote |
+| `quoteStale` | `true` when the bar is more than one NYSE session behind the expected EOD |
+| `snapshotPrice` | Vendor value in `fundamentals_snapshot` (may lag) |
+| `marketCapImpliedFromPrice` | Market cap recomputed from live price × implied shares |
+| `optionsFlowProxy` | `{ value, isProxy: true, definition }` — **price × volume**, not options tape |
+| `breadth.onList` / `greens` | Watchlist names (+4% & 2× vol), **not** market advancers |
+| `breadth.advancersPct` | Share of universe up on the latest session close |
+| `postureBasis` | Always `advancers_pct` — posture equals that percentage (0–100) |
+| `sectorBreadth` | Per-sector advancers % and avg session return (tape-based best/worst sectors) |
+| `priceVendorMismatch` | Vendor snapshot price differed from `prices_daily` by more than 15% |

@@ -9,6 +9,9 @@ import {
   isPostureBriefStale,
   sectorLeaders,
 } from "@/lib/postureDesk";
+import { fetchSessionQuotes } from "@/lib/sessionQuotes";
+import { countAdvancersDecliners } from "@/lib/liveBreadth";
+import { buildBreadthBlock } from "@/lib/breadthLabels";
 
 export const revalidate = 900;
 
@@ -39,8 +42,11 @@ export async function GET() {
     const total = radar.length;
     const greens = radar.filter((r) => r.state === 1).length;
     const reds = radar.filter((r) => r.state === -1).length;
-    const decliners = radar.filter((r) => (r.z_mom ?? 0) < 0).length;
-    const advancers = radar.filter((r) => (r.z_mom ?? 0) > 0).length;
+    const quotes = await fetchSessionQuotes(
+      sb,
+      radar.map((r) => r.symbol)
+    );
+    const { advancers, decliners } = countAdvancersDecliners(radar, quotes);
     const avgRank = total > 0
       ? Math.round(radar.reduce((s, r) => s + r.quality_rank, 0) / total)
       : 0;
@@ -81,25 +87,17 @@ export async function GET() {
       postureBriefStale,
       briefText: postureBriefStale ? null : brief?.brief ?? null,
       posture: livePosture,
+      postureBasis: "advancers_pct",
+      postureDefinition:
+        "Posture score (0–100) equals the percentage of active universe names with a positive latest session close-to-close return.",
       postureLabel: liveLabel,
-      breadth: {
+      breadth: buildBreadthBlock({
         total,
-        /** Names on the module-1 watchlist (day ≥ +4%, vol ≥ 2× avg). */
         onList: greens,
-        onListPct: total > 0 ? Math.round((greens / total) * 100) : 0,
-        /** Names with a down day (close below prior close). */
-        downDay: decliners,
-        downDayPct: total > 0 ? Math.round((decliners / total) * 100) : 0,
         onListDown: reds,
-        onListDownPct: total > 0 ? Math.round((reds / total) * 100) : 0,
-        /** Share of universe up on the day — matches pipeline posture. */
-        advancersPct: total > 0 ? Math.round((advancers / total) * 100) : 0,
-        /** @deprecated Use onListPct — old label implied market breadth. */
-        greens,
-        reds,
-        pctGreen: total > 0 ? Math.round((greens / total) * 100) : 0,
-        pctRed: total > 0 ? Math.round((reds / total) * 100) : 0,
-      },
+        downDay: decliners,
+        advancers,
+      }),
       avgRank,
       bestSector:
         postureBriefStale || !breadth?.best_sector
