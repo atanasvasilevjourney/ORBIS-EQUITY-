@@ -438,11 +438,13 @@ export async function GET() {
     const livePosture =
       !postureBriefStale && storedPosture.score != null
         ? storedPosture.score
-        : storedPosture.score ?? liveFallbackPosture;
+        : liveFallbackPosture;
     const postureLabel =
       !postureBriefStale && storedPosture.label
         ? storedPosture.label
-        : storedPosture.label ?? (livePosture != null ? computePostureLabel(livePosture) : null);
+        : livePosture != null
+          ? computePostureLabel(livePosture)
+          : null;
 
     const sectorBySymbol = new Map(
       universe.map((u) => [u.symbol, (u.sector?.trim() || "Unclassified").trim() || "Unclassified"])

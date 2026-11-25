@@ -92,11 +92,15 @@ export async function GET() {
     const posture =
       !postureBriefStale && storedPosture.score != null
         ? storedPosture.score
-        : storedPosture.score ?? (liveAdvancers != null ? computePostureScore(liveAdvancers) : null);
+        : liveAdvancers != null
+          ? computePostureScore(liveAdvancers)
+          : null;
     const postureLabel =
       !postureBriefStale && storedPosture.label
         ? storedPosture.label
-        : storedPosture.label ?? (posture != null ? computePostureLabel(posture) : null);
+        : posture != null
+          ? computePostureLabel(posture)
+          : null;
 
     return NextResponse.json({
       asOfDate: pricesAsOf ?? briefAsOf,
