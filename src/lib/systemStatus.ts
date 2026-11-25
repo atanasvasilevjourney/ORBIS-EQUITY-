@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { evaluateFreshness, lastExpectedEodDate, nyCalendarDate } from "@/lib/freshness";
+import { isTrendRadarRowStale } from "@/lib/postureDesk";
 
 type PipelineRunRow = {
   run_id: string;
@@ -37,6 +38,8 @@ export type SystemStatus = {
   expectedEodDate: string;
   pricesAsOf: string | null;
   dailyBriefAsOf: string | null;
+  trendRadarAsOf: string | null;
+  trendRadarStale: boolean;
   loopAsOf: string | null;
   freshness: ReturnType<typeof evaluateFreshness>;
   modules: ModuleStatus[];
@@ -45,9 +48,15 @@ export type SystemStatus = {
 };
 
 export async function buildSystemStatus(sb: SupabaseClient): Promise<SystemStatus> {
-  const [priceRow, brief, loopRun, pipelineRuns, ingestRuns, triangleRun] = await Promise.all([
+  const [priceRow, brief, radarMeta, loopRun, pipelineRuns, ingestRuns, triangleRun] = await Promise.all([
     sb.from("prices_daily").select("date").order("date", { ascending: false }).limit(1).maybeSingle(),
     sb.from("daily_brief").select("asof_date").order("asof_date", { ascending: false }).limit(1).maybeSingle(),
+    sb
+      .from("trend_radar")
+      .select("computed_at")
+      .order("computed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
     sb.from("paper_loop_runs").select("asof_date").order("computed_at", { ascending: false }).limit(1).maybeSingle(),
     fetchAll<PipelineRunRow>(
       sb,
@@ -77,6 +86,11 @@ export async function buildSystemStatus(sb: SupabaseClient): Promise<SystemStatu
 
   const pricesAsOf = priceRow.data?.date?.slice?.(0, 10) ?? (priceRow.data?.date as string | null) ?? null;
   const dailyBriefAsOf = brief.data?.asof_date?.slice?.(0, 10) ?? null;
+  const trendRadarAsOf =
+    radarMeta.data?.computed_at?.slice?.(0, 10) ??
+    (radarMeta.data?.computed_at as string | null) ??
+    null;
+  const trendRadarStale = isTrendRadarRowStale(trendRadarAsOf, pricesAsOf);
   const loopAsOf = loopRun.data?.asof_date?.slice?.(0, 10) ?? null;
 
   const latestBySource = new Map<string, PipelineRunRow>();
@@ -116,6 +130,8 @@ export async function buildSystemStatus(sb: SupabaseClient): Promise<SystemStatu
     expectedEodDate: lastExpectedEodDate(),
     pricesAsOf,
     dailyBriefAsOf,
+    trendRadarAsOf,
+    trendRadarStale,
     loopAsOf,
     freshness,
     modules: modules.sort((a, b) => a.source.localeCompare(b.source)),

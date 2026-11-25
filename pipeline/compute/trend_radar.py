@@ -198,27 +198,11 @@ def _run_trend_radar(sb, run) -> None:
     existing_rows = fetch_all(sb, "trend_radar", "symbol,state,state_changed_at")
     prev_state_map = {r["symbol"]: r for r in existing_rows}
 
-    cutoff = (date.today() - timedelta(days=120)).isoformat()
-    all_prices: list[dict] = []
-    page_size = 5000
-    offset = 0
-    logger.info("Fetching prices since %s...", cutoff)
+    from pipeline.utils.supabase import fetch_prices_since
 
-    while True:
-        resp = (
-            sb.table("prices_daily")
-            .select("symbol,date,open,high,low,close,volume")
-            .gte("date", cutoff)
-            .order("symbol")
-            .order("date")
-            .range(offset, offset + page_size - 1)
-            .execute()
-        )
-        rows = resp.data or []
-        all_prices.extend(rows)
-        if len(rows) < page_size:
-            break
-        offset += page_size
+    cutoff = (date.today() - timedelta(days=120)).isoformat()
+    logger.info("Fetching prices since %s...", cutoff)
+    all_prices = fetch_prices_since(sb, cutoff)
 
     logger.info("Fetched %d price rows, processing...", len(all_prices))
 
@@ -271,11 +255,53 @@ def _run_trend_radar(sb, run) -> None:
             len(results), errors, len(symbols) - len(results) - errors,
         )
 
+    computed_syms = {r["symbol"] for r in results}
+    stale_active = active_symbols - computed_syms
+    if stale_active:
+        stale_list = sorted(stale_active)
+        for j in range(0, len(stale_list), 100):
+            batch = stale_list[j : j + 100]
+            try:
+                sb.table("trend_radar").delete().in_("symbol", batch).execute()
+            except Exception:
+                logger.exception("Failed to delete stale trend_radar rows")
+
+    inactive = {r["symbol"] for r in existing_rows if r.get("symbol")} - active_symbols
+    if inactive:
+        dead = sorted(inactive)
+        for j in range(0, len(dead), 100):
+            batch = dead[j : j + 100]
+            try:
+                sb.table("trend_radar").delete().in_("symbol", batch).execute()
+            except Exception:
+                logger.exception("Failed to delete inactive trend_radar rows")
+
+    expected = len(symbols)
+    coverage = (len(results) / expected) if expected else 0.0
+    from pipeline.compute.posture_composite import load_posture_config
+
+    min_cov = float(load_posture_config().get("trend_radar_min_coverage", 0.9))
+    if expected and coverage < min_cov:
+        msg = (
+            f"trend_radar coverage {coverage:.1%} below {min_cov:.0%} "
+            f"({len(results)}/{expected} active symbols)"
+        )
+        logger.error(msg)
+        run.mark_error(msg)
+
     on_list = sum(1 for r in results if r["state"] == 1)
     hot = sum(1 for r in results if r["entry_timing"] == "hot")
     logger.info("Watchlist: %d on list, %d hot, %d total", on_list, hot, len(results))
-    run.set_row_counts(computed=len(results), on_list=on_list, hot=hot, errors=errors)
-    run.set_headline(f"watchlist {on_list} on list, {hot} hot")
+    run.set_row_counts(
+        computed=len(results),
+        expected=expected,
+        coverage_pct=round(coverage * 100, 1),
+        on_list=on_list,
+        hot=hot,
+        errors=errors,
+        stale_removed=len(stale_active),
+    )
+    run.set_headline(f"watchlist {on_list} on list, {hot} hot · {coverage:.0%} coverage")
 
 
 if __name__ == "__main__":

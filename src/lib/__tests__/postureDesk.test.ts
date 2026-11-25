@@ -11,7 +11,8 @@ describe("postureDesk", () => {
   it("matches advancer share for posture score", () => {
     expect(computePostureScore(28.4)).toBe(28);
     expect(computePostureLabel(68)).toBe("Slight Bullish");
-    expect(computePostureLabel(28)).toBe("Slight Bearish");
+    expect(computePostureLabel(70)).toBe("Bullish");
+    expect(computePostureLabel(28)).toBe("Bearish");
   });
 
   it("flags brief older than prices", () => {

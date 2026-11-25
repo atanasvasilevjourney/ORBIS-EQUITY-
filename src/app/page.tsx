@@ -428,7 +428,7 @@ export default function Home() {
             <MetricCard
               label="POSTURE"
               value={d?.posture ?? "—"}
-              sub={d?.postureLabel ?? "≈ advancers %"}
+              sub={d?.postureLabel ?? "composite posture"}
               color={postureColor}
               bar={typeof d?.posture === "number" ? d.posture : undefined}
               barColor={postureColor}

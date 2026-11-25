@@ -2,9 +2,9 @@
 
 Reads the module-1 watchlist (`trend_radar`) plus universe membership.
 
-Posture is the share of names up on the day (`z_mom` = day percent change).
-It is not the size of the hot list, so a short watchlist does not shut off
-other modules that read `daily_brief.posture_score`.
+Posture is a weighted composite (see ``shared/posture_composite.json`` and
+``pipeline.compute.posture_composite``). Breadth still tracks day change via
+``z_mom`` on the watchlist table.
 
 Also reports how many names are on the watchlist (`state == 1`) and which
 sectors led or lagged by average day change.
@@ -89,87 +89,21 @@ def compute_breadth(radar_rows: list[dict], universe_rows: list[dict]) -> dict:
     }
 
 
-def compute_posture(breadth: dict) -> int:
-    """Market posture 0-100 = percent of names up on the day.
-
-    Falls back to the older GREEN/RED mix only when day-change breadth is absent.
-    """
-    if "advancers_pct" in breadth:
-        return int(min(max(round(float(breadth["advancers_pct"])), 0), 100))
-
-    green_pct = breadth.get("pct_green", 0)
-    red_pct = breadth.get("pct_red", 0)
-
-    # Net breadth (0-50): centers at 25 when green=red
-    net_breadth = green_pct - red_pct  # range: -100 to +100
-    net_score = ((net_breadth + 100) / 200) * 50
-
-    # Directional strength (0-30): symmetric — centers at 15 when green=red
-    total_directional = green_pct + red_pct
-    if total_directional > 0:
-        direction_ratio = (green_pct - red_pct) / total_directional  # [-1, +1]
-    else:
-        direction_ratio = 0
-    green_score = ((direction_ratio + 1) / 2) * 30
-
-    # Sector uniformity (0-20): how many sectors are net positive
-    sector_breadth = breadth.get("sector_breadth", {})
-    if sector_breadth:
-        positive_sectors = sum(1 for v in sector_breadth.values() if v > 0)
-        uniformity = positive_sectors / len(sector_breadth)
-        uniformity_score = uniformity * 20
-    else:
-        uniformity_score = 10
-
-    raw = net_score + green_score + uniformity_score
-    return int(min(max(round(raw), 0), 100))
-
-
-def compute_posture_pillars(breadth: dict, radar_rows: list[dict], avg_rank: float) -> dict:
-    """Sub-scores for cockpit UI (0–100 each). Vol is neutral until skew is wired in."""
+def radar_aux_pillars(breadth: dict, radar_rows: list[dict], avg_rank: float) -> dict:
+    """Watchlist participation / leadership (not part of composite weights)."""
     total = len(radar_rows) or 1
     adv = float(breadth.get("advancers_pct", 0))
     on_list_pct = float(breadth.get("pct_green", 0))
     leaders = sum(1 for r in radar_rows if (r.get("quality_rank") or 0) >= 70)
     leadership = round(leaders / total * 100, 1)
-    trend = int(min(max(round(avg_rank), 0), 100))
-    breadth_p = int(min(max(round(adv), 0), 100))
     participation = int(min(max(round(on_list_pct), 0), 100))
-    vol = 50
-    heat_cap = int(min(100, max(15, round(adv - max(0, trend - leadership) * 0.35))))
-    if trend >= 55 and leadership < 45:
-        guidance = "Uptrend under pressure — trim size, add cautiously"
-    elif adv >= 60 and participation >= 10:
-        guidance = "Participation firm with active watchlist — stay selective"
-    elif adv >= 60 and participation < 10:
-        guidance = "Tape mixed — advancers strong but few hot names on list"
-    elif adv <= 40:
-        guidance = "Defensive tape — reduce heat, wait for breadth repair"
-    else:
-        guidance = "Mixed tape — size to posture and sector leaders"
+    trend_rank = int(min(max(round(avg_rank), 0), 100))
+    heat_cap = int(min(100, max(15, round(adv - max(0, trend_rank - leadership) * 0.35))))
     return {
-        "trend": trend,
-        "breadth": breadth_p,
         "leadership": int(leadership),
         "participation": participation,
-        "vol": vol,
         "heat_cap_pct": heat_cap,
-        "guidance": guidance,
     }
-
-
-def compute_posture_label(score: int) -> str:
-    """Map posture score to label."""
-    if score >= 75:
-        return "Bullish"
-    elif score >= 60:
-        return "Slight Bullish"
-    elif score >= 40:
-        return "Neutral"
-    elif score >= 25:
-        return "Slight Bearish"
-    else:
-        return "Bearish"
 
 
 def main():
@@ -197,7 +131,14 @@ def _latest_price_session(sb) -> date:
 
 
 def _run_aggregates(sb, run) -> None:
-    from pipeline.utils.supabase import fetch_all
+    from datetime import timedelta
+
+    from pipeline.compute.posture_composite import (
+        build_price_frames,
+        compute_posture_bundle,
+        fetch_gex_sign,
+    )
+    from pipeline.utils.supabase import fetch_all, fetch_prices_since
 
     trading_asof = _latest_price_session(sb)
 
@@ -218,8 +159,26 @@ def _run_aggregates(sb, run) -> None:
 
     # Compute breadth
     breadth = compute_breadth(radar_data, universe_data)
-    posture = compute_posture(breadth)
-    label = compute_posture_label(posture)
+
+    cutoff = (trading_asof - timedelta(days=285)).isoformat()
+    px_rows = fetch_prices_since(sb, cutoff, select="symbol,date,close,high,low")
+    active_syms = [u["symbol"] for u in universe_data if u.get("symbol")]
+    px_rows = [r for r in px_rows if r.get("symbol") in set(active_syms)]
+    frames = build_price_frames(px_rows)
+    index_frames = {
+        sym: frames[sym]
+        for sym in ("SPY", "QQQ", "VIX", "^VIX", "VIX3M", "^VIX3M")
+        if sym in frames
+    }
+    composite = compute_posture_bundle(
+        universe_symbols=active_syms,
+        price_rows=px_rows,
+        index_frames=index_frames,
+        advancers_pct=float(breadth.get("advancers_pct", 0)),
+        gex_sign=fetch_gex_sign(),
+    )
+    posture = int(composite["posture_score"])
+    label = str(composite["posture_label"])
 
     # Per-region breadth
     region_map = {}
@@ -245,13 +204,18 @@ def _run_aggregates(sb, run) -> None:
 
     # Average quality rank
     avg_rank = round(sum(r["quality_rank"] for r in radar_data) / len(radar_data), 1)
-    pillars = compute_posture_pillars(breadth, radar_data, avg_rank)
+    aux = radar_aux_pillars(breadth, radar_data, avg_rank)
+    pillars = {**composite["posture_pillars"], **aux}
+    pillars["participation"] = aux["participation"]
+    pillars["leadership"] = aux["leadership"]
 
     # Build summary
     summary = {
         "posture_score": posture,
         "posture_label": label,
+        "posture_basis": "composite",
         "posture_pillars": pillars,
+        "posture_composite": composite,
         "breadth": breadth,
         "region_breadth": region_breadth,
         "avg_quality_rank": avg_rank,
@@ -269,7 +233,7 @@ def _run_aggregates(sb, run) -> None:
             f"led by {breadth['best_sector']}"
         ),
         "inputs": summary,
-        "model": "aggregates_v1",
+        "model": "aggregates_v2_composite",
     }, on_conflict="asof_date").execute()
 
     logger.info(
