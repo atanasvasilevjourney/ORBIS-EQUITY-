@@ -21,10 +21,14 @@ import {
   computePosturePillars,
   computePostureScore,
   isPostureBriefStale,
-  sectorLeaders,
 } from "@/lib/postureDesk";
 import { fetchSessionQuotes } from "@/lib/sessionQuotes";
-import { countAdvancersDecliners, sessionDayPct, sessionLeadersLaggards } from "@/lib/liveBreadth";
+import {
+  countAdvancersDecliners,
+  sectorLeadersFromSession,
+  sessionDayPct,
+  sessionLeadersLaggards,
+} from "@/lib/liveBreadth";
 import { buildBreadthBlock } from "@/lib/breadthLabels";
 
 export const revalidate = 900;
@@ -282,10 +286,10 @@ export async function GET() {
     const total = radar.length;
     const greens = radar.filter((r) => r.state === 1).length;
     const reds = radar.filter((r) => r.state === -1).length;
-    const sessionQuotes = await fetchSessionQuotes(
-      sb,
-      radar.map((r) => r.symbol)
-    );
+    const sessionQuotes = await fetchSessionQuotes(sb, radar.map((r) => r.symbol), undefined, {
+      fillMissing: true,
+      fillLimit: 120,
+    });
     const { advancers, decliners } = countAdvancersDecliners(radar, sessionQuotes);
     const sessionMovers = sessionLeadersLaggards(radar, sessionQuotes, 10);
 
@@ -413,15 +417,12 @@ export async function GET() {
     const postureLabel =
       livePosture != null ? computePostureLabel(livePosture) : null;
 
-    const liveSectors = sectorLeaders(radar, universe);
-    const bestSector =
-      postureBriefStale || typeof breadthRaw?.best_sector !== "string"
-        ? liveSectors.bestSector
-        : (breadthRaw.best_sector as string);
-    const worstSector =
-      postureBriefStale || typeof breadthRaw?.worst_sector !== "string"
-        ? liveSectors.worstSector
-        : (breadthRaw.worst_sector as string);
+    const sectorBySymbol = new Map(
+      universe.map((u) => [u.symbol, (u.sector?.trim() || "Unclassified").trim() || "Unclassified"])
+    );
+    const sessionSector = sectorLeadersFromSession(radar, sessionQuotes, sectorBySymbol);
+  const bestSector = sessionSector.bestSector;
+  const worstSector = sessionSector.worstSector;
 
     const avgRankLive =
       total > 0 ? Math.round(radar.reduce((s, r) => s + r.quality_rank, 0) / total) : 0;
@@ -463,6 +464,9 @@ export async function GET() {
       signalsSuppressed: fresh.signalsSuppressed,
       capital,
       posture: livePosture,
+      postureBasis: "advancers_pct",
+      postureDefinition:
+        "Posture score (0–100) equals the percentage of active universe names with a positive latest session close-to-close return.",
       postureLabel,
       posturePillars: resolvedPillars ?? null,
       breadth: buildBreadthBlock({
@@ -476,6 +480,7 @@ export async function GET() {
       avgRank: total > 0 ? Math.round(radar.reduce((s, r) => s + r.quality_rank, 0) / total) : 0,
       bestSector,
       worstSector,
+      sectorBreadth: sessionSector.sectors,
       regionBreadth: inputs.region_breadth ?? {},
       crossAsset,
       scoreboard: scoreboardTiles(

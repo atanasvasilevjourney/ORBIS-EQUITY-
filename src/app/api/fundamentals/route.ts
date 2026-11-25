@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { fetchSessionQuotes } from "@/lib/sessionQuotes";
-import { refreshFundamentalQuotes, sanitizeMargins } from "@/lib/fundamentalsSanity";
+import { refreshFundamentalQuotes, sanitizeMargins, sanitizePeRatio } from "@/lib/fundamentalsSanity";
+import { displaySector } from "@/lib/displaySector";
+import { isResearchDeskEligible } from "@/lib/equityUniverseFilter";
 
 export const revalidate = 900;
 
@@ -103,7 +105,18 @@ export async function GET(req: NextRequest) {
     const uniMap = new Map(universe.map((r) => [r.symbol, r]));
     const radarMap = new Map(radar.map((r) => [r.symbol, r]));
 
-    let filtered = fundamentals.filter((r) => uniMap.has(r.symbol));
+    let filtered = fundamentals.filter((r) => {
+      const u = uniMap.get(r.symbol);
+      if (!u) return false;
+      return isResearchDeskEligible({
+        symbol: r.symbol,
+        tier: u.tier,
+        is_active: true,
+        company_name: u.company_name,
+        sector: u.sector,
+        industry: u.industry,
+      });
+    });
 
     if (minFScore > 0) filtered = filtered.filter((r) => (r.f_score ?? 0) >= minFScore);
     if (minComposite > 0) filtered = filtered.filter((r) => (r.composite_factor_score ?? 0) >= minComposite);
@@ -123,10 +136,10 @@ export async function GET(req: NextRequest) {
 
     filtered = filtered.slice(0, limit);
 
-    const quotes = await fetchSessionQuotes(
-      sb,
-      filtered.map((r) => r.symbol)
-    );
+    const quotes = await fetchSessionQuotes(sb, filtered.map((r) => r.symbol), undefined, {
+      fillMissing: true,
+      fillLimit: 80,
+    });
 
     const sectors = Array.from(
       new Set(universe.map((r) => r.sector).filter(Boolean))
@@ -147,7 +160,7 @@ export async function GET(req: NextRequest) {
       return {
         symbol: r.symbol,
         companyName: u.company_name ?? "",
-        sector: u.sector ?? "",
+        sector: displaySector(u),
         country: u.country ?? "",
         exchange: u.exchange ?? "",
         tier: u.tier ?? "",
@@ -160,7 +173,11 @@ export async function GET(req: NextRequest) {
         marketCap: refreshed.marketCap,
         snapshotMarketCap: refreshed.snapshotMarketCap,
         marketCapImpliedFromPrice: refreshed.marketCapImpliedFromPrice,
-        pe: r.pe_ratio,
+        pe: sanitizePeRatio(r.pe_ratio),
+        snapshotPe: r.pe_ratio,
+        priceVendorMismatch: refreshed.priceVendorMismatch,
+        sharesImplied: refreshed.sharesImplied,
+        marketCapUnit: refreshed.marketCapUnit,
         pb: r.pb_ratio,
         ps: r.ps_ratio,
         pFcf: r.p_fcf_ratio,

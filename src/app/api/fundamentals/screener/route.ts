@@ -4,7 +4,9 @@ import { fetchAll } from "@/lib/supabase/paginate";
 import { matchesScreener, parseScreenerQuery, type ScreenerQuery } from "@/lib/fundamentalsScreener";
 import { orbisScore } from "@/lib/orbisScore";
 import { fetchSessionQuotes } from "@/lib/sessionQuotes";
-import { refreshFundamentalQuotes, sanitizeMargins } from "@/lib/fundamentalsSanity";
+import { refreshFundamentalQuotes, sanitizeMargins, sanitizePeRatio } from "@/lib/fundamentalsSanity";
+import { displaySector } from "@/lib/displaySector";
+import { isResearchDeskEligible } from "@/lib/equityUniverseFilter";
 
 export const revalidate = 900;
 
@@ -38,7 +40,7 @@ function mapRow(
   return {
     symbol: r.symbol as string,
     companyName: u.company_name ?? "",
-    sector: u.sector ?? "",
+    sector: displaySector(u),
     industry: u.industry ?? "",
     country: u.country ?? "",
     exchange: u.exchange ?? "",
@@ -53,7 +55,9 @@ function mapRow(
     marketCap: refreshed.marketCap,
     snapshotMarketCap: refreshed.snapshotMarketCap,
     marketCapImpliedFromPrice: refreshed.marketCapImpliedFromPrice,
-    pe: r.pe_ratio as number | null,
+    priceVendorMismatch: refreshed.priceVendorMismatch,
+    pe: sanitizePeRatio(r.pe_ratio as number | null),
+    snapshotPe: r.pe_ratio as number | null,
     pb: r.pb_ratio as number | null,
     ps: r.ps_ratio as number | null,
     evEbitda: r.ev_ebitda as number | null,
@@ -119,7 +123,19 @@ export async function GET(req: NextRequest) {
     const uniMap = new Map(universe.map((r) => [r.symbol, r]));
     const radarMap = new Map(radar.map((r) => [r.symbol, r]));
 
-    let filtered = fundamentals.filter((r) => uniMap.has(r.symbol as string));
+    let filtered = fundamentals.filter((r) => {
+      const sym = r.symbol as string;
+      const u = uniMap.get(sym);
+      if (!u) return false;
+      return isResearchDeskEligible({
+        symbol: sym,
+        tier: u.tier,
+        is_active: true,
+        company_name: u.company_name,
+        sector: u.sector,
+        industry: u.industry,
+      });
+    });
 
     filtered = filtered.filter((r) => {
       const sym = r.symbol as string;
@@ -142,10 +158,10 @@ export async function GET(req: NextRequest) {
     const sectors = Array.from(new Set(universe.map((r) => r.sector).filter(Boolean))).sort() as string[];
     const industries = Array.from(new Set(universe.map((r) => r.industry).filter(Boolean))).sort() as string[];
 
-    const quotes = await fetchSessionQuotes(
-      sb,
-      filtered.map((r) => r.symbol as string)
-    );
+    const quotes = await fetchSessionQuotes(sb, filtered.map((r) => r.symbol as string), undefined, {
+      fillMissing: true,
+      fillLimit: 80,
+    });
 
     const rows = filtered.map((r) => {
       const sym = r.symbol as string;

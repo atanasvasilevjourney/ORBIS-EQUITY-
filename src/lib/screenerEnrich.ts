@@ -1,4 +1,5 @@
-import { refreshFundamentalQuotes } from "@/lib/fundamentalsSanity";
+import { refreshFundamentalQuotes, sanitizePeRatio } from "@/lib/fundamentalsSanity";
+import { displaySector } from "@/lib/displaySector";
 import { optionsFlowProxy, type SessionQuote } from "@/lib/sessionQuotes";
 
 type FundSnap = {
@@ -28,6 +29,7 @@ type RadarSnap = {
 type UniverseSnap = {
   company_name: string | null;
   sector: string | null;
+  industry?: string | null;
   country: string | null;
   exchange: string | null;
   tier: string | null;
@@ -58,7 +60,7 @@ export function buildScreenerRow(
   return {
     symbol: r.symbol,
     companyName: u.company_name ?? "",
-    sector: u.sector ?? "",
+    sector: displaySector(u),
     country: u.country ?? "",
     exchange: u.exchange ?? "",
     tier: u.tier ?? "",
@@ -86,7 +88,9 @@ export function buildScreenerRow(
     marketCap: refreshed.marketCap,
     snapshotMarketCap: refreshed.snapshotMarketCap,
     marketCapImpliedFromPrice: refreshed.marketCapImpliedFromPrice,
-    peRatio: f?.pe_ratio ?? null,
+    priceVendorMismatch: refreshed.priceVendorMismatch,
+    peRatio: sanitizePeRatio(f?.pe_ratio ?? null),
+    snapshotPeRatio: f?.pe_ratio ?? null,
     divYield: f?.dividend_yield ?? null,
     orbisScore: extras.orbisScore,
     compositeScore: f?.composite_factor_score ?? null,

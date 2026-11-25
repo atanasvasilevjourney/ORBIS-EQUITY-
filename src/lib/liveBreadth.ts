@@ -36,6 +36,57 @@ export type SessionMover = {
   quoteStale: boolean;
 };
 
+export type SectorSessionBreadth = {
+  sector: string;
+  nNames: number;
+  advancersPct: number;
+  avgDayPct: number;
+};
+
+export function sectorSessionBreadth(
+  radar: RadarDayRow[],
+  quotes: Map<string, SessionQuote>,
+  sectorBySymbol: Map<string, string>
+): SectorSessionBreadth[] {
+  const buckets = new Map<string, number[]>();
+  for (const row of radar) {
+    const sector = (sectorBySymbol.get(row.symbol) ?? "Unclassified").trim() || "Unclassified";
+    const day = sessionDayPct(row.symbol, quotes, row);
+    if (day == null || !Number.isFinite(day)) continue;
+    const list = buckets.get(sector) ?? [];
+    list.push(day);
+    buckets.set(sector, list);
+  }
+  return Array.from(buckets.entries())
+    .filter(([, vals]) => vals.length > 0)
+    .map(([sector, vals]) => {
+      const up = vals.filter((v) => v > 0).length;
+      return {
+        sector,
+        nNames: vals.length,
+        advancersPct: Math.round((up / vals.length) * 1000) / 10,
+        avgDayPct: Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 100) / 100,
+      };
+    })
+    .sort((a, b) => b.avgDayPct - a.avgDayPct);
+}
+
+export function sectorLeadersFromSession(
+  radar: RadarDayRow[],
+  quotes: Map<string, SessionQuote>,
+  sectorBySymbol: Map<string, string>
+): { bestSector: string | null; worstSector: string | null; sectors: SectorSessionBreadth[] } {
+  const sectors = sectorSessionBreadth(radar, quotes, sectorBySymbol);
+  if (!sectors.length) {
+    return { bestSector: null, worstSector: null, sectors: [] };
+  }
+  return {
+    bestSector: sectors[0].sector,
+    worstSector: sectors.at(-1)!.sector,
+    sectors,
+  };
+}
+
 export function sessionLeadersLaggards(
   radar: RadarDayRow[],
   quotes: Map<string, SessionQuote>,

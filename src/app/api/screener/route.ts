@@ -8,6 +8,7 @@ import { resolveUniverseDesk } from "@/lib/resolveIndexDesk";
 import { fetchLatestStrategySignals } from "@/lib/strategySignals";
 import { fetchSessionQuotes } from "@/lib/sessionQuotes";
 import { buildScreenerRow } from "@/lib/screenerEnrich";
+import { isResearchDeskEligible } from "@/lib/equityUniverseFilter";
 
 export const revalidate = 900;
 
@@ -120,6 +121,18 @@ export async function GET(req: NextRequest) {
     if (sector) {
       filteredUniverse = filteredUniverse.filter((u) => u.sector === sector);
     }
+    if (!deskSymbols.length) {
+      filteredUniverse = filteredUniverse.filter((u) =>
+        isResearchDeskEligible({
+          symbol: u.symbol,
+          tier: u.tier,
+          is_active: true,
+          company_name: u.company_name,
+          sector: u.sector,
+          industry: u.industry,
+        })
+      );
+    }
     const allowedSymbols = new Set(filteredUniverse.map((u) => u.symbol));
     const deskMode = deskSymbols.length > 0;
 
@@ -187,7 +200,10 @@ export async function GET(req: NextRequest) {
 
     const filteredRadar = allRadar.filter((r) => allowedSymbols.has(r.symbol)).slice(0, limit);
     const quoteSymbols = Array.from(new Set(filteredRadar.map((r) => r.symbol)));
-    const quotes = await fetchSessionQuotes(sb, quoteSymbols);
+    const quotes = await fetchSessionQuotes(sb, quoteSymbols, undefined, {
+      fillMissing: true,
+      fillLimit: 80,
+    });
 
     let rows = filteredRadar
       .map((r) => {

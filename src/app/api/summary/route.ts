@@ -87,6 +87,9 @@ export async function GET() {
       postureBriefStale,
       briefText: postureBriefStale ? null : brief?.brief ?? null,
       posture: livePosture,
+      postureBasis: "advancers_pct",
+      postureDefinition:
+        "Posture score (0–100) equals the percentage of active universe names with a positive latest session close-to-close return.",
       postureLabel: liveLabel,
       breadth: buildBreadthBlock({
         total,

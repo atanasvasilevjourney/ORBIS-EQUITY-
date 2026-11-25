@@ -1,6 +1,6 @@
 /** Recompute market cap from live price; guard impossible margin combinations. */
 
-import { normalizeMarketCapUsd } from "@/lib/marketCap";
+import { normalizeMarketCapUsd, resolveMarketCapUsd } from "@/lib/marketCap";
 
 export type MarginSanity = {
   grossMargin: number | null;
@@ -9,6 +9,9 @@ export type MarginSanity = {
   marginSanityOk: boolean;
   marginNote: string | null;
 };
+
+export const PE_RATIO_MAX_SANE = 250;
+export const PE_RATIO_MIN_SANE = 0;
 
 /** Ratios may be 0–1 or 0–100 depending on upstream vendor. */
 export function normalizeMarginRatio(raw: number | null | undefined): number | null {
@@ -52,14 +55,18 @@ export function sanitizeMargins(
   };
 }
 
+export function sanitizePeRatio(pe: number | null | undefined): number | null {
+  if (pe == null || !Number.isFinite(pe)) return null;
+  if (pe <= PE_RATIO_MIN_SANE || pe > PE_RATIO_MAX_SANE) return null;
+  return pe;
+}
+
 export function impliedSharesFromSnapshot(
   snapshotPrice: number | null | undefined,
   snapshotMarketCap: number | null | undefined
 ): number | null {
-  const px = snapshotPrice;
-  const mcap = snapshotMarketCap != null ? normalizeMarketCapUsd(snapshotMarketCap) : NaN;
-  if (px == null || !Number.isFinite(px) || px <= 0 || !Number.isFinite(mcap) || mcap <= 0) return null;
-  return mcap / px;
+  const resolved = resolveMarketCapUsd(snapshotMarketCap, snapshotPrice);
+  return resolved.sharesImplied;
 }
 
 export type RefreshedQuoteFields = {
@@ -70,6 +77,9 @@ export type RefreshedQuoteFields = {
   snapshotPrice: number | null;
   snapshotMarketCap: number | null;
   marketCapImpliedFromPrice: boolean;
+  priceVendorMismatch: boolean;
+  sharesImplied: number | null;
+  marketCapUnit: string | null;
 };
 
 export function refreshFundamentalQuotes(input: {
@@ -81,27 +91,52 @@ export function refreshFundamentalQuotes(input: {
 }): RefreshedQuoteFields {
   const snapshotPrice = input.snapshotPrice;
   const snapshotMarketCap = input.snapshotMarketCap;
-  const price = input.livePrice ?? snapshotPrice;
-  const shares = impliedSharesFromSnapshot(snapshotPrice, snapshotMarketCap);
-  let marketCap = snapshotMarketCap;
+  const tapePrice = input.livePrice;
+
+  let priceVendorMismatch = false;
+  let price: number | null = tapePrice ?? snapshotPrice;
+
+  if (
+    tapePrice != null &&
+    snapshotPrice != null &&
+    snapshotPrice > 0 &&
+    Math.abs(tapePrice - snapshotPrice) / snapshotPrice > 0.15
+  ) {
+    priceVendorMismatch = true;
+    price = tapePrice;
+  }
+
+  const snapResolved = resolveMarketCapUsd(snapshotMarketCap, snapshotPrice ?? price);
+  let mcapUsd = snapResolved.usd;
   let marketCapImpliedFromPrice = false;
 
-  if (price != null && shares != null) {
-    const usd = price * shares;
-    marketCap = usd;
-    marketCapImpliedFromPrice =
-      snapshotPrice == null ||
-      !Number.isFinite(snapshotPrice) ||
-      Math.abs(price - snapshotPrice) / Math.max(snapshotPrice, 1e-9) > 0.005;
+  if (
+    mcapUsd != null &&
+    price != null &&
+    snapshotPrice != null &&
+    snapshotPrice > 0 &&
+    tapePrice != null
+  ) {
+    mcapUsd = mcapUsd * (tapePrice / snapshotPrice);
+    marketCapImpliedFromPrice = Math.abs(tapePrice - snapshotPrice) / snapshotPrice > 0.005;
+  } else if (mcapUsd != null && price != null && snapResolved.sharesImplied != null) {
+    mcapUsd = price * snapResolved.sharesImplied;
+    marketCapImpliedFromPrice = tapePrice != null;
   }
+
+  const sharesImplied =
+    mcapUsd != null && price != null && price > 0 ? mcapUsd / price : snapResolved.sharesImplied;
 
   return {
     price,
-    marketCap,
+    marketCap: mcapUsd,
     priceAsOf: input.quoteAsOf,
     quoteStale: input.quoteStale,
     snapshotPrice,
     snapshotMarketCap,
     marketCapImpliedFromPrice,
+    priceVendorMismatch,
+    sharesImplied,
+    marketCapUnit: snapResolved.unit,
   };
 }

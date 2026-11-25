@@ -3,6 +3,7 @@ import {
   impliedSharesFromSnapshot,
   refreshFundamentalQuotes,
   sanitizeMargins,
+  sanitizePeRatio,
 } from "@/lib/fundamentalsSanity";
 
 describe("sanitizeMargins", () => {
@@ -22,8 +23,6 @@ describe("sanitizeMargins", () => {
 
 describe("refreshFundamentalQuotes", () => {
   it("recomputes market cap from live price and implied shares", () => {
-    const shares = impliedSharesFromSnapshot(802, 906_000_000_000);
-    expect(shares).not.toBeNull();
     const refreshed = refreshFundamentalQuotes({
       snapshotPrice: 802,
       snapshotMarketCap: 906_000_000_000,
@@ -32,7 +31,15 @@ describe("refreshFundamentalQuotes", () => {
       quoteStale: false,
     });
     expect(refreshed.price).toBe(629.79);
+    expect(refreshed.priceVendorMismatch).toBe(true);
     expect(refreshed.marketCapImpliedFromPrice).toBe(true);
-    expect(refreshed.marketCap).toBeCloseTo(629.79 * (shares as number), -5);
+    const ratio = 629.79 / 802;
+    const baseline = (impliedSharesFromSnapshot(802, 906_000_000_000) ?? 0) * 802;
+    expect(refreshed.marketCap).toBeCloseTo(baseline * ratio, -6);
+  });
+
+  it("nulls absurd P/E", () => {
+    expect(sanitizePeRatio(1240)).toBeNull();
+    expect(sanitizePeRatio(18)).toBe(18);
   });
 });

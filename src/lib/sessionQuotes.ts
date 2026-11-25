@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { isEodStale, lastExpectedEodDate } from "@/lib/freshness";
 import { sessionMove } from "@/lib/rotationDesk";
+import { fillMissingTape } from "@/lib/marketTapeFill";
+import type { PricePoint } from "@/lib/liteDesks";
 
 export type PriceBar = { symbol: string; date: string; close: number; volume?: number | null };
 
@@ -81,10 +83,40 @@ export async function fetchRecentPriceBars(
 export async function fetchSessionQuotes(
   sb: SupabaseClient,
   symbols: string[],
-  expectedEod = lastExpectedEodDate()
+  expectedEod = lastExpectedEodDate(),
+  opts?: { fillMissing?: boolean; fillLimit?: number }
 ): Promise<Map<string, SessionQuote>> {
   const bars = await fetchRecentPriceBars(sb, symbols);
-  return quotesFromBars(bars, expectedEod);
+  const points: PricePoint[] = bars.map((b) => ({ symbol: b.symbol, date: b.date, close: b.close }));
+  const have = new Set(bars.map((b) => b.symbol));
+  let merged = bars;
+  const fill = opts?.fillMissing !== false;
+  const missing = symbols.filter((s) => !have.has(s));
+  const cap = opts?.fillLimit ?? 60;
+  if (fill && missing.length > 0) {
+    const toFill = missing.slice(0, cap);
+    const { prices: filled } = await fillMissingTape(points, toFill, undefined, expectedEod);
+    const filledBars: PriceBar[] = [];
+    for (const sym of toFill) {
+      const symPoints = filled.filter((p) => p.symbol === sym);
+      filledBars.push(
+        ...symPoints.map((p) => ({
+          symbol: p.symbol,
+          date: p.date,
+          close: p.close,
+          volume: null as number | null,
+        }))
+      );
+    }
+    merged = [...bars];
+    for (const fb of filledBars) {
+      if (!merged.some((b) => b.symbol === fb.symbol && b.date === fb.date)) {
+        merged.push(fb);
+      }
+    }
+    merged.sort((a, b) => a.symbol.localeCompare(b.symbol) || a.date.localeCompare(b.date));
+  }
+  return quotesFromBars(merged, expectedEod);
 }
 
 /** Price × session volume — not options tape; crude activity proxy only. */

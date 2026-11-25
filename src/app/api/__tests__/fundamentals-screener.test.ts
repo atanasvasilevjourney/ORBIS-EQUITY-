@@ -8,6 +8,20 @@ vi.mock("@/lib/supabase/server", () => ({
   createServerClient: () => mockCreateServerClient(),
 }));
 
+vi.mock("@/lib/sessionQuotes", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/sessionQuotes")>("@/lib/sessionQuotes");
+  return {
+    ...actual,
+    fetchSessionQuotes: async (_sb: unknown, symbols: string[]) => {
+      const map = new Map<string, import("@/lib/sessionQuotes").SessionQuote>();
+      for (const sym of symbols) {
+        map.set(sym, { last: 100, dayPct: 1, asOf: "2026-11-24", stale: false, volume: null });
+      }
+      return map;
+    },
+  };
+});
+
 describe("GET /api/fundamentals/screener", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -95,7 +109,7 @@ describe("GET /api/fundamentals/screener", () => {
               industry: "Banks",
               country: "US",
               exchange: "NYSE",
-              tier: "us_mid",
+              tier: "us_large",
             },
           ],
           error: null,

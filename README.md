@@ -330,3 +330,6 @@ Screener, fundamentals, and dashboard routes overlay **`prices_daily`** session 
 | `optionsFlowProxy` | `{ value, isProxy: true, definition }` — **price × volume**, not options tape |
 | `breadth.onList` / `greens` | Watchlist names (+4% & 2× vol), **not** market advancers |
 | `breadth.advancersPct` | Share of universe up on the latest session close |
+| `postureBasis` | Always `advancers_pct` — posture equals that percentage (0–100) |
+| `sectorBreadth` | Per-sector advancers % and avg session return (tape-based best/worst sectors) |
+| `priceVendorMismatch` | Vendor snapshot price differed from `prices_daily` by more than 15% |

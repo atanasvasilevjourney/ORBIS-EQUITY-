@@ -7,6 +7,38 @@ vi.mock("@/lib/supabase/server", () => ({
   createServerClient: () => mockCreateServerClient(),
 }));
 
+vi.mock("@/lib/sessionQuotes", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/sessionQuotes")>("@/lib/sessionQuotes");
+  return {
+    ...actual,
+    fetchSessionQuotes: async (
+      _sb: unknown,
+      symbols: string[],
+      _expected?: string,
+      _opts?: unknown
+    ) => {
+      const zBySym: Record<string, number> = { A: 5, B: -2, C: 1 };
+      const map = new Map<string, import("@/lib/sessionQuotes").SessionQuote>();
+      for (const sym of symbols) {
+        let day = zBySym[sym];
+        if (day == null && /^S(\d+)$/.test(sym)) {
+          const i = parseInt(sym.slice(1), 10);
+          day = i < 2 ? 1 : -0.5;
+        }
+        day ??= 0;
+        map.set(sym, {
+          last: 100,
+          dayPct: day,
+          asOf: "2026-11-24",
+          stale: false,
+          volume: null,
+        });
+      }
+      return map;
+    },
+  };
+});
+
 describe("GET /api/summary", () => {
   beforeEach(() => {
     vi.resetModules();
