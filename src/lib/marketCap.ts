@@ -1,8 +1,10 @@
 /** Format LSE screener market_cap (often millions USD) for display. */
 
+const MAX_SANE_MARKET_CAP_USD = 5e12;
+
 export function normalizeMarketCapUsd(raw: number): number {
   if (!Number.isFinite(raw) || raw <= 0) return NaN;
-  if (raw >= 1e9) return raw;
+  if (raw >= 1e9) return raw <= MAX_SANE_MARKET_CAP_USD ? raw : NaN;
   if (raw >= 1e5) return raw * 1_000;
   if (raw >= 500) return raw * 1_000_000;
   return raw * 1_000_000;
@@ -40,7 +42,7 @@ export function resolveMarketCapUsd(
   for (const c of candidates) {
     if (!Number.isFinite(c.usd) || c.usd <= 0) continue;
     const shares = c.usd / price;
-    if (shares < SHARES_MIN || shares > SHARES_MAX) continue;
+      if (shares < SHARES_MIN || shares > 5e9) continue;
     const score = Math.abs(Math.log10(shares) - 9);
     if (score < bestScore) {
       bestScore = score;
@@ -52,7 +54,11 @@ export function resolveMarketCapUsd(
     return { usd: best.usd, sharesImplied: best.usd / price, unit: best.unit };
   }
 
-  const fallback = normalizeMarketCapUsd(rawMcap);
+  let fallback = normalizeMarketCapUsd(rawMcap);
+  if (fallback > MAX_SANE_MARKET_CAP_USD && price > 0) {
+    const asMillions = rawMcap * 1_000_000;
+    if (asMillions <= MAX_SANE_MARKET_CAP_USD) fallback = asMillions;
+  }
   if (!Number.isFinite(fallback)) {
     return { usd: null, sharesImplied: null, unit: "unknown" };
   }

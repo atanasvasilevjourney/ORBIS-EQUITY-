@@ -33,6 +33,7 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 
 from pipeline.config.settings import SupabaseConfig
+from pipeline.fundamentals.sector_class import is_financial_sector
 
 load_dotenv()
 
@@ -100,6 +101,9 @@ def compute_f_score_detail(
     balance_pri: dict | None,
     cashflow_cur: dict | None,
     balance_older: dict | None = None,
+    *,
+    sector: str | None = None,
+    industry: str | None = None,
 ) -> dict[str, Any] | None:
     """Compute F-Score with boolean component breakdown. Returns None if data insufficient."""
     if not income_cur or not balance_cur or not income_pri or not balance_pri:
@@ -151,22 +155,44 @@ def compute_f_score_detail(
         "weightedAverageShsOut"
     )
     components["no_dilution"] = bool(
-        shares_cur and shares_pri and shares_cur <= shares_pri
+        shares_cur
+        and shares_pri
+        and shares_cur > 0
+        and shares_pri > 0
+        and shares_cur <= shares_pri
     )
 
-    gm_cur = _safe_div(income_cur.get("grossProfit"), income_cur.get("revenue"))
-    gm_pri = _safe_div(income_pri.get("grossProfit"), income_pri.get("revenue"))
-    components["delta_gross_margin"] = (
-        gm_cur is not None and gm_pri is not None and gm_cur > gm_pri
-    )
+    financial = is_financial_sector(sector, industry)
+    applicable = list(COMPONENT_KEYS)
+    if financial:
+        components["delta_gross_margin"] = False
+        components["delta_asset_turnover"] = False
+        applicable = [k for k in COMPONENT_KEYS if k not in ("delta_gross_margin", "delta_asset_turnover")]
+    else:
+        gm_cur = _safe_div(income_cur.get("grossProfit"), income_cur.get("revenue"))
+        gm_pri = _safe_div(income_pri.get("grossProfit"), income_pri.get("revenue"))
+        components["delta_gross_margin"] = (
+            gm_cur is not None and gm_pri is not None and gm_cur > gm_pri
+        )
 
-    at_cur = _safe_div(income_cur.get("revenue"), total_assets_beg)
-    at_pri = _safe_div(income_pri.get("revenue"), prior_ta_beg)
-    components["delta_asset_turnover"] = (
-        at_cur is not None and at_pri is not None and at_cur > at_pri
-    )
+        avg_assets_cur = _safe_div(
+            (balance_cur.get("totalAssets") or 0) + (balance_pri.get("totalAssets") or 0),
+            2,
+        )
+        avg_assets_pri = _safe_div(
+            ((balance_older or balance_pri).get("totalAssets") or 0)
+            + (balance_pri.get("totalAssets") or 0),
+            2,
+        )
+        at_cur = _safe_div(income_cur.get("revenue"), avg_assets_cur)
+        at_pri = _safe_div(income_pri.get("revenue"), avg_assets_pri)
+        components["delta_asset_turnover"] = (
+            at_cur is not None and at_pri is not None and at_cur > at_pri
+        )
 
-    score = sum(1 for v in components.values() if v)
+    passed = sum(1 for k in applicable if components[k])
+    max_pts = len(applicable)
+    score = round(9 * passed / max_pts) if max_pts else 0
     return {
         "score": score,
         "components": components,
@@ -223,6 +249,13 @@ def _run_f_score(sb, run) -> None:
 
     symbol_rows = fetch_all(sb, "fundamentals_snapshot", "symbol")
     symbols = {r["symbol"] for r in symbol_rows}
+    universe = fetch_all(
+        sb,
+        "universe_members",
+        "symbol, sector, industry",
+        filters=lambda q: q.eq("is_active", True),
+    )
+    sector_map = {r["symbol"]: (r.get("sector"), r.get("industry")) for r in universe}
     logger.info("Computing F-Score for %d symbols", len(symbols))
 
     logger.info("Pre-fetching financial reports...")
@@ -256,6 +289,7 @@ def _run_f_score(sb, run) -> None:
             balance_older = balance[2] if len(balance) > 2 else None
             cashflow_cur = cashflow[0] if cashflow else None
 
+            sec, ind = sector_map.get(symbol, (None, None))
             detail = compute_f_score_detail(
                 income_cur,
                 income_pri,
@@ -263,6 +297,8 @@ def _run_f_score(sb, run) -> None:
                 balance_pri,
                 cashflow_cur,
                 balance_older,
+                sector=sec,
+                industry=ind,
             )
             if detail is not None:
                 f = int(detail["score"])

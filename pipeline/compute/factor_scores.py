@@ -28,6 +28,8 @@ import numpy as np
 from dotenv import load_dotenv
 
 from pipeline.compute.fundamental_analysis import build_fundamental_analysis
+from pipeline.compute.fundamentals_derived import run_derived
+from pipeline.fundamentals.sector_class import is_financial_sector
 from pipeline.utils.supabase import fetch_all
 
 load_dotenv()
@@ -172,10 +174,16 @@ def score_cross_section(
     accruals: list[float | None],
     interest_coverage: list[float | None],
     sectors: list[str],
+    industries: list[str],
 ) -> dict[str, np.ndarray]:
     """Rank each fundamental input, then blend. See module docstring."""
-    if len(rows) != len(accruals) or len(rows) != len(interest_coverage) or len(rows) != len(sectors):
-        raise ValueError("rows, accruals, interest coverage, and sectors must be aligned")
+    if (
+        len(rows) != len(accruals)
+        or len(rows) != len(interest_coverage)
+        or len(rows) != len(sectors)
+        or len(rows) != len(industries)
+    ):
+        raise ValueError("rows, accruals, interest coverage, sectors, and industries must be aligned")
 
     value = average_available([
         percentile_ranks(_column(rows, "pe_ratio", positive_only=True), higher_is_better=False),
@@ -184,11 +192,20 @@ def score_cross_section(
         percentile_ranks(_column(rows, "earnings_yield"), higher_is_better=True),
         percentile_ranks(_column(rows, "fcf_yield"), higher_is_better=True),
     ])
+    gross_col = np.array(
+        [
+            np.nan
+            if is_financial_sector(sectors[i], industries[i])
+            else (float(row["gross_margin"]) if row.get("gross_margin") is not None else np.nan)
+            for i, row in enumerate(rows)
+        ],
+        dtype=float,
+    )
     quality = average_available([
         percentile_ranks(_column(rows, "roe")),
         percentile_ranks(_column(rows, "roic")),
         percentile_ranks(_column(rows, "roa")),
-        percentile_ranks(_column(rows, "gross_margin")),
+        percentile_ranks(gross_col),
         percentile_ranks(_column(rows, "operating_margin")),
         percentile_ranks(_column(rows, "net_margin")),
         percentile_ranks(_column(rows, "f_score")),
@@ -244,14 +261,18 @@ def main() -> None:
 def _run_factor_scores(sb, run) -> None:
     logger.info("=== Factor Scores Compute Start ===")
 
+    derived_stats = run_derived(sb)
+    logger.info("Derived fundamentals: %s", derived_stats)
+
     fundamentals = fetch_all(sb, "fundamentals_snapshot", "*")
     universe = fetch_all(
         sb,
         "universe_members",
-        "symbol, sector",
+        "symbol, sector, industry",
         filters=lambda q: q.eq("is_active", True),
     )
     sector_map = {r["symbol"]: r.get("sector") or "Unknown" for r in universe}
+    industry_map = {r["symbol"]: r.get("industry") or "" for r in universe}
 
     if not fundamentals:
         logger.warning("No fundamentals data — run fundamentals ingest first")
@@ -265,13 +286,15 @@ def _run_factor_scores(sb, run) -> None:
     accruals: list[float | None] = []
     interest_cov: list[float | None] = []
     sectors: list[str] = []
+    industries: list[str] = []
     for row in fundamentals:
         extra = fin_extras.get(row["symbol"], {})
         accruals.append(extra.get("accruals_ratio"))
         interest_cov.append(extra.get("interest_coverage"))
         sectors.append(sector_map.get(row["symbol"], "Unknown"))
+        industries.append(industry_map.get(row["symbol"], ""))
 
-    scored = score_cross_section(fundamentals, accruals, interest_cov, sectors)
+    scored = score_cross_section(fundamentals, accruals, interest_cov, sectors, industries)
 
     updates: list[dict] = []
     verdict_counts: dict[str, int] = {}

@@ -8,6 +8,14 @@ import { decideApiAccess } from "@/lib/apiAuth";
  * External clients must send: x-api-key: <API_SECRET>
  */
 export function middleware(req: NextRequest) {
+  const path = req.nextUrl.pathname;
+  if (
+    req.method === "GET" &&
+    /^\/api\/fundamentals\/[A-Za-z0-9.\-]{1,20}$/.test(path)
+  ) {
+    return NextResponse.next();
+  }
+
   const decision = decideApiAccess({
     secret: process.env.API_SECRET,
     isProduction: process.env.NODE_ENV === "production",

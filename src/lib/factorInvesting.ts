@@ -23,7 +23,7 @@ export const FACTOR_STYLES: FactorStyleDef[] = [
     weight: 0.25,
     scoreField: "value_score",
     screenerMinField: "min_value_score",
-    inputs: ["P/E", "P/B", "EV/EBITDA", "Earnings yield", "FCF yield"],
+    inputs: ["P/E", "P/B", "EV/EBITDA", "Earnings yield", "FCF yield (when reported)"],
   },
   {
     id: "quality",
@@ -31,7 +31,7 @@ export const FACTOR_STYLES: FactorStyleDef[] = [
     weight: 0.25,
     scoreField: "quality_score",
     screenerMinField: "min_quality_score",
-    inputs: ["ROE", "ROIC", "Margins", "Piotroski F-Score"],
+    inputs: ["ROE", "ROIC (when reported)", "Margins (industrial only)", "Piotroski F-Score"],
   },
   {
     id: "growth",

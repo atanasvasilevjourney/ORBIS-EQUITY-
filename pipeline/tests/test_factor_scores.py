@@ -17,7 +17,7 @@ def test_yield_only_does_not_outrank_a_complete_cheap_name():
         _row(pe_ratio=40, pb_ratio=12, ev_ebitda=25, earnings_yield=0.025, fcf_yield=0.01),
         _row(earnings_yield=0.04, fcf_yield=0.03),
     ]
-    scored = score_cross_section(rows, [None, None, None], [None, None, None], ["X", "X", "X"])
+    scored = score_cross_section(rows, [None, None, None], [None, None, None], ["X", "X", "X"], ["", "", ""])
     cheap, rich, yield_only = scored["value"]
     assert cheap == 100
     assert rich == 0
@@ -33,7 +33,7 @@ def test_missing_value_inputs_stay_missing():
         _row(),
     ]
     scored = score_cross_section(
-        rows, [None, None, None], [None, None, None], ["Tech", "Tech", "Tech"]
+        rows, [None, None, None], [None, None, None], ["Tech", "Tech", "Tech"], ["", "", ""]
     )
     assert scored["value"][0] == scored["value"][1] == 50
     assert np.isnan(scored["value"][2])
@@ -61,13 +61,13 @@ def test_sound_balance_sheet_beats_coverage_dominated_leverage():
         _row(current_ratio=2.0, debt_to_equity=0.4),
         _row(current_ratio=1.2, debt_to_equity=3.0),
     ]
-    scored = score_cross_section(rows, [None, None], [8.0, 40.0], ["X", "X"])
+    scored = score_cross_section(rows, [None, None], [8.0, 40.0], ["X", "X"], ["", ""])
     assert scored["leverage"][0] > scored["leverage"][1]
 
 
 def test_composite_renormalizes_when_a_style_is_missing():
     rows = [_row(pe_ratio=10), _row(pe_ratio=40)]
-    scored = score_cross_section(rows, [None, None], [None, None], ["X", "X"])
+    scored = score_cross_section(rows, [None, None], [None, None], ["X", "X"], ["", ""])
     assert scored["composite"][0] == 100
     assert scored["composite"][1] == 0
     assert np.isnan(scored["quality"][0])
@@ -81,7 +81,7 @@ def test_sector_rank_leaves_a_blank_name_blank():
         _row(),
     ]
     sectors = ["Tech", "Tech", "Tech", "Tech"]
-    scored = score_cross_section(rows, [None] * 4, [None] * 4, sectors)
+    scored = score_cross_section(rows, [None] * 4, [None] * 4, sectors, [""] * 4)
     assert scored["sector_value"][0] == 100
     assert scored["sector_value"][1] == 50
     assert scored["sector_value"][2] == 0

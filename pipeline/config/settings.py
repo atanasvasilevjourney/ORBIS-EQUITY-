@@ -12,7 +12,7 @@ class LSEConfig:
     api_url: str = field(default_factory=lambda: _env("LSE_API_URL", "https://api.londonstrategicedge.com"))
     api_key: str = field(default_factory=lambda: _env("LSE_API_KEY"))
     data_api_url: str = field(default_factory=lambda: _env("LSE_DATA_API_URL") or "https://data-api.londonstrategicedge.com")
-    max_rows_per_request: int = 5000
+    max_rows_per_request: int = 1000
     request_delay: float = 0.2
 
 
