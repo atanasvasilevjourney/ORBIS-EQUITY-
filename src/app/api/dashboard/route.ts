@@ -23,6 +23,9 @@ import {
   isPostureBriefStale,
   sectorLeaders,
 } from "@/lib/postureDesk";
+import { fetchSessionQuotes } from "@/lib/sessionQuotes";
+import { countAdvancersDecliners, sessionDayPct, sessionLeadersLaggards } from "@/lib/liveBreadth";
+import { buildBreadthBlock } from "@/lib/breadthLabels";
 
 export const revalidate = 900;
 
@@ -279,8 +282,12 @@ export async function GET() {
     const total = radar.length;
     const greens = radar.filter((r) => r.state === 1).length;
     const reds = radar.filter((r) => r.state === -1).length;
-    const decliners = radar.filter((r) => (r.z_mom ?? 0) < 0).length;
-    const advancers = radar.filter((r) => (r.z_mom ?? 0) > 0).length;
+    const sessionQuotes = await fetchSessionQuotes(
+      sb,
+      radar.map((r) => r.symbol)
+    );
+    const { advancers, decliners } = countAdvancersDecliners(radar, sessionQuotes);
+    const sessionMovers = sessionLeadersLaggards(radar, sessionQuotes, 10);
 
     const inputs = (brief?.inputs && typeof brief.inputs === "object")
       ? (brief.inputs as Record<string, unknown>)
@@ -350,7 +357,9 @@ export async function GET() {
       .map((r) => ({
         symbol: r.symbol,
         rank: r.quality_rank,
-        dayPct: r.z_mom,
+        dayPct: sessionDayPct(r.symbol, sessionQuotes, r),
+        priceAsOf: sessionQuotes.get(r.symbol)?.asOf ?? null,
+        quoteStale: sessionQuotes.get(r.symbol)?.stale ?? true,
         orbisScore: orbisScore(r.quality_rank, null),
       }));
 
@@ -456,20 +465,14 @@ export async function GET() {
       posture: livePosture,
       postureLabel,
       posturePillars: resolvedPillars ?? null,
-      breadth: {
+      breadth: buildBreadthBlock({
         total,
         onList: greens,
-        onListPct: total > 0 ? Math.round((greens / total) * 100) : 0,
-        downDay: decliners,
-        downDayPct: total > 0 ? Math.round((decliners / total) * 100) : 0,
         onListDown: reds,
-        onListDownPct: total > 0 ? Math.round((reds / total) * 100) : 0,
-        advancersPct: total > 0 ? Math.round((advancers / total) * 100) : 0,
-        greens,
-        reds,
-        pctGreen: total > 0 ? Math.round((greens / total) * 100) : 0,
-        pctRed: total > 0 ? Math.round((reds / total) * 100) : 0,
-      },
+        downDay: decliners,
+        advancers,
+      }),
+      sessionMovers,
       avgRank: total > 0 ? Math.round(radar.reduce((s, r) => s + r.quality_rank, 0) / total) : 0,
       bestSector,
       worstSector,

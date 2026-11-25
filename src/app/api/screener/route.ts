@@ -6,6 +6,8 @@ import { orbisScore } from "@/lib/orbisScore";
 import { parseSymbolsQueryParam } from "@/lib/symbolsQuery";
 import { resolveUniverseDesk } from "@/lib/resolveIndexDesk";
 import { fetchLatestStrategySignals } from "@/lib/strategySignals";
+import { fetchSessionQuotes } from "@/lib/sessionQuotes";
+import { buildScreenerRow } from "@/lib/screenerEnrich";
 
 export const revalidate = 900;
 
@@ -183,50 +185,39 @@ export async function GET(req: NextRequest) {
       }));
     }
 
-    let rows = allRadar
-      .filter((r) => allowedSymbols.has(r.symbol))
-      .slice(0, limit)
+    const filteredRadar = allRadar.filter((r) => allowedSymbols.has(r.symbol)).slice(0, limit);
+    const quoteSymbols = Array.from(new Set(filteredRadar.map((r) => r.symbol)));
+    const quotes = await fetchSessionQuotes(sb, quoteSymbols);
+
+    let rows = filteredRadar
       .map((r) => {
         const u = filteredUniverse.find((x) => x.symbol === r.symbol);
         const f = fundamentals.find((x) => x.symbol === r.symbol);
         if (!u) return null;
-        return {
-          symbol: r.symbol,
-          companyName: u.company_name ?? "",
-          sector: u.sector ?? "",
-          country: u.country ?? "",
-          exchange: u.exchange ?? "",
-          tier: u.tier ?? "",
-          state: r.state,
-          rank: r.quality_rank,
-          zMom: r.z_mom,
-          fEwmac: r.f_ewmac,
-          z52: r.z_52,
-          breakout: r.breakout_active,
-          volumeConfirmed: r.volume_confirmed,
-          kamaRegime: r.kama_regime ?? 0,
-          adx: r.adx ?? null,
-          entryTiming: r.entry_timing ?? null,
-          convergence: r.convergence_count,
-          stateChangedAt: r.state_changed_at,
-          dayPct: r.z_mom,
-          relVolume: r.f_ewmac,
-          pctFromHigh: r.z_52 * 100,
-          price: f?.price ?? null,
-          marketCap: f?.market_cap ?? null,
-          peRatio: f?.pe_ratio ?? null,
-          divYield: f?.dividend_yield ?? null,
+        return buildScreenerRow(r, u, f, quotes.get(r.symbol), {
           orbisScore: orbisScore(r.quality_rank, f?.composite_factor_score ?? null),
-          compositeScore: f?.composite_factor_score ?? null,
-          hasTrendRadar: true,
           signalSource: useStrategyBus ? "strategy_signals" : "trend_radar",
           strategyAsOf: useStrategyBus ? watchBatch.asOf : null,
-        };
+          hasTrendRadar: true,
+        });
       })
       .filter(Boolean);
 
     if (deskMode) {
+      const deskQuotes = await fetchSessionQuotes(sb, deskSymbols);
       const radarBySym = new Map(allRadar.map((r) => [r.symbol, r]));
+      const emptyRadar = {
+        symbol: "",
+        state: 0,
+        quality_rank: 0,
+        z_mom: 0,
+        f_ewmac: 0,
+        z_52: 0,
+        breakout_active: false,
+        volume_confirmed: false,
+        convergence_count: 0,
+        state_changed_at: null as string | null,
+      };
       const merged = deskSymbols.map((sym) => {
         const existing = rows.find((row) => row && row.symbol === sym);
         if (existing) return { ...existing, hasTrendRadar: true, signalSource: "trend_radar", strategyAsOf: null };
@@ -234,71 +225,31 @@ export async function GET(req: NextRequest) {
         const f = fundamentals.find((x) => x.symbol === sym);
         const r = radarBySym.get(sym);
         if (r && u) {
-          return {
-            symbol: r.symbol,
-            companyName: u.company_name ?? "",
-            sector: u.sector ?? "",
-            country: u.country ?? "",
-            exchange: u.exchange ?? "",
-            tier: u.tier ?? "",
-            state: r.state,
-            rank: r.quality_rank,
-            zMom: r.z_mom,
-            fEwmac: r.f_ewmac,
-            z52: r.z_52,
-            breakout: r.breakout_active,
-            volumeConfirmed: r.volume_confirmed,
-            kamaRegime: r.kama_regime ?? 0,
-            adx: r.adx ?? null,
-            entryTiming: r.entry_timing ?? null,
-            convergence: r.convergence_count,
-            stateChangedAt: r.state_changed_at,
-            dayPct: r.z_mom,
-            relVolume: r.f_ewmac,
-            pctFromHigh: r.z_52 * 100,
-            price: f?.price ?? null,
-            marketCap: f?.market_cap ?? null,
-            peRatio: f?.pe_ratio ?? null,
-            divYield: f?.dividend_yield ?? null,
+          return buildScreenerRow(r, u, f, deskQuotes.get(sym), {
             orbisScore: orbisScore(r.quality_rank, f?.composite_factor_score ?? null),
-            compositeScore: f?.composite_factor_score ?? null,
-            hasTrendRadar: true,
             signalSource: "trend_radar",
             strategyAsOf: null,
-          };
+            hasTrendRadar: true,
+          });
         }
-        return {
-          symbol: sym,
-          companyName: u?.company_name ?? sym,
-          sector: u?.sector ?? "",
-          country: u?.country ?? "US",
-          exchange: u?.exchange ?? "NASDAQ",
-          tier: "desk",
-          state: 0,
-          rank: 0,
-          zMom: 0,
-          fEwmac: 0,
-          z52: 0,
-          breakout: false,
-          volumeConfirmed: false,
-          kamaRegime: 0,
-          adx: null,
-          entryTiming: null,
-          convergence: 0,
-          stateChangedAt: null,
-          dayPct: 0,
-          relVolume: 0,
-          pctFromHigh: 0,
-          price: f?.price ?? null,
-          marketCap: f?.market_cap ?? null,
-          peRatio: f?.pe_ratio ?? null,
-          divYield: f?.dividend_yield ?? null,
-          orbisScore: null,
-          compositeScore: f?.composite_factor_score ?? null,
-          hasTrendRadar: false,
-          signalSource: "trend_radar",
-          strategyAsOf: null,
-        };
+        return buildScreenerRow(
+          { ...emptyRadar, symbol: sym },
+          {
+            company_name: u?.company_name ?? sym,
+            sector: u?.sector ?? "",
+            country: u?.country ?? "US",
+            exchange: u?.exchange ?? "NASDAQ",
+            tier: "desk",
+          },
+          f,
+          deskQuotes.get(sym),
+          {
+            orbisScore: null,
+            signalSource: "trend_radar",
+            strategyAsOf: null,
+            hasTrendRadar: false,
+          }
+        );
       });
       rows = merged as typeof rows;
     }

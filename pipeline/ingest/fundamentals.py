@@ -108,13 +108,40 @@ def _get_supabase_client() -> Client:
     return create_client(cfg.url, cfg.service_key)
 
 
+def _norm_margin(raw) -> float | None:
+    if raw is None:
+        return None
+    try:
+        x = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if abs(x) > 1.5:
+        x = x / 100.0
+    if x < -1 or x > 1:
+        return None
+    return x
+
+
+def _sanitize_margin_fields(row: dict) -> dict:
+    """Drop operating margin when it exceeds gross (vendor field/period mix)."""
+    gross = _norm_margin(row.get("gross_margin"))
+    op = _norm_margin(row.get("operating_margin"))
+    net = _norm_margin(row.get("net_margin"))
+    row["gross_margin"] = gross
+    row["operating_margin"] = op
+    row["net_margin"] = net
+    if gross is not None and op is not None and op > gross + 1e-6:
+        row["operating_margin"] = None
+    return row
+
+
 def _map_row(raw: dict, field_map: dict[str, str]) -> dict:
     """Map a raw API row to DB columns using the given field map."""
     mapped: dict = {}
     for src_key, dst_key in field_map.items():
         if src_key in raw:
             mapped[dst_key] = raw[src_key]
-    return mapped
+    return _sanitize_margin_fields(mapped)
 
 
 def _ingest_fundamentals(lse: LSEClient, sb: Client) -> int:

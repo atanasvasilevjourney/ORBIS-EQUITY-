@@ -3,6 +3,8 @@ import { createServerClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { matchesScreener, parseScreenerQuery, type ScreenerQuery } from "@/lib/fundamentalsScreener";
 import { orbisScore } from "@/lib/orbisScore";
+import { fetchSessionQuotes } from "@/lib/sessionQuotes";
+import { refreshFundamentalQuotes, sanitizeMargins } from "@/lib/fundamentalsSanity";
 
 export const revalidate = 900;
 
@@ -16,10 +18,23 @@ function mapRow(
     exchange: string | null;
     tier: string | null;
   },
-  radar: { state: number; quality_rank: number } | undefined
+  radar: { state: number; quality_rank: number } | undefined,
+  quote?: import("@/lib/sessionQuotes").SessionQuote
 ) {
   const rank = radar?.quality_rank ?? null;
   const composite = r.composite_factor_score as number | null;
+  const refreshed = refreshFundamentalQuotes({
+    snapshotPrice: (r.price as number | null) ?? null,
+    snapshotMarketCap: (r.market_cap as number | null) ?? null,
+    livePrice: quote?.last ?? null,
+    quoteAsOf: quote?.asOf ?? null,
+    quoteStale: quote?.stale ?? true,
+  });
+  const margins = sanitizeMargins(
+    r.gross_margin as number | null,
+    r.operating_margin as number | null,
+    r.net_margin as number | null
+  );
   return {
     symbol: r.symbol as string,
     companyName: u.company_name ?? "",
@@ -31,8 +46,13 @@ function mapRow(
     state: radar?.state ?? null,
     rank,
     orbisScore: orbisScore(rank ?? 0, composite),
-    price: r.price as number | null,
-    marketCap: r.market_cap as number | null,
+    price: refreshed.price,
+    priceAsOf: refreshed.priceAsOf,
+    quoteStale: refreshed.quoteStale,
+    snapshotPrice: refreshed.snapshotPrice,
+    marketCap: refreshed.marketCap,
+    snapshotMarketCap: refreshed.snapshotMarketCap,
+    marketCapImpliedFromPrice: refreshed.marketCapImpliedFromPrice,
     pe: r.pe_ratio as number | null,
     pb: r.pb_ratio as number | null,
     ps: r.ps_ratio as number | null,
@@ -122,9 +142,14 @@ export async function GET(req: NextRequest) {
     const sectors = Array.from(new Set(universe.map((r) => r.sector).filter(Boolean))).sort() as string[];
     const industries = Array.from(new Set(universe.map((r) => r.industry).filter(Boolean))).sort() as string[];
 
+    const quotes = await fetchSessionQuotes(
+      sb,
+      filtered.map((r) => r.symbol as string)
+    );
+
     const rows = filtered.map((r) => {
       const sym = r.symbol as string;
-      return mapRow(r, uniMap.get(sym)!, radarMap.get(sym));
+      return mapRow(r, uniMap.get(sym)!, radarMap.get(sym), quotes.get(sym));
     });
 
     return NextResponse.json({
