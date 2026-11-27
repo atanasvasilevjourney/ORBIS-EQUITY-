@@ -18,13 +18,12 @@ const NAV_PRIMARY = [
 ];
 
 const NAV_MORE = [
-  { href: "/ema200", label: "EMA200", title: "Watchlist only" },
+  { href: "/ema200", label: "EMA200", title: "Ribbon watchlist + band pullback (pb_ema)" },
   { href: "/orb", label: "ORB", title: "Research sleeve" },
   { href: "/skew", label: "SKEW", title: "Research sleeve" },
   { href: "/analysis", label: "ANALYZE", title: "Research sleeve" },
   { href: "/bias", label: "BIAS", title: "Research sleeve" },
   { href: "/triangle", label: "TRI", title: "Research sleeve" },
-  { href: "/trend-band", label: "BAND", title: "Trend-band pullback scanner" },
   { href: "/cash", label: "CASH", title: "Research sleeve" },
   { href: "/factors", label: "FACTORS", title: "Factor investing desk" },
   { href: "/fundamentals/screener", label: "FA SCR", title: "Factor screener" },
