@@ -139,6 +139,11 @@ class TestPipelineDAGSmoke:
             ):
                 stack.enter_context(patch.object(mod, "LSEClient", return_value=mock_lse))
 
+            if module_path == "pipeline.ingest.fundamentals":
+                stack.enter_context(
+                    patch.object(mod, "fill_missing_from_statements", return_value=0)
+                )
+
             if module_path == "pipeline.ingest.financial_reports":
                 from pipeline.clients.sec_edgar import SecFinancialsBatchResult
                 from pipeline.clients.yahoo_financials import YahooFinancialsBatchResult

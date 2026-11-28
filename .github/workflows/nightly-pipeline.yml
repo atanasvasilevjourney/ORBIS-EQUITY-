@@ -244,13 +244,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     needs: [ingest-prices, ingest-financial-reports, ingest-fundamentals]
+    # A screener 401 must not block signals; that job keeps the prior snapshot.
     if: >-
       always()
       && needs.ingest-prices.result == 'success'
       && (needs.ingest-financial-reports.result == 'success'
           || needs.ingest-financial-reports.result == 'skipped')
       && (needs.ingest-fundamentals.result == 'success'
-          || needs.ingest-fundamentals.result == 'skipped')
+          || needs.ingest-fundamentals.result == 'skipped'
+          || needs.ingest-fundamentals.result == 'failure')
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
