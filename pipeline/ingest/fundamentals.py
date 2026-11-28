@@ -346,6 +346,8 @@ def main() -> None:
             headline += "; kept prior snapshot"
         run.set_headline(headline)
 
+    run_recorded("ingest.fundamentals", _run)
+
 
 def _record_fundamentals_outcome(run, result: FundamentalsIngestResult, sb: Client) -> None:
     """Record screener failure as partial so the process still exits 0."""
@@ -382,7 +384,6 @@ def _record_fundamentals_outcome(run, result: FundamentalsIngestResult, sb: Clie
             )
     run.set_row_counts(**counts)
 
-    run_recorded("ingest.fundamentals", _run)
 
 if __name__ == "__main__":
     main()
