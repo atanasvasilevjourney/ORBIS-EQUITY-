@@ -42,9 +42,22 @@ def _growth_ratio(cur: float | None, pri: float | None, years: int = 1) -> float
     if years <= 0:
         return None
     try:
-        return (cur / pri) ** (1.0 / years) - 1.0
-    except (ValueError, ZeroDivisionError):
+        ratio = cur / pri
+        # A negative base to a fractional power is complex in Python and cannot be stored.
+        if ratio < 0 and years != 1:
+            return None
+        value = ratio ** (1.0 / years) - 1.0
+    except (ValueError, ZeroDivisionError, OverflowError):
         return None
+    if isinstance(value, complex):
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    if value != value:
+        return None
+    return value
 
 
 def derive_from_reports(
@@ -374,18 +387,22 @@ def fill_missing_from_statements(sb) -> int:
     for sym, (sec, ind) in sector_map.items():
         rep = reports.get(sym, {})
         inc = rep.get("income") or []
-        fields = statement_fields_from_reports(
-            income_cur=inc[0] if inc else None,
-            income_pri=inc[1] if len(inc) > 1 else None,
-            income_old=inc[2] if len(inc) > 2 else None,
-            balance_cur=(rep.get("balance") or [None])[0],
-            cashflow_cur=(rep.get("cashflow") or [None])[0],
-            growth_cur=(rep.get("growth") or [None])[0],
-            metrics_cur=(rep.get("metrics") or [None])[0],
-            price=prices.get(sym),
-            sector=sec,
-            industry=ind,
-        )
+        try:
+            fields = statement_fields_from_reports(
+                income_cur=inc[0] if inc else None,
+                income_pri=inc[1] if len(inc) > 1 else None,
+                income_old=inc[2] if len(inc) > 2 else None,
+                balance_cur=(rep.get("balance") or [None])[0],
+                cashflow_cur=(rep.get("cashflow") or [None])[0],
+                growth_cur=(rep.get("growth") or [None])[0],
+                metrics_cur=(rep.get("metrics") or [None])[0],
+                price=prices.get(sym),
+                sector=sec,
+                industry=ind,
+            )
+        except Exception:
+            logger.exception("Statement fill skipped %s", sym)
+            continue
         patch = patch_missing_snapshot(
             existing.get(sym),
             fields,
@@ -421,18 +438,22 @@ def run_derived(sb) -> dict[str, int]:
         rep = reports.get(sym, {})
         inc = rep.get("income", [])
         sec, ind = sector_map[sym]
-        derived = derive_from_reports(
-            income_cur=inc[0] if inc else None,
-            income_pri=inc[1] if len(inc) > 1 else None,
-            income_old=inc[2] if len(inc) > 2 else None,
-            balance_cur=(rep.get("balance") or [None])[0],
-            cashflow_cur=(rep.get("cashflow") or [None])[0],
-            growth_cur=(rep.get("growth") or [None])[0],
-            metrics_cur=(rep.get("metrics") or [None])[0],
-            price=prices.get(sym),
-            sector=sec,
-            industry=ind,
-        )
+        try:
+            derived = derive_from_reports(
+                income_cur=inc[0] if inc else None,
+                income_pri=inc[1] if len(inc) > 1 else None,
+                income_old=inc[2] if len(inc) > 2 else None,
+                balance_cur=(rep.get("balance") or [None])[0],
+                cashflow_cur=(rep.get("cashflow") or [None])[0],
+                growth_cur=(rep.get("growth") or [None])[0],
+                metrics_cur=(rep.get("metrics") or [None])[0],
+                price=prices.get(sym),
+                sector=sec,
+                industry=ind,
+            )
+        except Exception:
+            logger.exception("Derived ratios skipped %s", sym)
+            continue
         if not derived:
             continue
         derived["symbol"] = sym
