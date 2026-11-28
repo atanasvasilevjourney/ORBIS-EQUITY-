@@ -8,6 +8,20 @@ import pandas as pd
 from pipeline.strategies.costs import DEFAULT_LOOP_COSTS, CostModel
 
 
+def next_session_date(ohlcv: pd.DataFrame | None, after: date) -> date | None:
+    """Calendar date of the first bar strictly after ``after``."""
+    if ohlcv is None or ohlcv.empty:
+        return None
+    idx = ohlcv.index
+    if not isinstance(idx, pd.DatetimeIndex):
+        return None
+    ts = pd.Timestamp(after)
+    future = ohlcv.index.normalize() > ts
+    if not future.any():
+        return None
+    return ohlcv.index[int(future.argmax())].date()
+
+
 def next_session_open(ohlcv: pd.DataFrame | None, after: date) -> tuple[float | None, str]:
     """Next bar open strictly after ``after``; else None and ``eod_close``."""
     if ohlcv is None or ohlcv.empty:

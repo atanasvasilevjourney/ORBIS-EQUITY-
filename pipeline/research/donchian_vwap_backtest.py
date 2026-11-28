@@ -1,6 +1,16 @@
-"""Donchian channel + rolling VWAP filter — portfolio backtest for IS/OOS validation."""
+"""Donchian channel + rolling VWAP filter — portfolio backtest for IS/OOS validation.
+
+Execution assumptions are documented in ``pipeline.strategies.fill_rules``. The legacy path
+below applies **corrected** exit-day P&L and slot cash (no re-leverage) by default.
+
+.. deprecated::
+   Headline metrics that ranked ATR parameters on the same OOS window (see ``grid_search_atr_trail``)
+   and artifacts under ``pipeline/research/artifacts/donchian_atr_trail_grid.*`` are **invalid**
+   (+307% / OOS Sharpe 3.73). Use ``pipeline.research.loop_donchian_harness`` instead.
+"""
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from typing import Literal
@@ -24,6 +34,8 @@ from pipeline.compute.donchian_vwap import (
 )
 from pipeline.ingest.us_index_universe import build_merged_universe
 from pipeline.research.loop_backtest import _bar_on, _download_panel
+from pipeline.strategies.costs import CostModel, DEFAULT_LOOP_COSTS
+from pipeline.strategies.fill_rules import portfolio_pnl_day, slot_weight
 from pipeline.universe_filters import is_loop_tradable, is_pharma_stock
 
 ExitMode = Literal["donchian20", "atr_trail", "tighter"]
@@ -98,11 +110,25 @@ def _bar_ohlc(ohlcv: pd.DataFrame, d: date) -> tuple[float, float, float] | None
     return float(row["high"]), float(row["low"]), float(row["close"])
 
 
-def build_research_panels(data_start: str = "2022-06-01") -> tuple[dict[str, pd.DataFrame], dict[str, pd.DataFrame]]:
+def build_research_panels(
+    data_start: str = "2022-06-01",
+    *,
+    sym_sector: dict[str, str] | None = None,
+    symbols: list[str] | None = None,
+) -> tuple[dict[str, pd.DataFrame], dict[str, pd.DataFrame]]:
     """Download universe OHLCV and precompute Donchian signal frames."""
-    sym_sector = _universe()
-    symbols = sorted(sym_sector.keys())
+    if sym_sector is None:
+        sym_sector = _universe()
+    if symbols is None:
+        symbols = sorted(sym_sector.keys())
+    else:
+        symbols = sorted(set(symbols) & set(sym_sector.keys()))
+    import logging
+
+    log = logging.getLogger(__name__)
+    log.info("Downloading OHLCV for %s symbols from %s", len(symbols), data_start)
     panels = _download_panel(symbols, data_start)
+    log.info("Downloaded %s panels", len(panels))
     if "SPY" not in panels:
         spy = yf.download("SPY", start=data_start, progress=False, auto_adjust=True)
         panels["SPY"] = spy.rename(columns=str.lower)[["open", "high", "low", "close", "volume"]].dropna()
@@ -115,7 +141,7 @@ def build_research_panels(data_start: str = "2022-06-01") -> tuple[dict[str, pd.
             signals[sym] = _donchian_signals(ohlcv)
         except Exception:
             continue
-    return panels, signals
+    return panels, signals, sym_sector
 
 
 def _metrics(label: str, start: date, end: date, daily_returns: pd.Series) -> PeriodMetrics:
@@ -141,6 +167,11 @@ def run_donchian_vwap_portfolio(
     panels: dict[str, pd.DataFrame] | None = None,
     signals: dict[str, pd.DataFrame] | None = None,
     sym_sector: dict[str, str] | None = None,
+    rebalance_weekday: int | None = None,
+    rotation_mode: str = "weekly",
+    cost: CostModel | None = DEFAULT_LOOP_COSTS,
+    legacy_accounting: bool = False,
+    membership_lookup: Callable[[date], set[str]] | None = None,
 ) -> tuple[pd.Series, pd.DataFrame]:
     """
     Weekly rebalance: hold up to TOP_N names with Donchian(55) break + close > 20d VWAP.
@@ -154,7 +185,7 @@ def run_donchian_vwap_portfolio(
     if sym_sector is None:
         sym_sector = _universe()
     if panels is None or signals is None:
-        panels, signals = build_research_panels(data_start)
+        panels, signals, _ = build_research_panels(data_start)
 
     cal = panels["SPY"]
     days = [d.date() if hasattr(d, "date") else d for d in cal.index]
@@ -167,38 +198,73 @@ def run_donchian_vwap_portfolio(
 
     for i, d in enumerate(days):
         start_holdings = list(holdings.keys())
-        # exits between rebalances
-        to_drop = []
+        gap_stops: list[str] = []
+        close_stops: list[str] = []
+        to_drop: list[str] = []
         for sym in list(holdings.keys()):
             sig = signals.get(sym)
             ohlcv = panels.get(sym)
             row = _bar_on(sig, d) if sig is not None else None
             dc_exit = row is not None and bool(row.get("exit_signal", False))
             atr_exit = False
-            if exit_mode in ("atr_trail", "tighter") and ohlcv is not None:
+            gap_exit = False
+            if exit_mode in ("atr_trail", "tighter") and ohlcv is not None and sym in trails:
                 bar = _bar_ohlc(ohlcv, d)
-                if bar is not None and sym in trails:
+                if bar is not None:
                     hi, _, close = bar
-                    atr = _atr_on_bar(ohlcv, d, atr_period)
-                    if atr is not None:
-                        trails[sym] = _update_trail(trails[sym], hi, atr, atr_mult)
-                        if close < trails[sym].stop_price:
-                            atr_exit = True
+                    ts = pd.Timestamp(d)
+                    hits = ohlcv.index.normalize() == ts
+                    op = float(ohlcv.iloc[int(np.where(hits)[0][0])]["open"]) if hits.any() else close
+                    if op < trails[sym].stop_price:
+                        gap_exit = True
+                    else:
+                        atr = _atr_on_bar(ohlcv, d, atr_period)
+                        if atr is not None:
+                            trails[sym] = _update_trail(trails[sym], hi, atr, atr_mult)
+                            if close < trails[sym].stop_price:
+                                atr_exit = True
             if exit_mode == "donchian20" and dc_exit:
                 to_drop.append(sym)
-            elif exit_mode == "atr_trail" and atr_exit:
+                close_stops.append(sym)
+            elif exit_mode == "atr_trail" and (gap_exit or atr_exit):
                 to_drop.append(sym)
-            elif exit_mode == "tighter" and (dc_exit or atr_exit):
+                if gap_exit:
+                    gap_stops.append(sym)
+                else:
+                    close_stops.append(sym)
+            elif exit_mode == "tighter" and (dc_exit or gap_exit or atr_exit):
                 to_drop.append(sym)
+                if gap_exit:
+                    gap_stops.append(sym)
+                elif atr_exit or dc_exit:
+                    close_stops.append(sym)
         for sym in to_drop:
             holdings.pop(sym, None)
             trails.pop(sym, None)
 
         signal_day = days[max(0, i - 1)]  # prior close — no same-bar lookahead
-        if i % REBALANCE_DAYS == 0 or not holdings:
+        if rebalance_weekday is not None:
+            rebalance_today = d.weekday() == rebalance_weekday
+        else:
+            rebalance_today = i % REBALANCE_DAYS == 0 or not holdings
+        if rotation_mode == "hold_until_stop" and holdings:
+            rebalance_today = rebalance_today and len(holdings) < TOP_N
+        elif not holdings:
+            rebalance_today = True
+
+        rotated_out: list[str] = []
+        new_entries: list[str] = []
+        end_before = set(holdings.keys())
+
+        if rebalance_today:
             sector_count: dict[str, int] = {}
             cands: list[tuple[str, float]] = []
+            pit_set = membership_lookup(signal_day) if membership_lookup else None
             for sym, sig in signals.items():
+                if sym not in sym_sector:
+                    continue
+                if pit_set is not None and sym not in pit_set:
+                    continue
                 row = _bar_on(sig, signal_day)
                 if row is None:
                     continue
@@ -206,22 +272,40 @@ def run_donchian_vwap_portfolio(
                     continue
                 cands.append((sym, float(row["strength"])))
             cands.sort(key=lambda x: -x[1])
-            new_hold: dict[str, float] = {}
-            for sym, _ in cands:
-                sec = sym_sector.get(sym, "Unknown")
-                if sector_count.get(sec, 0) >= MAX_PER_SECTOR:
-                    continue
-                new_hold[sym] = 1.0
-                sector_count[sec] = sector_count.get(sec, 0) + 1
-                if len(new_hold) >= TOP_N:
-                    break
-            if new_hold:
-                w = 1.0 / len(new_hold)
-                prev_syms = set(holdings.keys())
-                holdings = {s: w for s in new_hold}
+            if rotation_mode == "hold_until_stop":
+                new_hold = dict(holdings)
+                sector_count = {}
                 for sym in new_hold:
-                    if sym in trails:
+                    sec = sym_sector.get(sym, "Unknown")
+                    sector_count[sec] = sector_count.get(sec, 0) + 1
+                for sym, _ in cands:
+                    if len(new_hold) >= TOP_N:
+                        break
+                    if sym in new_hold:
                         continue
+                    sec = sym_sector.get(sym, "Unknown")
+                    if sector_count.get(sec, 0) >= MAX_PER_SECTOR:
+                        continue
+                    new_hold[sym] = slot_weight(TOP_N)
+                    new_entries.append(sym)
+                    sector_count[sec] = sector_count.get(sec, 0) + 1
+            else:
+                new_hold: dict[str, float] = {}
+                for sym, _ in cands:
+                    sec = sym_sector.get(sym, "Unknown")
+                    if sector_count.get(sec, 0) >= MAX_PER_SECTOR:
+                        continue
+                    new_hold[sym] = slot_weight(TOP_N)
+                    sector_count[sec] = sector_count.get(sec, 0) + 1
+                    if len(new_hold) >= TOP_N:
+                        break
+            if new_hold:
+                if rotation_mode == "weekly":
+                    for sym in end_before - set(new_hold.keys()):
+                        rotated_out.append(sym)
+                prev_syms = set(holdings.keys())
+                holdings = {s: slot_weight(TOP_N) for s in new_hold}
+                for sym in set(new_hold) - prev_syms:
                     ohlcv = panels.get(sym)
                     if ohlcv is None:
                         continue
@@ -234,11 +318,25 @@ def run_donchian_vwap_portfolio(
                 for sym in prev_syms - set(new_hold.keys()):
                     trails.pop(sym, None)
 
-        from pipeline.strategies.execution import equal_weight_portfolio_return
+        if legacy_accounting:
+            from pipeline.strategies.execution import equal_weight_portfolio_return
 
-        day_ret = equal_weight_portfolio_return(
-            panels, d, list(holdings.keys()), prev_holdings=start_holdings
-        )
+            day_ret = equal_weight_portfolio_return(
+                panels, d, list(holdings.keys()), prev_holdings=start_holdings, cost=cost,
+            )
+        else:
+            day_ret, _ = portfolio_pnl_day(
+                panels,
+                d,
+                start_symbols=start_holdings,
+                end_symbols=list(holdings.keys()),
+                stop_close_exits=close_stops,
+                stop_gap_exits=gap_stops,
+                rotated_out=rotated_out,
+                new_entries=new_entries,
+                top_n=TOP_N,
+                cost=cost,
+            )
 
         equity *= 1 + day_ret
         eq_rows.append({"date": d, "equity": equity, "daily_return": day_ret, "names": len(holdings)})
@@ -292,12 +390,13 @@ def grid_search_atr_trail(
     exit_mode: ExitMode = "atr_trail",
     data_start: str = "2022-06-01",
     param_grid: list[tuple[int, float]] | None = None,
+    select_on_is_only: bool = True,
 ) -> pd.DataFrame:
-    """Rank ATR chandelier trail parameters on fixed IS/OOS split (same as notebook)."""
+    """Grid over ATR trail params. When ``select_on_is_only``, rank by IS Sharpe (not OOS)."""
     (is_start, is_end), (oos_start, oos_end) = is_oos_split()
     full_start, full_end = is_start, oos_end
     grid = param_grid or default_atr_param_grid()
-    panels, signals = build_research_panels(data_start)
+    panels, signals, _ = build_research_panels(data_start)
 
     rows: list[GridResult] = []
     for atr_period, atr_mult in grid:
@@ -334,5 +433,6 @@ def grid_search_atr_trail(
     df = pd.DataFrame([r.__dict__ for r in rows])
     if df.empty:
         return df
-    df = df.sort_values(["oos_sharpe", "is_sharpe"], ascending=False).reset_index(drop=True)
+    sort_cols = ["is_sharpe", "oos_sharpe"] if select_on_is_only else ["oos_sharpe", "is_sharpe"]
+    df = df.sort_values(sort_cols, ascending=False).reset_index(drop=True)
     return df

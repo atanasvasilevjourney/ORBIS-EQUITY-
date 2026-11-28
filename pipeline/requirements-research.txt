@@ -1,0 +1,3 @@
+# Optional: Donchian harness reports / PNG charts (not installed in CI).
+-r requirements.txt
+matplotlib>=3.8
