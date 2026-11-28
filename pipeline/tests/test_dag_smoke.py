@@ -140,10 +140,21 @@ class TestPipelineDAGSmoke:
                 stack.enter_context(patch.object(mod, "LSEClient", return_value=mock_lse))
 
             if module_path == "pipeline.ingest.financial_reports":
+                from pipeline.clients.sec_edgar import SecFinancialsBatchResult
                 from pipeline.clients.yahoo_financials import YahooFinancialsBatchResult
 
                 stack.enter_context(
                     patch.object(mod, "fetch_active_symbols", return_value=["AAPL"])
+                )
+                stack.enter_context(
+                    patch.object(mod, "load_company_tickers", return_value={"AAPL": 320193})
+                )
+                stack.enter_context(
+                    patch.object(
+                        mod,
+                        "fetch_sec_financials_batch",
+                        return_value=SecFinancialsBatchResult([], 0, 0, 0, 0, 0, 0, {}),
+                    )
                 )
                 stack.enter_context(
                     patch.object(

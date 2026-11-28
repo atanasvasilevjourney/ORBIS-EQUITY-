@@ -8,8 +8,7 @@
 #   - ingest-fundamentals : ~4 Mon runs     x 12 min =   48 min
 #   - ingest-fin-reports  : ~4 Mon runs     x 15 min =   60 min
 #   - compute-signals     : ~22 daily runs  x  8 min =  176 min
-#   - ingest-earnings     : ~22 daily runs  x  3 min =   66 min
-#   - ingest-news         : ~22 daily runs  x  5 min =  110 min
+#   - ingest-earnings-news: ~22 daily runs  x 15 min =  330 min
 #   - overhead (setup/cache)                          = ~300 min
 #   Total estimate                                    ~1,040 min/month
 # =============================================================================
@@ -236,15 +235,22 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           LSE_API_KEY: ${{ secrets.LSE_API_KEY }}
+          SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
 
   # ---------------------------------------------------------------------------
-  # 5. Compute Signals — runs every weekday after prices are ingested
+  # 5. Compute Signals — after prices; on Mondays wait for weekly financial reports
   # ---------------------------------------------------------------------------
   compute-signals:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: ingest-prices
-    if: always() && needs.ingest-prices.result == 'success'
+    timeout-minutes: 35
+    needs: [ingest-prices, ingest-financial-reports, ingest-fundamentals]
+    if: >-
+      always()
+      && needs.ingest-prices.result == 'success'
+      && (needs.ingest-financial-reports.result == 'success'
+          || needs.ingest-financial-reports.result == 'skipped')
+      && (needs.ingest-fundamentals.result == 'success'
+          || needs.ingest-fundamentals.result == 'skipped')
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -394,9 +400,10 @@ jobs:
   # ---------------------------------------------------------------------------
   # 6. Ingest Earnings + News — runs every weekday
   # ---------------------------------------------------------------------------
+  # GDELT rate limits drive ~14 min news fetches for 50 tickers; keep headroom vs job kill.
   ingest-earnings-news:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     needs: compute-signals
     if: always() && needs.compute-signals.result == 'success'
     steps:
@@ -433,4 +440,5 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          NEWS_MAX_SEC: "1080"
 
