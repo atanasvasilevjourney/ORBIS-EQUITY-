@@ -144,6 +144,21 @@ class _Run:
         self.counts.update(counts)
 
 
+def test_main_invokes_the_recorded_ingest(monkeypatch):
+    seen = {}
+
+    def fake_run_recorded(source, fn, **kwargs):
+        seen["source"] = source
+        seen["fn"] = fn
+
+    monkeypatch.setattr("pipeline.utils.run_recorded.run_recorded", fake_run_recorded)
+    from pipeline.ingest.fundamentals import main
+
+    main()
+    assert seen["source"] == "ingest.fundamentals"
+    assert callable(seen["fn"])
+
+
 def test_screener_failure_is_partial_so_the_job_can_continue():
     run = _Run()
     _record_fundamentals_outcome(
