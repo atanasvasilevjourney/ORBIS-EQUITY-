@@ -1,4 +1,4 @@
-# ORBIS EQUITY architecture
+# Iskrel Equity architecture
 
 Paper research terminal. Nothing here sends a live broker order.
 

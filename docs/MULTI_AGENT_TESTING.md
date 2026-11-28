@@ -1,6 +1,6 @@
-# Multi-Agent Testing Guide for ORBIS EQUITY
+# Multi-Agent Testing Guide for Iskrel Equity
 
-This document describes how to run ORBIS EQUITY's multi-agent testing workflow using Cursor Cloud Agent subagents.
+This document describes how to run Iskrel Equity's multi-agent testing workflow using Cursor Cloud Agent subagents.
 
 ## Architecture
 
@@ -39,7 +39,7 @@ Launch these subagents simultaneously:
 
 ```
 explore:
-  "Map all testable surfaces in ORBIS EQUITY; list P0 coverage gaps in pipeline compute,
+  "Map all testable surfaces in Iskrel Equity; list P0 coverage gaps in pipeline compute,
    API routes, and UI pages."
 
 generalPurpose (pipeline):

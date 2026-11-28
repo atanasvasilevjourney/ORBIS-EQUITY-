@@ -1,8 +1,8 @@
 # thinkorswim-style trade workspace
 
-ORBIS EQUITY does not replicate thinkorswim order entry, options chains, or multi-monitor layouts. The **`/trade`** route mirrors the **MarketWatch + Charts** workflow:
+Iskrel Equity does not replicate thinkorswim order entry, options chains, or multi-monitor layouts. The **`/trade`** route mirrors the **MarketWatch + Charts** workflow:
 
-| TOS concept | ORBIS route | Notes |
+| TOS concept | Iskrel route | Notes |
 |-------------|-------------|--------|
 | MarketWatch | Left pane (`MARKETWATCH`) | Same Trend Radar scan as `/screener` |
 | Charts | Right pane (`CHARTS`) | lightweight-charts, 1d / 5m, EMA ribbon |

@@ -1,4 +1,4 @@
-"""Build weekly research pack from ORBIS Supabase tables."""
+"""Build weekly research pack from Iskrel Equity Supabase tables."""
 from __future__ import annotations
 
 import logging
@@ -244,7 +244,7 @@ def generate_pack(sb: Client, cfg: dict | None = None) -> dict:
     headline = macro.get("headline") or "Weekly research pack"
     if ideas:
         headline = (
-            f"{headline} · {len(ideas)} idea(s): {n_long} long / {n_short} short from ORBIS screens."
+            f"{headline} · {len(ideas)} idea(s): {n_long} long / {n_short} short from Iskrel screens."
         )
 
     return {

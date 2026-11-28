@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://orbis.equity/schemas/signal.v1.json",
-  "title": "ORBIS Common Signal v1",
-  "description": "Normalized cross-app signal row for ORBIS Equity, ORBIS GEX, COT Pulse, QMIE, and public sources. Used by Sunday confluence scoring and future Grok weekly routine.",
+  "title": "Iskrel Common Signal v1",
+  "description": "Normalized cross-app signal row for Iskrel Equity, Iskrel GEX, Iskrel COT, Iskrel Crypto, and public sources. Used by Sunday confluence scoring and future Grok weekly routine.",
   "type": "object",
   "required": [
     "run_id",
@@ -56,7 +56,7 @@
     "symbol": {
       "type": "string",
       "minLength": 1,
-      "description": "Canonical ORBIS symbol (ticker, index ETF, or perp code)."
+      "description": "Canonical Iskrel symbol (ticker, index ETF, or perp code)."
     },
     "venue_symbol": {
       "type": ["string", "null"],
@@ -75,7 +75,7 @@
       "type": "number",
       "minimum": -20,
       "maximum": 20,
-      "description": "Signed conviction on the shared +/-20 scale (ORBIS Trend Diagnostics convention)."
+      "description": "Signed conviction on the shared +/-20 scale (Iskrel Trend Diagnostics convention)."
     },
     "probability": {
       "type": ["number", "null"],

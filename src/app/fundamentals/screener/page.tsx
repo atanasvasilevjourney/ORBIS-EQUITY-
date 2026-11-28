@@ -59,7 +59,7 @@ type FaSortKey =
 
 const FA_SORT_LABELS: Record<FaSortKey, string> = {
   symbol: "Ticker",
-  orbisScore: "Orbis",
+  orbisScore: "Iskrel",
   compositeScore: "Comp",
   fScore: "F",
   pe: "P/E",
@@ -418,7 +418,7 @@ export default function FundamentalsScreenerPage() {
               <thead>
                 <tr className="text-[10px] text-[var(--text-muted)] tracking-widest border-b border-[var(--border)] bg-[var(--surface-alt)]">
                   <SortableTh columnKey="symbol" label="TICKER" levels={levels} onSort={onHeaderClick} />
-                  <SortableTh columnKey="orbisScore" label="ORBIS" levels={levels} align="right" onSort={onHeaderClick} />
+                  <SortableTh columnKey="orbisScore" label="ISKREL" levels={levels} align="right" onSort={onHeaderClick} />
                   <SortableTh columnKey="compositeScore" label="COMP" levels={levels} align="right" onSort={onHeaderClick} />
                   <SortableTh columnKey="fScore" label="F" levels={levels} align="right" onSort={onHeaderClick} />
                   <SortableTh columnKey="pe" label="P/E" levels={levels} align="right" onSort={onHeaderClick} />

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { PortfolioStudio } from "@/components/portfolio/PortfolioStudio";
 
 export const metadata: Metadata = {
-  title: "Portfolio Studio · Orbis",
+  title: "Portfolio Studio · Iskrel",
   description: "Simple long-term stock book and Pro systematic quant stack.",
 };
 

@@ -36,7 +36,7 @@ async function yahoo5m(ticker: string): Promise<Candle[]> {
   try {
     const body = await cachedYahooJson(`5m:${ticker}`, 120_000, async () => {
       const res = await fetch(url, {
-        headers: { "User-Agent": "Mozilla/5.0 OrbisEquity-Terminal" },
+        headers: { "User-Agent": "Mozilla/5.0 IskrelEquity-Terminal" },
         cache: "no-store",
         signal: AbortSignal.timeout(8000),
       });

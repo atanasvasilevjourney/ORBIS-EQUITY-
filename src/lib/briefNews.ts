@@ -118,7 +118,7 @@ async function fetchQuery(query: string): Promise<BriefNewsItem[]> {
   const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=0&newsCount=6`;
   const body = await cachedYahooJson(`news:${query}`, 5 * 60_000, async () => {
     const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 OrbisEquity-Terminal" },
+      headers: { "User-Agent": "Mozilla/5.0 IskrelEquity-Terminal" },
       cache: "no-store",
       signal: AbortSignal.timeout(12000),
     });

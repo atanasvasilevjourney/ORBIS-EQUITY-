@@ -1,4 +1,4 @@
-# ORBIS Equity — EMA200 Touch Scanner (Agent Spec)
+# Iskrel Equity — EMA200 Touch Scanner (Agent Spec)
 
 Persistent agent context for the EMA200 touch scanner. **Phase 1 is implemented under `pipeline/ema200_scanner/`** (see `docs/DECISIONS.md` for layout deviations).
 
@@ -10,7 +10,7 @@ Persistent agent context for the EMA200 touch scanner. **Phase 1 is implemented 
 4. Never place orders. Detect, score, log, and alert only.
 5. Never use unadjusted prices. Never use future data (no lookahead).
 6. Every external call needs timeout, retry with backoff, and structured logging.
-7. If this spec conflicts with the ORBIS repo, follow repo conventions and note in `docs/DECISIONS.md`.
+7. If this spec conflicts with the Iskrel repo, follow repo conventions and note in `docs/DECISIONS.md`.
 8. Write tests alongside code. A phase is not done without passing tests.
 
 ## Build phases

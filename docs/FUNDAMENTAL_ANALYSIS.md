@@ -1,6 +1,6 @@
 # Fundamental Analysis
 
-ORBIS EQUITY stores **full financial statements** and runs automated fundamental
+Iskrel Equity stores **full financial statements** and runs automated fundamental
 analysis on top of them. This is an equity EOD overlay for discretionary swing
 risk — **not** an earnings-beat email alert.
 

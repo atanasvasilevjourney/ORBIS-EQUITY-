@@ -74,7 +74,7 @@ export function Nav() {
                 backgroundClip: "text",
               }}
             >
-              ORBIS
+              ISKREL
             </span>
             <span className="hidden sm:inline font-terminal text-[10px] text-[var(--text-muted)] ml-1.5 tracking-widest">
               EQUITY

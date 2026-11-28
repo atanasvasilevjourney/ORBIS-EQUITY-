@@ -1,4 +1,4 @@
-# Deploy Orbis Equity (online)
+# Deploy Iskrel Equity (online)
 
 Goal: **Next.js app on Vercel**, **Python data pipeline on Render Cron**, **data in Supabase**.
 

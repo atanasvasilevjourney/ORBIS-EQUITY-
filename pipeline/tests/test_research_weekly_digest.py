@@ -17,7 +17,7 @@ def test_format_digest_text_includes_setups_and_watchlist():
             "target_px": 110,
             "rr": 2.0,
             "theme": "Tech",
-            "rationale": "ORBIS rank",
+            "rationale": "Iskrel rank",
         }
     ]
     watchlist = [

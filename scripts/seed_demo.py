@@ -1,4 +1,4 @@
-"""Seed the local ORBIS EQUITY database with deterministic demo data.
+"""Seed the local Iskrel Equity database with deterministic demo data.
 
 This is a LOCAL DEVELOPMENT helper. It writes synthetic (not real-market)
 data through the same Supabase/PostgREST service path the nightly pipeline

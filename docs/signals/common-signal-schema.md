@@ -1,6 +1,6 @@
-# ORBIS common signal schema (v1)
+# Iskrel common signal schema (v1)
 
-Cross-app contract for **ORBIS Equity**, **ORBIS GEX**, **COT Pulse**, **QMIE**, and **public** context feeds. Rows land in a future `signals_weekly` table (or JSON artifact) before **confluence scoring** and the Sunday Grok research routine.
+Cross-app contract for **Iskrel Equity**, **Iskrel GEX**, **Iskrel COT**, **Iskrel Crypto**, and **public** context feeds. Rows land in a future `signals_weekly` table (or JSON artifact) before **confluence scoring** and the Sunday Grok research routine.
 
 - Machine-readable: [`schema.signal.v1.json`](./schema.signal.v1.json) (JSON Schema draft-07)
 - TypeScript: [`src/lib/signals/types.ts`](../../src/lib/signals/types.ts)
@@ -31,7 +31,7 @@ Cross-app contract for **ORBIS Equity**, **ORBIS GEX**, **COT Pulse**, **QMIE**,
 | `forecast` | number | yes | −20 … +20 |
 | `probability` | number \| null | no | 0–1 when source is calibrated |
 | `validated` | boolean | no | Default `false` |
-| `entry`, `stop`, `target` | number \| null | no | From research pack / GEX walls / QMIE |
+| `entry`, `stop`, `target` | number \| null | no | From research pack / GEX walls / Iskrel Crypto |
 | `invalidation` | string \| null | no | Text rule; may be tighter than `stop` |
 | `rationale` | string \| null | no | One line |
 | `evidence` | array | no | `{ label, url?, as_of?, kind }` |
@@ -43,8 +43,8 @@ Cross-app contract for **ORBIS Equity**, **ORBIS GEX**, **COT Pulse**, **QMIE**,
 
 | Horizon | Calendar | Primary modules (integration plan) |
 |---------|----------|-----------------------------------|
-| **short** | Days → 2 weeks | QMIE 1H/4H book, GEX regime/walls, research pack breakouts, COT 1w |
-| **medium** | 2 → 6 weeks | Carver EWMAC, beta rotation, COT 4w, QMIE Trend Radar |
+| **short** | Days → 2 weeks | Iskrel Crypto 1H/4H book, GEX regime/walls, research pack breakouts, COT 1w |
+| **medium** | 2 → 6 weeks | Carver EWMAC, beta rotation, COT 4w, Iskrel Crypto Trend Radar |
 | **long** | ~2 → 6 months | Factor scores, valuation cycle, SEC lane, macro regime (FRED / brief) |
 
 ## Forecast scaling (adapters)
@@ -53,14 +53,14 @@ Map each upstream reading to `forecast` ∈ [−20, 20]:
 
 | Source | Module examples | Mapping |
 |--------|-----------------|---------|
-| ORBIS Equity | `trend_diagnostics`, `carver_ewmac` | Use combined forecast as published (already ±20). |
-| ORBIS Equity | `research_pack` | Long: +12 to +18 from trend+quality vote; short: symmetric negative; `flat` if no setup. |
-| ORBIS GEX | `gex_regime` | `NEGATIVE_GAMMA` + spot below flip → negative bias scaled by distance to flip; positive gamma damped positive. |
-| COT Pulse | `cot_1w`, `cot_4w` | `(probability − 0.5) × 40`, sign matches `direction`. |
-| QMIE | `qmie_grade`, `qmie_radar` | Map grade A+→+18 … C→+4 (short book negates); blend component score if present. |
+| Iskrel Equity | `trend_diagnostics`, `carver_ewmac` | Use combined forecast as published (already ±20). |
+| Iskrel Equity | `research_pack` | Long: +12 to +18 from trend+quality vote; short: symmetric negative; `flat` if no setup. |
+| Iskrel GEX | `gex_regime` | `NEGATIVE_GAMMA` + spot below flip → negative bias scaled by distance to flip; positive gamma damped positive. |
+| Iskrel COT | `cot_1w`, `cot_4w` | `(probability − 0.5) × 40`, sign matches `direction`. |
+| Iskrel Crypto | `qmie_grade`, `qmie_radar` | Map grade A+→+18 … C→+4 (short book negates); blend component score if present. |
 | public | `fred_spread`, `regime` | Discrete mapping documented per adapter; often `long`/`short` only for regime. |
 
-Set `probability` only for COT Pulse (and any future calibrated models). Set `validated` from each app's walk-forward report (COT Pulse already flags per-market AUC / Sharpe).
+Set `probability` only for Iskrel COT (and any future calibrated models). Set `validated` from each app's walk-forward report (Iskrel COT already flags per-market AUC / Sharpe).
 
 ## Confluence scoring (pseudocode)
 
@@ -119,7 +119,7 @@ function ideaConfidence(score, agreement, hasValidated):
   "rationale": "Negative gamma; spot below flip",
   "evidence": [
     {
-      "label": "ORBIS GEX /gex/SPY",
+      "label": "Iskrel GEX /gex/SPY",
       "url": "https://orbis-gex.onrender.com/gex/SPY",
       "as_of": "2026-11-22T06:55:00Z",
       "kind": "SOURCED"
@@ -137,13 +137,13 @@ Planned paths (not all implemented):
 
 | App | Adapter (proposed) | Upstream |
 |-----|-------------------|----------|
-| ORBIS Equity | `pipeline/signals/adapters/orbis_equity.py` | `/api/research-weekly`, `/api/diagnostics`, `/api/rotate`, `/api/cash` |
-| ORBIS GEX | `pipeline/signals/adapters/orbis_gex.py` | `https://orbis-gex.onrender.com` |
-| QMIE | `pipeline/signals/adapters/qmie.py` | `https://qmie.onrender.com` |
-| COT Pulse | `pipeline/signals/adapters/cot_pulse.py` | HTTP export after PR 3 (`predictions.json`) |
+| Iskrel Equity | `pipeline/signals/adapters/orbis_equity.py` | `/api/research-weekly`, `/api/diagnostics`, `/api/rotate`, `/api/cash` |
+| Iskrel GEX | `pipeline/signals/adapters/orbis_gex.py` | `https://orbis-gex.onrender.com` |
+| Iskrel Crypto | `pipeline/signals/adapters/qmie.py` | `https://qmie.onrender.com` |
+| Iskrel COT | `pipeline/signals/adapters/cot_pulse.py` | HTTP export after PR 3 (`predictions.json`) |
 | Confluence job | `pipeline/signals/jobs/weekly_confluence.py` | Writes ranked ideas + persists raw rows |
 
-Protected ORBIS Equity routes require `x-api-key` when `API_SECRET` is set (`src/middleware.ts`). Adapters should read keys from environment in GitHub Actions, never commit secrets.
+Protected Iskrel Equity routes require `x-api-key` when `API_SECRET` is set (`src/middleware.ts`). Adapters should read keys from environment in GitHub Actions, never commit secrets.
 
 ## Related docs
 

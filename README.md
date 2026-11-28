@@ -1,4 +1,4 @@
-# ORBIS EQUITY
+# Iskrel Equity
 
 Systematic equity research terminal — momentum screener, multi-factor fundamentals, earnings & news.
 
@@ -89,7 +89,7 @@ pip install -r pipeline/requirements.txt
 python -m pipeline.bootstrap
 ```
 
-Listed cash EOD (no LSE key) — same public-REST / closed-bar shape as QMIE,
+Listed cash EOD (no LSE key) — same public-REST / closed-bar shape as the Iskrel Crypto scanner (QMIE ingest),
 Yahoo then Stooq, not Binance perps:
 
 ```bash
@@ -180,7 +180,7 @@ Surfaced at `/analysis` and `GET /api/analysis`. Heuristic signals — not inves
 
 ## Quantropy (risk + allocation)
 
-Port of [atanasvasilevjourney/Quantropy](https://github.com/atanasvasilevjourney/Quantropy) (Matilda) onto ORBIS EQUITY daily bars. No Alpaca, no Ken-French file drop.
+Port of [atanasvasilevjourney/Quantropy](https://github.com/atanasvasilevjourney/Quantropy) (Matilda) onto Iskrel Equity daily bars. No Alpaca, no Ken-French file drop.
 
 - **Risk:** annual vol, Sharpe, Sortino, max drawdown, historical VaR/CVaR 5%
 - **CAPM:** alpha and beta vs the equal-weight universe
@@ -224,7 +224,7 @@ Research only — not investment advice.
 
 ## TEMA + Carver cash (listed stock, fully funded)
 
-[QMIE](https://github.com/atanasvasilevjourney/QMIE) is a **crypto USDT-perp scanner**. It does **not** implement TEMA or Carver. This desk maps those two ideas onto **listed cash equities** at the `prices_daily` close. No Bybit/Binance mark, no funding, no liquidation.
+[Iskrel Crypto](https://github.com/atanasvasilevjourney/QMIE) is a **crypto USDT-perp scanner**. It does **not** implement TEMA or Carver. This desk maps those two ideas onto **listed cash equities** at the `prices_daily` close. No Bybit/Binance mark, no funding, no liquidation.
 
 Cash EOD ingest copies QMIE's *ingestion shape* (public REST, provider fallback, drop the in-progress session bar, ~300 daily closes) onto **Yahoo → Stooq**. It does **not** pull USDT-M klines or vendor QMIE's exchange clients.
 

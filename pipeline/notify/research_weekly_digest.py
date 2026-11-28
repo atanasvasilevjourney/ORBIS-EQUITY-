@@ -1,4 +1,4 @@
-"""Sunday ORBIS research + watchlist digest → email (Resend).
+"""Sunday Iskrel Equity research + watchlist digest → email (Resend).
 
 Uses latest research_weekly pack (macro, setups) plus top GREEN trend-radar names.
 Regenerates the pack if missing or older than 6 days.
@@ -136,7 +136,7 @@ def format_digest_text(
 ) -> str:
     macro = run.get("macro") or {}
     lines = [
-        f"ORBIS EQUITY — Sunday research notes ({as_of.isoformat()})",
+        f"Iskrel Equity — Sunday research notes ({as_of.isoformat()})",
         "",
         run.get("headline") or "",
         "",
@@ -204,7 +204,7 @@ def format_digest_html(
     risk = "".join(f"<li>{n}</li>" for n in (run.get("risk_notes") or []))
     return (
         f"<div style='font-family:system-ui,sans-serif;max-width:640px'>"
-        f"<h2>ORBIS Sunday research — {as_of.isoformat()}</h2>"
+        f"<h2>Iskrel Sunday research — {as_of.isoformat()}</h2>"
         f"<p>{run.get('headline') or ''}</p>"
         f"<h3>Macro ({macro.get('symbol', 'SPY')})</h3>"
         f"<p>{macro.get('headline') or ''}</p><ul>{narrative}</ul>"
@@ -239,7 +239,7 @@ def run_digest(*, dry_run: bool = False, as_of: date | None = None) -> None:
     html = format_digest_html(
         as_of=as_of, run=run, setups=setups, watchlist=watchlist, app_base=app_base
     )
-    subject = f"ORBIS Sunday research — {len(setups)} setup(s), {len(watchlist)} watchlist names"
+    subject = f"Iskrel Sunday research — {len(setups)} setup(s), {len(watchlist)} watchlist names"
 
     print(text)
     if dry_run:

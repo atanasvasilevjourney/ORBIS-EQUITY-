@@ -55,7 +55,7 @@ def fetch_nasdaq_listed_symbols() -> list[dict[str, str]]:
     resp = requests.get(
         NASDAQ_LISTED_URL,
         timeout=60,
-        headers={"User-Agent": "OrbisEquity-Universe/1.0"},
+        headers={"User-Agent": "IskrelEquity-Universe/1.0"},
     )
     resp.raise_for_status()
     return parse_nasdaq_listed_text(resp.text)

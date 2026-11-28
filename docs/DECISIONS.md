@@ -3,7 +3,7 @@
 ## Module layout
 
 - **Spec path:** `orbis_equity/ema200_scanner/`
-- **Implemented at:** `pipeline/ema200_scanner/` to match existing Orbis Python pipeline layout (`pipeline/ingest`, `pipeline/compute`, `pipeline/tests`).
+- **Implemented at:** `pipeline/ema200_scanner/` to match existing Iskrel Python pipeline layout (`pipeline/ingest`, `pipeline/compute`, `pipeline/tests`).
 
 ## Data vendors (Phase 1)
 

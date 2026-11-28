@@ -129,7 +129,7 @@ export function PortfolioStudio() {
   if (!ready) {
     return (
       <div className="pf-shell pt-6">
-        <p className="pf-kicker">Orbis · Portfolio</p>
+        <p className="pf-kicker">Iskrel · Portfolio</p>
         <h1 className="font-display text-3xl font-semibold tracking-tight mt-1">Portfolio Studio</h1>
         <p className="mt-2 text-sm text-[var(--text-secondary)]">Opening the book…</p>
       </div>
@@ -146,7 +146,7 @@ export function PortfolioStudio() {
     <div className="pf-shell space-y-4 pt-2">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="pf-kicker">Orbis · Portfolio</p>
+          <p className="pf-kicker">Iskrel · Portfolio</p>
           <h1 className="font-display text-3xl font-semibold tracking-tight mt-1">Portfolio Studio</h1>
           <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
             {pro

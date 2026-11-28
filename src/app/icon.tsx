@@ -26,7 +26,7 @@ export default function Icon() {
             fontFamily: "ui-monospace, monospace",
           }}
         >
-          O
+          I
         </div>
       </div>
     ),

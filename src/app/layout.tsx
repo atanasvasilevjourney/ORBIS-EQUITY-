@@ -8,8 +8,14 @@ import { DeskUniverseShell } from "@/components/universe/DeskUniverseShell";
 import { DeskUniverseStrip } from "@/components/universe/DeskUniverseStrip";
 
 export const metadata: Metadata = {
-  title: "Orbis Equity Terminal",
+  title: "Iskrel Equity Terminal",
   description: "Equity swing terminal — momentum, fundamentals, earnings & news",
+  applicationName: "Iskrel Equity",
+  openGraph: {
+    title: "Iskrel Equity Terminal",
+    description: "Equity swing terminal — momentum, fundamentals, earnings & news",
+    siteName: "Iskrel Equity",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

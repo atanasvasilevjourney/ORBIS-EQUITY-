@@ -34,7 +34,7 @@ def _fetch_nasdaq100() -> list[dict]:
         NDX100_API,
         timeout=30,
         headers={
-            "User-Agent": "Mozilla/5.0 (compatible; OrbisEquity-Universe/1.0)",
+            "User-Agent": "Mozilla/5.0 (compatible; IskrelEquity-Universe/1.0)",
             "Accept": "application/json",
         },
     )
@@ -58,7 +58,7 @@ def _fetch_nasdaq100() -> list[dict]:
     return out
 
 
-def _scrape_table(url: str, *, user_agent: str = "OrbisEquity-Universe/1.0") -> list[dict]:
+def _scrape_table(url: str, *, user_agent: str = "IskrelEquity-Universe/1.0") -> list[dict]:
     resp = requests.get(url, timeout=30, headers={"User-Agent": user_agent})
     resp.raise_for_status()
     tables = pd.read_html(StringIO(resp.text))

@@ -35,7 +35,7 @@ export async function fetchYahooDaily(symbol: string, range = "2y"): Promise<Yah
   try {
     const body = await cachedYahooJson(cacheKey, 5 * 60_000, async () => {
       const res = await fetch(url, {
-        headers: { "User-Agent": "Mozilla/5.0 OrbisEquity-Terminal" },
+        headers: { "User-Agent": "Mozilla/5.0 IskrelEquity-Terminal" },
         cache: "no-store",
         signal: AbortSignal.timeout(range === "max" ? 20_000 : 12_000),
       });

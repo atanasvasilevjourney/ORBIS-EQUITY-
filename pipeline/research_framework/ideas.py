@@ -1,4 +1,4 @@
-"""Rank long/short research ideas with transparent ORBIS rules and evidence marks."""
+"""Rank long/short research ideas with transparent Iskrel rules and evidence marks."""
 from __future__ import annotations
 
 from collections import defaultdict
@@ -217,7 +217,7 @@ def assemble_ideas(
         horizon = _long_horizon(q, fs, cfg)
         rules = ["trend_radar_green", "composite_factor", "analyze_buy_vote"]
         rationale = (
-            f"ORBIS long: radar quality {q or '—'}, factor {fs or '—'}, ANALYZE BUY. "
+            f"Iskrel long: radar quality {q or '—'}, factor {fs or '—'}, ANALYZE BUY. "
             f"Breakout entry at prior high; ATR stop/target ({horizon.replace('_', ' ')})."
         )
         wrong = f"Invalid if {sym} closes below stop ({levels['stop_px']}) before entry triggers."
@@ -270,7 +270,7 @@ def assemble_ideas(
         rules = cand.get("rules") or []
         rule_txt = ", ".join(rules)
         rationale = (
-            f"ORBIS short: rules [{rule_txt}]. Breakdown entry at prior low; "
+            f"Iskrel short: rules [{rule_txt}]. Breakdown entry at prior low; "
             f"ATR stop above / target below (short-term)."
         )
         wrong = f"Invalid if {sym} reclaims stop ({levels['stop_px']}) or trend radar flips GREEN."
