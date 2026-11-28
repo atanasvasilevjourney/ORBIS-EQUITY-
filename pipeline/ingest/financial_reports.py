@@ -47,6 +47,7 @@ class FinancialReportsIngestResult:
     upserted: int
     lse_error: str | None = None
     sec_missing_fields: dict[str, int] | None = None
+    income_coverage: float | None = None
 
 
 def _get_supabase_client() -> Client:
@@ -69,7 +70,7 @@ def _ingest_reports_for_type(
     universe_set = set(symbols)
     rows: list[dict] = []
     offset = 0
-    page_size = 5000
+    page_size = LSEConfig().max_rows_per_request
 
     while True:
         try:
@@ -228,6 +229,26 @@ def run_financial_reports_ingest(sb: Client | None = None) -> FinancialReportsIn
     merged = merge_report_rows(all_sec, yahoo_rows, all_lse)
     upserted = _upsert_reports(sb, merged) if merged else 0
 
+    sym_with_income = {
+        r["symbol"]
+        for r in merged
+        if r.get("report_type") == "income" and r.get("symbol") in set(symbols)
+    }
+    cov = len(sym_with_income) / max(1, len(symbols))
+    import json
+    from pathlib import Path
+
+    cfg_path = Path(__file__).resolve().parents[2] / "shared" / "fundamentals_config.json"
+    min_cov = 0.85
+    if cfg_path.is_file():
+        with cfg_path.open(encoding="utf-8") as fh:
+            min_cov = float(json.load(fh).get("financial_reports_min_coverage", 0.85))
+    if symbols and cov < min_cov:
+        gh_error(
+            f"financial_reports coverage {cov:.1%} below {min_cov:.0%} "
+            f"({len(sym_with_income)}/{len(symbols)} symbols with FY income)"
+        )
+
     logger.info(
         "Financial reports ingest: merged=%d upserted=%d (sec=%d yahoo=%d lse=%d)",
         len(merged),
@@ -267,6 +288,7 @@ def run_financial_reports_ingest(sb: Client | None = None) -> FinancialReportsIn
         upserted=upserted,
         lse_error=lse_error,
         sec_missing_fields=sec_batch.missing_field_counts,
+        income_coverage=cov if symbols else None,
     )
 
 
@@ -294,6 +316,13 @@ def main() -> None:
         )
         gh_error(msg)
         logger.error("=== Financial Reports Ingest FAILED: 0 rows upserted ===")
+        sys.exit(1)
+
+    if result.income_coverage is not None and result.income_coverage < 0.85:
+        logger.error(
+            "=== Financial Reports Ingest FAILED: income coverage %.1f%% ===",
+            result.income_coverage * 100,
+        )
         sys.exit(1)
 
     logger.info("=== Financial Reports Ingest Complete: %d upserted ===", result.upserted)

@@ -18,10 +18,13 @@ import { deskNewsFromRows, loadMarketHeadlines, newsSource, type BriefNewsItem }
 import {
   buildDeskPostureBrief,
   computePostureLabel,
-  computePosturePillars,
   computePostureScore,
   isPostureBriefStale,
+  isTrendRadarRowStale,
+  radarParticipationPillars,
+  sectorLeaders,
 } from "@/lib/postureDesk";
+import { resolveStoredPosture } from "@/lib/postureComposite";
 import { fetchSessionQuotes } from "@/lib/sessionQuotes";
 import {
   countAdvancersDecliners,
@@ -270,17 +273,32 @@ export async function GET() {
       .limit(1)
       .maybeSingle();
 
-    const radar = await fetchAll<{ state: number; quality_rank: number; z_mom: number | null; symbol: string }>(
-      sb,
-      "trend_radar",
-      "symbol, state, quality_rank, z_mom"
-    );
+    const radarRaw = await fetchAll<{
+      state: number;
+      quality_rank: number;
+      z_mom: number | null;
+      symbol: string;
+      computed_at: string | null;
+    }>(sb, "trend_radar", "symbol, state, quality_rank, z_mom, computed_at");
 
     const universe = await fetchAll<{ symbol: string; sector: string | null }>(
       sb,
       "universe_members",
       "symbol, sector",
       (q) => q.eq("is_active", true)
+    );
+
+    const priceRowEarly = await sb
+      .from("prices_daily")
+      .select("date")
+      .order("date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const pricesAsOfEarly =
+      priceRowEarly.data?.date?.slice?.(0, 10) ?? (priceRowEarly.data?.date as string | null) ?? null;
+    const activeSet = new Set(universe.map((u) => u.symbol));
+    const radar = radarRaw.filter(
+      (r) => activeSet.has(r.symbol) && !isTrendRadarRowStale(r.computed_at, pricesAsOfEarly)
     );
 
     const total = radar.length;
@@ -400,37 +418,44 @@ export async function GET() {
     const headlines = await loadMarketHeadlines(
       deskNewsFromRows(Array.isArray(newsRes.data) ? newsRes.data : [])
     );
-    const priceRow = await sb
-      .from("prices_daily")
-      .select("date")
-      .order("date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const pricesAsOf = priceRow.data?.date?.slice?.(0, 10) ?? (priceRow.data?.date as string | null) ?? null;
+    const pricesAsOf = pricesAsOfEarly;
     const briefAsOf = brief?.asof_date?.slice?.(0, 10) ?? null;
     const postureBriefStale = isPostureBriefStale(briefAsOf, pricesAsOf);
 
     const advancersPct = total > 0 ? Math.round((advancers / total) * 100) : null;
     const onListPct = total > 0 ? Math.round((greens / total) * 100) : 0;
-    const livePosture =
+    const storedPosture = resolveStoredPosture(inputs);
+    const liveAux =
+      advancersPct != null ? radarParticipationPillars(advancersPct, radar, onListPct) : null;
+    const mergedPillars =
+      storedPosture.pillars && liveAux
+        ? { ...storedPosture.pillars, ...liveAux }
+        : storedPosture.pillars ?? null;
+    const resolvedPillars = postureBriefStale || !posturePillars ? mergedPillars : { ...posturePillars, ...liveAux };
+
+    const liveFallbackPosture =
       advancersPct != null ? computePostureScore(advancersPct) : null;
+    const livePosture =
+      !postureBriefStale && storedPosture.score != null
+        ? storedPosture.score
+        : liveFallbackPosture;
     const postureLabel =
-      livePosture != null ? computePostureLabel(livePosture) : null;
+      !postureBriefStale && storedPosture.label
+        ? storedPosture.label
+        : livePosture != null
+          ? computePostureLabel(livePosture)
+          : null;
 
     const sectorBySymbol = new Map(
       universe.map((u) => [u.symbol, (u.sector?.trim() || "Unclassified").trim() || "Unclassified"])
     );
     const sessionSector = sectorLeadersFromSession(radar, sessionQuotes, sectorBySymbol);
-  const bestSector = sessionSector.bestSector;
-  const worstSector = sessionSector.worstSector;
+    const liveSectors = sectorLeaders(radar, universe);
+    const bestSector = sessionSector.bestSector ?? liveSectors.bestSector;
+    const worstSector = sessionSector.worstSector ?? liveSectors.worstSector;
 
     const avgRankLive =
       total > 0 ? Math.round(radar.reduce((s, r) => s + r.quality_rank, 0) / total) : 0;
-    const livePillars =
-      advancersPct != null
-        ? computePosturePillars(advancersPct, radar, avgRankLive, onListPct)
-        : null;
-    const resolvedPillars = postureBriefStale || !posturePillars ? livePillars : posturePillars;
 
     const pipelineBrief =
       postureBriefStale || !brief?.brief
@@ -464,9 +489,10 @@ export async function GET() {
       signalsSuppressed: fresh.signalsSuppressed,
       capital,
       posture: livePosture,
-      postureBasis: "advancers_pct",
+      postureBasis:
+        storedPosture.score != null ? "composite" : "advancers_pct_fallback",
       postureDefinition:
-        "Posture score (0–100) equals the percentage of active universe names with a positive latest session close-to-close return.",
+        "Composite posture blends breadth (25%), cross-sectional trend (25%), index trend (20%), 52-week highs/lows (15%), and risk regime (15%).",
       postureLabel,
       posturePillars: resolvedPillars ?? null,
       breadth: buildBreadthBlock({

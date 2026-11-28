@@ -7,9 +7,11 @@ upserts into fundamentals_snapshot.  Also fetches recent insider trades
 Usage:
     python -m pipeline.ingest.fundamentals
 """
+import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
@@ -17,6 +19,8 @@ from supabase import create_client, Client
 
 from pipeline.config.settings import LSEConfig, SupabaseConfig, SCREENER_FIELDS
 from pipeline.clients.lse_api import LSEClient
+from pipeline.utils.market_cap import normalize_market_cap_usd
+from pipeline.utils.supabase import fetch_active_symbols
 
 load_dotenv()
 
@@ -144,7 +148,7 @@ def _map_row(raw: dict, field_map: dict[str, str]) -> dict:
     return _sanitize_margin_fields(mapped)
 
 
-def _ingest_fundamentals(lse: LSEClient, sb: Client) -> int:
+def _ingest_fundamentals(lse: LSEClient, sb: Client) -> tuple[int, list[dict]]:
     """Fetch screener data and upsert into fundamentals_snapshot.
 
     Returns the number of rows successfully upserted.
@@ -157,12 +161,12 @@ def _ingest_fundamentals(lse: LSEClient, sb: Client) -> int:
             "LSE screener failed (%s) — keeping existing fundamentals_snapshot",
             err,
         )
-        return 0
+        return 0, [], []
     logger.info("Received %d stocks from screener", len(stocks))
 
     if not stocks:
         logger.warning("No screener data returned — skipping fundamentals upsert.")
-        return 0
+        return 0, []
 
     now = datetime.now(timezone.utc).isoformat()
     rows: list[dict] = []
@@ -174,6 +178,14 @@ def _ingest_fundamentals(lse: LSEClient, sb: Client) -> int:
 
         row = _map_row(stock, FUNDAMENTALS_FIELD_MAP)
         row["updated_at"] = now
+        price = row.get("price")
+        if row.get("market_cap") is not None:
+            try:
+                m = normalize_market_cap_usd(float(row["market_cap"]), float(price) if price else None)
+                if m is not None:
+                    row["market_cap"] = m
+            except (TypeError, ValueError):
+                pass
         rows.append(row)
 
     logger.info("Mapped %d fundamental rows for upsert", len(rows))
@@ -198,7 +210,7 @@ def _ingest_fundamentals(lse: LSEClient, sb: Client) -> int:
                 "Failed to upsert fundamentals batch %d-%d", i, i + len(batch)
             )
 
-    return upserted
+    return upserted, rows
 
 
 def _ingest_insider_trades(lse: LSEClient, sb: Client) -> int:
@@ -260,6 +272,31 @@ def _ingest_insider_trades(lse: LSEClient, sb: Client) -> int:
     return upserted
 
 
+def _coverage_guard(sb, upserted_rows: list[dict]) -> tuple[float, int, int, float]:
+    cfg_path = Path(__file__).resolve().parents[2] / "shared" / "fundamentals_config.json"
+    with cfg_path.open(encoding="utf-8") as fh:
+        cfg = json.load(fh)
+    max_age = int(cfg.get("ratios_max_age_days", 120))
+    min_cov = float(cfg.get("screener_min_coverage", 0.85))
+    active = set(fetch_active_symbols(sb))
+    cutoff = date.today() - __import__("datetime").timedelta(days=max_age)
+    fresh = 0
+    for row in upserted_rows:
+        sym = row.get("symbol")
+        if sym not in active:
+            continue
+        rd = row.get("ratios_date")
+        if rd:
+            try:
+                if date.fromisoformat(str(rd)[:10]) >= cutoff:
+                    fresh += 1
+            except ValueError:
+                pass
+    expected = len(active) or 1
+    cov = fresh / expected
+    return cov, fresh, len(active), min_cov
+
+
 def main() -> None:
     """Fetch fundamentals + insider trades and upsert into Supabase."""
     logging.basicConfig(
@@ -268,22 +305,34 @@ def main() -> None:
     )
     logger.info("=== Fundamentals Ingest Start ===")
 
-    lse = LSEClient()
-    sb = _get_supabase_client()
+    from pipeline.utils.run_recorded import run_recorded
 
-    # 1. Fundamentals snapshot
-    fund_count = _ingest_fundamentals(lse, sb)
-    logger.info("Fundamentals: %d rows upserted", fund_count)
+    def _run(sb, run) -> None:
+        lse = LSEClient()
+        # 1. Fundamentals snapshot
+        fund_count, rows = _ingest_fundamentals(lse, sb)
+        if fund_count == 0:
+            run.mark_error("fundamentals ingest wrote 0 rows")
+        elif rows:
+            cov, fresh, expected, min_cov = _coverage_guard(sb, rows)
+            run.set_row_counts(
+                fundamentals=fund_count,
+                ratios_fresh=fresh,
+                ratios_expected=expected,
+                ratios_coverage_pct=round(cov * 100, 1),
+            )
+            if cov < min_cov:
+                run.mark_error(
+                    f"ratios coverage {cov:.1%} below {min_cov:.0%} ({fresh}/{expected} fresh)"
+                )
+        else:
+            run.set_row_counts(fundamentals=0)
 
-    # 2. Insider trades snapshot
-    insider_count = _ingest_insider_trades(lse, sb)
-    logger.info("Insider trades: %d rows upserted", insider_count)
+        insider_count = _ingest_insider_trades(lse, sb)
+        run.set_row_counts(insider=insider_count)
+        run.set_headline(f"{fund_count} fundamentals upserted")
 
-    logger.info(
-        "=== Fundamentals Ingest Complete: %d fundamentals, %d insider trades ===",
-        fund_count, insider_count,
-    )
-
+    run_recorded("ingest.fundamentals", _run)
 
 if __name__ == "__main__":
     main()

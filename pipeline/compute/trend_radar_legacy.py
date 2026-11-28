@@ -353,28 +353,11 @@ def main() -> None:
     existing_rows = fetch_all(sb, "trend_radar", "symbol,state,state_changed_at")
     prev_state_map = {r["symbol"]: r for r in existing_rows}
 
-    # Bulk fetch ALL prices since cutoff with pagination (instead of N+1 per-symbol queries)
-    cutoff = (date.today() - timedelta(days=400)).isoformat()
-    all_prices: list[dict] = []
-    page_size = 5000
-    offset = 0
-    logger.info("Fetching all prices since %s...", cutoff)
+    from pipeline.utils.supabase import fetch_prices_since
 
-    while True:
-        resp = (
-            sb.table("prices_daily")
-            .select("symbol,date,open,high,low,close,volume")
-            .gte("date", cutoff)
-            .order("symbol")
-            .order("date")
-            .range(offset, offset + page_size - 1)
-            .execute()
-        )
-        rows = resp.data or []
-        all_prices.extend(rows)
-        if len(rows) < page_size:
-            break
-        offset += page_size
+    cutoff = (date.today() - timedelta(days=400)).isoformat()
+    logger.info("Fetching all prices since %s...", cutoff)
+    all_prices = fetch_prices_since(sb, cutoff)
 
     logger.info("Fetched %d price rows, processing...", len(all_prices))
 

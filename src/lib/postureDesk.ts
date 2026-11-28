@@ -1,4 +1,4 @@
-/** Live posture / breadth from trend_radar — mirrors pipeline.compute.aggregates. */
+/** Live posture helpers — breadth / brief; composite score from pipeline or `postureComposite`. */
 
 export type RadarRow = {
   symbol: string;
@@ -14,13 +14,16 @@ export type UniverseSectorRow = {
 };
 
 export type PosturePillars = {
-  trend: number;
   breadth: number;
-  leadership: number;
-  participation: number;
-  vol: number;
-  heat_cap_pct: number;
-  guidance: string;
+  trend: number;
+  index_trend: number;
+  highs_lows: number;
+  risk: number;
+  leadership?: number;
+  participation?: number;
+  vol?: number;
+  heat_cap_pct?: number;
+  guidance?: string;
 };
 
 function dayPct(row: RadarRow): number {
@@ -29,15 +32,16 @@ function dayPct(row: RadarRow): number {
   return z;
 }
 
+/** @deprecated Use composite posture from daily_brief; kept for legacy fallbacks. */
 export function computePostureScore(advancersPct: number): number {
   return Math.min(100, Math.max(0, Math.round(advancersPct)));
 }
 
 export function computePostureLabel(score: number): string {
-  if (score >= 75) return "Bullish";
-  if (score >= 60) return "Slight Bullish";
-  if (score >= 40) return "Neutral";
-  if (score >= 25) return "Slight Bearish";
+  if (score >= 70) return "Bullish";
+  if (score >= 55) return "Slight Bullish";
+  if (score >= 45) return "Neutral";
+  if (score >= 30) return "Slight Bearish";
   return "Bearish";
 }
 
@@ -64,44 +68,40 @@ export function sectorLeaders(
   return { bestSector: scores[0].sector, worstSector: scores.at(-1)!.sector };
 }
 
+export function radarParticipationPillars(
+  advancersPct: number,
+  radar: RadarRow[],
+  onListPct: number
+): Pick<PosturePillars, "leadership" | "participation" | "heat_cap_pct"> {
+  const total = radar.length || 1;
+  const leaders = radar.filter((r) => (r.quality_rank ?? 0) >= 70).length;
+  const leadership = Math.round((leaders / total) * 1000) / 10;
+  const participation = Math.min(100, Math.max(0, Math.round(onListPct)));
+  const avgRank = total > 0 ? radar.reduce((s, r) => s + r.quality_rank, 0) / total : 0;
+  const heatCap = Math.min(
+    100,
+    Math.max(15, Math.round(advancersPct - Math.max(0, avgRank - leadership) * 0.35))
+  );
+  return { leadership: Math.round(leadership), participation, heat_cap_pct: heatCap };
+}
+
+/** @deprecated replaced by pipeline composite pillars */
 export function computePosturePillars(
   advancersPct: number,
   radar: RadarRow[],
   avgRank: number,
   breadthOnListPct: number
 ): PosturePillars {
-  const total = radar.length || 1;
-  const adv = advancersPct;
-  const onListPct = breadthOnListPct;
-  const leaders = radar.filter((r) => (r.quality_rank ?? 0) >= 70).length;
-  const leadership = Math.round((leaders / total) * 1000) / 10;
-  const trend = computePostureScore(avgRank);
-  const breadth = computePostureScore(adv);
-  const participation = computePostureScore(onListPct);
-  const vol = 50;
-  const heatCap = Math.min(100, Math.max(15, Math.round(adv - Math.max(0, trend - leadership) * 0.35)));
-
-  let guidance: string;
-  if (trend >= 55 && leadership < 45) {
-    guidance = "Uptrend under pressure — trim size, add cautiously";
-  } else if (adv >= 60 && participation >= 10) {
-    guidance = "Participation firm with active watchlist — stay selective";
-  } else if (adv >= 60 && participation < 10) {
-    guidance = "Tape mixed — advancers strong but few hot names on list";
-  } else if (adv <= 40) {
-    guidance = "Defensive tape — reduce heat, wait for breadth repair";
-  } else {
-    guidance = "Mixed tape — size to posture and sector leaders";
-  }
-
+  const aux = radarParticipationPillars(advancersPct, radar, breadthOnListPct);
   return {
-    trend,
-    breadth,
-    leadership: Math.round(leadership),
-    participation,
-    vol,
-    heat_cap_pct: heatCap,
-    guidance,
+    breadth: computePostureScore(advancersPct),
+    trend: computePostureScore(avgRank),
+    index_trend: 50,
+    highs_lows: 50,
+    risk: 50,
+    vol: 50,
+    guidance: "Legacy live fallback",
+    ...aux,
   };
 }
 
@@ -120,4 +120,15 @@ export function isPostureBriefStale(briefAsOf: string | null, pricesAsOf: string
   if (!pricesAsOf) return false;
   if (!briefAsOf) return true;
   return briefAsOf.slice(0, 10) < pricesAsOf.slice(0, 10);
+}
+
+/** Trend radar row is stale when ``computed_at`` is before the latest price session. */
+export function isTrendRadarRowStale(
+  computedAt: string | null | undefined,
+  pricesAsOf: string | null
+): boolean {
+  if (!pricesAsOf) return false;
+  if (!computedAt) return true;
+  const day = computedAt.slice(0, 10);
+  return day < pricesAsOf.slice(0, 10);
 }

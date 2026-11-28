@@ -55,7 +55,7 @@ describe("GET /api/summary", () => {
             brief: "Risk-On - 55% GREEN",
             inputs: {
               posture_score: 65,
-              posture_label: "Risk-On",
+              posture_label: "Slight Bullish",
               breadth: { best_sector: "Technology", worst_sector: "Energy" },
               region_breadth: { US: 60 },
             },
@@ -64,9 +64,27 @@ describe("GET /api/summary", () => {
         }),
         trend_radar: () => ({
           data: [
-            { symbol: "A", state: 1, quality_rank: 70, z_mom: 5 },
-            { symbol: "B", state: -1, quality_rank: 30, z_mom: -2 },
-            { symbol: "C", state: 0, quality_rank: 50, z_mom: 1 },
+            {
+              symbol: "A",
+              state: 1,
+              quality_rank: 70,
+              z_mom: 5,
+              computed_at: `${today}T22:00:00Z`,
+            },
+            {
+              symbol: "B",
+              state: -1,
+              quality_rank: 30,
+              z_mom: -2,
+              computed_at: `${today}T22:00:00Z`,
+            },
+            {
+              symbol: "C",
+              state: 0,
+              quality_rank: 50,
+              z_mom: 1,
+              computed_at: `${today}T22:00:00Z`,
+            },
           ],
           error: null,
         }),
@@ -97,7 +115,8 @@ describe("GET /api/summary", () => {
     expect(body.breadth.downDay).toBe(1);
     expect(body.breadth.greens).toBe(1);
     expect(body.breadth.reds).toBe(1);
-    expect(body.posture).toBe(67);
+    expect(body.posture).toBe(65);
+    expect(body.postureBasis).toBe("composite");
     expect(body.postureLabel).toBe("Slight Bullish");
     expect(body.stale).toBe(false);
   });
@@ -123,11 +142,15 @@ describe("GET /api/summary", () => {
             state: 0,
             quality_rank: 40,
             z_mom: i < 2 ? 1 : -0.5,
+            computed_at: "2026-11-20T22:00:00Z",
           })),
           error: null,
         }),
         universe_members: () => ({
-          data: [{ symbol: "S0", sector: "Tech" }],
+          data: Array.from({ length: 10 }, (_, i) => ({
+            symbol: `S${i}`,
+            sector: "Tech",
+          })),
           error: null,
         }),
         prices_daily: () => ({

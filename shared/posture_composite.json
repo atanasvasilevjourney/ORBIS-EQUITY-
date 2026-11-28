@@ -1,0 +1,22 @@
+{
+  "weights": {
+    "breadth": 0.25,
+    "trend": 0.25,
+    "index_trend": 0.2,
+    "highs_lows": 0.15,
+    "risk": 0.15
+  },
+  "labels": [
+    { "min": 70, "name": "Bullish" },
+    { "min": 55, "name": "Slight Bullish" },
+    { "min": 45, "name": "Neutral" },
+    { "min": 30, "name": "Slight Bearish" },
+    { "min": 0, "name": "Bearish" }
+  ],
+  "vix": {
+    "low_threshold": 16,
+    "high_threshold": 25
+  },
+  "risk_off_cap_score": 54,
+  "trend_radar_min_coverage": 0.9
+}

@@ -143,6 +143,7 @@ describe("GET /api/status", () => {
       createMockSupabase({
         prices_daily: () => ({ data: [{ date: asOf }], error: null }),
         daily_brief: () => ({ data: [{ asof_date: asOf }], error: null }),
+        trend_radar: () => ({ data: [{ computed_at: `${asOf}T22:00:00Z` }], error: null }),
         paper_loop_runs: () => ({ data: [{ asof_date: asOf }], error: null }),
         pipeline_runs: () => ({
           data: [
@@ -448,7 +449,15 @@ describe("GET /api/dashboard", () => {
             brief: "Risk-on tape",
             inputs: {
               posture_score: 64,
-              posture_label: "Risk-On",
+              posture_label: "Slight Bullish",
+              posture_basis: "composite",
+              posture_pillars: {
+                breadth: 64,
+                trend: 55,
+                index_trend: 60,
+                highs_lows: 50,
+                risk: 52,
+              },
               breadth: { best_sector: "Technology", worst_sector: "Energy" },
               region_breadth: { US: 60 },
             },
@@ -457,8 +466,20 @@ describe("GET /api/dashboard", () => {
         }),
         trend_radar: () => ({
           data: [
-            { symbol: "AAPL", state: 1, quality_rank: 80, z_mom: 1.2 },
-            { symbol: "XOM", state: -1, quality_rank: 20, z_mom: -0.4 },
+            {
+              symbol: "AAPL",
+              state: 1,
+              quality_rank: 80,
+              z_mom: 1.2,
+              computed_at: `${asOf}T22:00:00Z`,
+            },
+            {
+              symbol: "XOM",
+              state: -1,
+              quality_rank: 20,
+              z_mom: -0.4,
+              computed_at: `${asOf}T22:00:00Z`,
+            },
           ],
           error: null,
         }),
@@ -501,7 +522,8 @@ describe("GET /api/dashboard", () => {
     expect(body.degraded).toBe(false);
     expect(body.breadth.total).toBe(2);
     expect(body.breadth.greens).toBe(1);
-    expect(body.posture).toBe(50);
+    expect(body.posture).toBe(64);
+    expect(body.postureBasis).toBe("composite");
     expect(body.breadth.advancersPct).toBe(50);
     expect(body.watchlistMovers[0].symbol).toBe("AAPL");
     expect(body.bestSector).toBe("Technology");

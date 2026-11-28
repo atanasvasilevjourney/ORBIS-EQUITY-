@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 
 export const revalidate = 900; // 15-minute cache — EOD data
+// Public read: middleware allows GET without x-api-key (ticker detail for the app UI).
 
 function margin(numer: number | null | undefined, denom: number | null | undefined): number | null {
   if (numer == null || denom == null || denom === 0) return null;

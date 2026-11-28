@@ -1,0 +1,5 @@
+{
+  "screener_min_coverage": 0.85,
+  "financial_reports_min_coverage": 0.85,
+  "ratios_max_age_days": 120
+}

@@ -276,13 +276,15 @@ def fetch_radar_and_universe(sb: Any) -> tuple[list[dict], dict[str, dict]]:
             break
         offset += page
 
-    uni_resp = (
-        sb.table("universe_members")
-        .select("symbol,company_name,sector")
-        .eq("is_active", True)
-        .execute()
+    from pipeline.utils.supabase import fetch_all
+
+    uni_rows = fetch_all(
+        sb,
+        "universe_members",
+        "symbol,company_name,sector",
+        filters=lambda q: q.eq("is_active", True),
     )
-    uni_map = {r["symbol"]: r for r in (uni_resp.data or [])}
+    uni_map = {r["symbol"]: r for r in uni_rows}
     return radar, uni_map
 
 

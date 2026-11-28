@@ -56,12 +56,15 @@ class LSEClient:
         country: str | None = None,
         countries: list[str] | None = None,
         order: str = "market_cap.desc.nullslast",
-        limit: int = 5000,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[dict]:
         """Fetch stock screener data (1,472 global stocks, 50+ metrics)."""
+        page = limit if limit is not None else self.cfg.max_rows_per_request
         params: dict[str, str] = {
             "order": order,
-            "limit": str(limit),
+            "limit": str(page),
+            "offset": str(offset),
         }
         if symbol:
             params["symbol"] = f"eq.{symbol}"
@@ -199,8 +202,17 @@ class LSEClient:
     # ── Convenience: bulk fetch ─────────────────────────────────
 
     def get_all_screener_data(self) -> list[dict]:
-        """Fetch entire screener universe (all 1,472 stocks)."""
-        return self.get_screener(limit=5000)
+        """Fetch entire screener universe with PostgREST-safe pagination."""
+        page = self.cfg.max_rows_per_request
+        offset = 0
+        rows: list[dict] = []
+        while True:
+            batch = self.get_screener(limit=page, offset=offset)
+            rows.extend(batch)
+            if len(batch) < page:
+                break
+            offset += page
+        return rows
 
     def get_healthcare_stocks(self) -> list[dict]:
         """Fetch healthcare sector stocks."""
