@@ -9,7 +9,7 @@ from typing import Any
 
 from pipeline.fundamentals.sector_class import is_financial_sector
 from pipeline.utils.market_cap import normalize_market_cap_usd
-from pipeline.utils.pit_reports import latest_fy_reports_as_of
+from pipeline.utils.pit_reports import latest_fy_reports_as_of, latest_fy_rows_as_of
 from pipeline.utils.supabase import fetch_all
 
 logger = logging.getLogger(__name__)
@@ -169,6 +169,121 @@ def derive_from_reports(
     return out
 
 
+# Snapshot columns a statement can fill when the screener left them empty.
+_STATEMENT_PATCH_KEYS = (
+    "revenue",
+    "gross_profit",
+    "operating_income",
+    "net_income",
+    "ebitda",
+    "eps",
+    "eps_diluted",
+    "operating_margin",
+    "net_margin",
+    "pe_ratio",
+    "earnings_yield",
+    "market_cap",
+    "fcf_yield",
+    "revenue_growth_1y",
+    "revenue_growth_3y",
+    "net_income_growth_1y",
+    "gross_margin",
+    "roa",
+    "roe",
+    "roic",
+    "debt_to_equity",
+    "accruals_ratio",
+    "interest_coverage",
+)
+
+
+def statement_fields_from_reports(
+    *,
+    income_cur: dict | None,
+    income_pri: dict | None,
+    income_old: dict | None,
+    balance_cur: dict | None,
+    cashflow_cur: dict | None,
+    growth_cur: dict | None,
+    metrics_cur: dict | None,
+    price: float | None,
+    sector: str | None,
+    industry: str | None,
+) -> dict[str, Any]:
+    """Ratios plus statement totals the screener would have stored."""
+    derived = derive_from_reports(
+        income_cur=income_cur,
+        income_pri=income_pri,
+        income_old=income_old,
+        balance_cur=balance_cur,
+        cashflow_cur=cashflow_cur,
+        growth_cur=growth_cur,
+        metrics_cur=metrics_cur,
+        price=price,
+        sector=sector,
+        industry=industry,
+    )
+    inc = income_cur.get("data") if isinstance(income_cur, dict) and isinstance(income_cur.get("data"), dict) else (
+        income_cur if isinstance(income_cur, dict) else {}
+    )
+    if not isinstance(inc, dict):
+        inc = {}
+    revenue = _f(inc, "revenue")
+    ni = _f(inc, "netIncome")
+    gp = _f(inc, "grossProfit")
+    op = _f(inc, "operatingIncome", "ebit")
+    ebitda = _f(inc, "ebitda", "operatingIncome")
+    eps = _f(inc, "eps")
+    eps_diluted = _f(inc, "epsDiluted", "epsdiluted")
+    extra: dict[str, Any] = {}
+    if revenue is not None:
+        extra["revenue"] = revenue
+    if gp is not None:
+        extra["gross_profit"] = gp
+    if op is not None:
+        extra["operating_income"] = op
+    if ni is not None:
+        extra["net_income"] = ni
+    if ebitda is not None:
+        extra["ebitda"] = ebitda
+    if eps is not None:
+        extra["eps"] = eps
+    if eps_diluted is not None:
+        extra["eps_diluted"] = eps_diluted
+    financial = is_financial_sector(sector, industry)
+    if not financial and revenue not in (None, 0):
+        if op is not None:
+            extra["operating_margin"] = round(op / revenue, 4)
+        if ni is not None:
+            extra["net_margin"] = round(ni / revenue, 4)
+    merged = {**extra, **{k: v for k, v in derived.items() if v is not None}}
+    return {k: merged[k] for k in _STATEMENT_PATCH_KEYS if k in merged and merged[k] is not None}
+
+
+def patch_missing_snapshot(
+    existing: dict | None,
+    incoming: dict,
+    *,
+    ratios_date: str | None = None,
+    source: str = "sec",
+) -> dict[str, Any]:
+    """Copy only fields the current snapshot does not already have."""
+    current = existing or {}
+    patch: dict[str, Any] = {}
+    for key, value in incoming.items():
+        if key not in _STATEMENT_PATCH_KEYS or value is None:
+            continue
+        if current.get(key) is None:
+            patch[key] = value
+    if not patch:
+        return {}
+    if current.get("ratios_date") is None and ratios_date:
+        patch["ratios_date"] = ratios_date
+    if not current.get("source"):
+        patch["source"] = source
+    return patch
+
+
 def _reports_by_symbol(sb, as_of: date) -> dict[str, dict[str, dict]]:
     by: dict[str, dict[str, dict]] = {}
     for rt in ("income", "balance", "cashflow", "growth", "metrics"):
@@ -199,6 +314,94 @@ def _latest_prices(sb) -> dict[str, float]:
         if sym not in px or d > px[sym][0]:
             px[sym] = (d, float(r["close"] or 0))
     return {s: v[1] for s, v in px.items() if v[1] > 0}
+
+
+def _statement_rows_by_symbol(sb, as_of: date) -> dict[str, dict[str, list]]:
+    by: dict[str, dict[str, list]] = {}
+    for rt in ("income", "balance", "cashflow", "growth", "metrics"):
+        rows = fetch_all(
+            sb,
+            "financial_reports",
+            "symbol, date, filing_date, data",
+            filters=lambda q, report_type=rt: q.eq("report_type", report_type).eq("period", "FY"),
+            order=("date", True),
+        )
+        sym_rows: dict[str, list] = {}
+        for r in rows:
+            sym_rows.setdefault(r["symbol"], []).append(r)
+        for sym, lst in sym_rows.items():
+            known = latest_fy_rows_as_of(lst, as_of, max_reports=3)
+            if not known:
+                continue
+            by.setdefault(sym, {})[rt] = known
+    return by
+
+
+def _ratios_date_from_income(row: dict | None) -> str | None:
+    if not row:
+        return None
+    raw = row.get("filing_date") or row.get("date")
+    if not raw:
+        return None
+    return str(raw)[:10]
+
+
+def fill_missing_from_statements(sb) -> int:
+    """Patch null fundamentals_snapshot fields from financial_reports already stored.
+
+    Does not overwrite a value the screener (or a prior run) already wrote.
+    """
+    as_of = date.today()
+    universe = fetch_all(
+        sb,
+        "universe_members",
+        "symbol, sector, industry",
+        filters=lambda q: q.eq("is_active", True),
+    )
+    sector_map = {r["symbol"]: (r.get("sector"), r.get("industry")) for r in universe if r.get("symbol")}
+    if not sector_map:
+        return 0
+    columns = ",".join(("symbol", "ratios_date", "source", *_STATEMENT_PATCH_KEYS))
+    existing = {
+        r["symbol"]: r
+        for r in fetch_all(sb, "fundamentals_snapshot", columns)
+        if r.get("symbol")
+    }
+    reports = _statement_rows_by_symbol(sb, as_of)
+    prices = _latest_prices(sb)
+    updates: list[dict] = []
+    now = datetime.now(timezone.utc).isoformat()
+    for sym, (sec, ind) in sector_map.items():
+        rep = reports.get(sym, {})
+        inc = rep.get("income") or []
+        fields = statement_fields_from_reports(
+            income_cur=inc[0] if inc else None,
+            income_pri=inc[1] if len(inc) > 1 else None,
+            income_old=inc[2] if len(inc) > 2 else None,
+            balance_cur=(rep.get("balance") or [None])[0],
+            cashflow_cur=(rep.get("cashflow") or [None])[0],
+            growth_cur=(rep.get("growth") or [None])[0],
+            metrics_cur=(rep.get("metrics") or [None])[0],
+            price=prices.get(sym),
+            sector=sec,
+            industry=ind,
+        )
+        patch = patch_missing_snapshot(
+            existing.get(sym),
+            fields,
+            ratios_date=_ratios_date_from_income(inc[0] if inc else None),
+        )
+        if not patch:
+            continue
+        patch["symbol"] = sym
+        patch["updated_at"] = now
+        updates.append(patch)
+
+    for i in range(0, len(updates), 200):
+        batch = updates[i : i + 200]
+        sb.table("fundamentals_snapshot").upsert(batch, on_conflict="symbol").execute()
+    logger.info("Filled %d fundamentals_snapshot rows from stored statements", len(updates))
+    return len(updates)
 
 
 def run_derived(sb) -> dict[str, int]:

@@ -10,6 +10,7 @@ Usage:
 import json
 import logging
 import os
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from supabase import create_client, Client
 
 from pipeline.config.settings import LSEConfig, SupabaseConfig, SCREENER_FIELDS
 from pipeline.clients.lse_api import LSEClient
+from pipeline.compute.fundamentals_derived import fill_missing_from_statements
 from pipeline.utils.market_cap import normalize_market_cap_usd
 from pipeline.utils.supabase import fetch_active_symbols
 
@@ -148,52 +150,67 @@ def _map_row(raw: dict, field_map: dict[str, str]) -> dict:
     return _sanitize_margin_fields(mapped)
 
 
-def _ingest_fundamentals(lse: LSEClient, sb: Client) -> tuple[int, list[dict]]:
-    """Fetch screener data and upsert into fundamentals_snapshot.
+@dataclass
+class FundamentalsIngestResult:
+    upserted: int
+    rows: list[dict]
+    screener_error: str | None
+    statement_fills: int
 
-    Returns the number of rows successfully upserted.
+
+def _load_screener(lse: LSEClient) -> tuple[list[dict], str | None]:
+    """Return screener rows, or an empty list and the error when the call fails.
+
+    A failure keeps the existing fundamentals_snapshot. The caller still exits 0
+    so nightly compute can build signals and posture from the prior snapshot.
     """
     logger.info("Fetching all screener data from LSE API...")
     try:
-        stocks = lse.get_all_screener_data()
+        return lse.get_all_screener_data(), None
     except requests.HTTPError as err:
         logger.error(
             "LSE screener failed (%s) — keeping existing fundamentals_snapshot",
             err,
         )
-        return 0, [], []
+        return [], str(err)
+
+
+def _ingest_fundamentals(lse: LSEClient, sb: Client) -> FundamentalsIngestResult:
+    """Fetch screener data and upsert into fundamentals_snapshot.
+
+    On screener HTTP failure, leave the stored snapshot in place and fill only
+    null fields from financial_reports already in the database.
+    """
+    stocks, screener_error = _load_screener(lse)
     logger.info("Received %d stocks from screener", len(stocks))
 
-    if not stocks:
-        logger.warning("No screener data returned — skipping fundamentals upsert.")
-        return 0, []
-
-    now = datetime.now(timezone.utc).isoformat()
     rows: list[dict] = []
-
-    for stock in stocks:
-        symbol = stock.get("symbol")
-        if not symbol:
-            continue
-
-        row = _map_row(stock, FUNDAMENTALS_FIELD_MAP)
-        row["updated_at"] = now
-        price = row.get("price")
-        if row.get("market_cap") is not None:
-            try:
-                m = normalize_market_cap_usd(float(row["market_cap"]), float(price) if price else None)
-                if m is not None:
-                    row["market_cap"] = m
-            except (TypeError, ValueError):
-                pass
-        rows.append(row)
-
-    logger.info("Mapped %d fundamental rows for upsert", len(rows))
-
-    # Batch upsert
-    batch_size = 500
     upserted = 0
+    if not stocks:
+        if screener_error is None:
+            logger.warning("No screener data returned — skipping fundamentals upsert.")
+    else:
+        now = datetime.now(timezone.utc).isoformat()
+        for stock in stocks:
+            symbol = stock.get("symbol")
+            if not symbol:
+                continue
 
+            row = _map_row(stock, FUNDAMENTALS_FIELD_MAP)
+            row["updated_at"] = now
+            price = row.get("price")
+            if row.get("market_cap") is not None:
+                try:
+                    m = normalize_market_cap_usd(float(row["market_cap"]), float(price) if price else None)
+                    if m is not None:
+                        row["market_cap"] = m
+                except (TypeError, ValueError):
+                    pass
+            rows.append(row)
+
+        logger.info("Mapped %d fundamental rows for upsert", len(rows))
+
+    batch_size = 500
     for i in range(0, len(rows), batch_size):
         batch = rows[i : i + batch_size]
         try:
@@ -210,7 +227,15 @@ def _ingest_fundamentals(lse: LSEClient, sb: Client) -> tuple[int, list[dict]]:
                 "Failed to upsert fundamentals batch %d-%d", i, i + len(batch)
             )
 
-    return upserted, rows
+    statement_fills = 0
+    try:
+        statement_fills = fill_missing_from_statements(sb)
+    except Exception:
+        logger.exception(
+            "Statement fill failed; existing fundamentals_snapshot left in place"
+        )
+
+    return FundamentalsIngestResult(upserted, rows, screener_error, statement_fills)
 
 
 def _ingest_insider_trades(lse: LSEClient, sb: Client) -> int:
@@ -309,28 +334,53 @@ def main() -> None:
 
     def _run(sb, run) -> None:
         lse = LSEClient()
-        # 1. Fundamentals snapshot
-        fund_count, rows = _ingest_fundamentals(lse, sb)
-        if fund_count == 0:
-            run.mark_error("fundamentals ingest wrote 0 rows")
-        elif rows:
-            cov, fresh, expected, min_cov = _coverage_guard(sb, rows)
-            run.set_row_counts(
-                fundamentals=fund_count,
-                ratios_fresh=fresh,
-                ratios_expected=expected,
-                ratios_coverage_pct=round(cov * 100, 1),
-            )
-            if cov < min_cov:
-                run.mark_error(
-                    f"ratios coverage {cov:.1%} below {min_cov:.0%} ({fresh}/{expected} fresh)"
-                )
-        else:
-            run.set_row_counts(fundamentals=0)
+        result = _ingest_fundamentals(lse, sb)
+        _record_fundamentals_outcome(run, result, sb)
 
         insider_count = _ingest_insider_trades(lse, sb)
         run.set_row_counts(insider=insider_count)
-        run.set_headline(f"{fund_count} fundamentals upserted")
+        headline = f"{result.upserted} screener rows"
+        if result.statement_fills:
+            headline += f"; {result.statement_fills} statement fills"
+        if result.screener_error:
+            headline += "; kept prior snapshot"
+        run.set_headline(headline)
+
+
+def _record_fundamentals_outcome(run, result: FundamentalsIngestResult, sb: Client) -> None:
+    """Record screener failure as partial so the process still exits 0."""
+    if result.screener_error:
+        detail = "LSE screener unavailable; kept existing fundamentals_snapshot"
+        if result.statement_fills:
+            detail += f"; filled {result.statement_fills} symbols from stored SEC statements"
+        run.mark_partial(detail)
+        run.set_row_counts(
+            fundamentals=result.upserted,
+            statement_fills=result.statement_fills,
+        )
+        return
+
+    if result.upserted == 0 and result.statement_fills == 0:
+        run.mark_error("fundamentals ingest wrote 0 rows")
+        run.set_row_counts(fundamentals=0, statement_fills=0)
+        return
+
+    counts: dict = {
+        "fundamentals": result.upserted,
+        "statement_fills": result.statement_fills,
+    }
+    if result.rows:
+        cov, fresh, expected, min_cov = _coverage_guard(sb, result.rows)
+        counts.update(
+            ratios_fresh=fresh,
+            ratios_expected=expected,
+            ratios_coverage_pct=round(cov * 100, 1),
+        )
+        if cov < min_cov:
+            run.mark_error(
+                f"ratios coverage {cov:.1%} below {min_cov:.0%} ({fresh}/{expected} fresh)"
+            )
+    run.set_row_counts(**counts)
 
     run_recorded("ingest.fundamentals", _run)
 

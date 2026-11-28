@@ -35,10 +35,16 @@ class LSEClient:
         retry = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
         self.session.mount("https://", HTTPAdapter(max_retries=retry))
 
-    def _get(self, table: str, params: dict[str, str] | None = None,
-             count: bool = False) -> list[dict[str, Any]]:
+    def _get(
+        self,
+        table: str,
+        params: dict[str, str] | None = None,
+        count: bool = False,
+        base_url: str | None = None,
+    ) -> list[dict[str, Any]]:
         """GET from a PostgREST table/view."""
-        url = f"{self.cfg.api_url}/{table}"
+        root = (base_url or self.cfg.api_url).rstrip("/")
+        url = f"{root}/{table}"
         headers = {}
         if count:
             headers["Prefer"] = "count=exact"
@@ -46,6 +52,15 @@ class LSEClient:
         resp.raise_for_status()
         time.sleep(self.cfg.request_delay)
         return resp.json()
+
+    def _screener_hosts(self) -> list[str]:
+        """Primary catalog host, then the data API when it is a different host."""
+        primary = (getattr(self, "_screener_base", None) or self.cfg.api_url).rstrip("/")
+        hosts = [primary]
+        alt = (self.cfg.data_api_url or "").rstrip("/")
+        if alt and alt not in hosts:
+            hosts.append(alt)
+        return hosts
 
     # ── Stock Screener ──────────────────────────────────────────
 
@@ -74,12 +89,42 @@ class LSEClient:
             params["country"] = f"eq.{country}"
         if countries:
             params["country"] = f"in.({','.join(countries)})"
-        return self._get("stock_screener", params)
+        return self._get_screener(params)
+
+    def _get_screener(self, params: dict[str, str]) -> list[dict]:
+        """GET stock_screener, retrying the data-API host after 401/403/404.
+
+        Prices use the lse-data SDK on ``data_api_url``. The catalog host
+        (``api_url``) can reject the same key for ``stock_screener`` when the
+        plan does not include that endpoint.
+        """
+        hosts = self._screener_hosts()
+        last_err: requests.HTTPError | None = None
+        for i, host in enumerate(hosts):
+            try:
+                rows = self._get("stock_screener", params, base_url=host)
+            except requests.HTTPError as err:
+                status = getattr(getattr(err, "response", None), "status_code", None)
+                last_err = err
+                if status in (401, 403, 404) and i < len(hosts) - 1:
+                    logger.warning(
+                        "stock_screener HTTP %s on %s; retrying %s",
+                        status,
+                        host,
+                        hosts[i + 1],
+                    )
+                    continue
+                raise
+            self._screener_base = host
+            return rows
+        if last_err is not None:
+            raise last_err
+        return []
 
     def get_screener_by_exchange(self, exchange: str, **kwargs) -> list[dict]:
         """Filter screener by exchange (NYSE, NASDAQ, LSE, XETRA, PAR, etc.)."""
-        params = {"exchange": f"eq.{exchange}", **kwargs}
-        return self._get("stock_screener", params)
+        params = {"exchange": f"eq.{exchange}", **{k: str(v) for k, v in kwargs.items()}}
+        return self._get_screener(params)
 
     # ── Financial Reports ───────────────────────────────────────
 
