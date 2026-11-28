@@ -244,12 +244,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     needs: [ingest-prices, ingest-financial-reports, ingest-fundamentals]
-    # A screener 401 must not block signals; that job keeps the prior snapshot.
+    # A screener failure or a financial-reports timeout must not block signals.
     if: >-
       always()
       && needs.ingest-prices.result == 'success'
       && (needs.ingest-financial-reports.result == 'success'
-          || needs.ingest-financial-reports.result == 'skipped')
+          || needs.ingest-financial-reports.result == 'skipped'
+          || needs.ingest-financial-reports.result == 'failure'
+          || needs.ingest-financial-reports.result == 'cancelled')
       && (needs.ingest-fundamentals.result == 'success'
           || needs.ingest-fundamentals.result == 'skipped'
           || needs.ingest-fundamentals.result == 'failure')
