@@ -18,7 +18,14 @@ Render Cron (pipeline) ─────→ Supabase
 | [Render](https://render.com) | Run weekday data jobs |
 | GitHub repo connected to both | This repository |
 
-Apply migrations in Supabase SQL editor (or CLI) if the project is empty: run **all** files in `supabase/migrations/` in filename order (`001` → `028`, including desk/KAMA migrations). Do not stop at `005` — cloud desk modules need `006`+.
+Apply migrations in Supabase SQL editor (or CLI) if the project is empty: run **all** files in `supabase/migrations/` in filename order through the latest (`035_…` as of this repo). Do not stop at `005` — cloud desk modules need `006`+.
+
+**Sunday research (required for GitHub Actions):** apply at least:
+
+1. `supabase/migrations/027_research_weekly.sql` — `research_weekly_runs` / `research_weekly_setups`
+2. `supabase/migrations/035_research_weekly_horizons.sql` — `horizon` / `confidence` on setups
+
+Migrations are **not** applied by Vercel or GitHub Actions merges; run them in the Supabase SQL editor (or `supabase db push` against production). Until `027` is applied, `Sunday Research Email` and `Sunday Research Pack` fail with PostgREST `PGRST205`.
 
 After deploying migration `028_trading_journal.sql`, backfill closed LOOP trades once:
 
@@ -112,7 +119,8 @@ Repo → Settings → Secrets and variables → Actions — add:
 Schedule (already in repo):
 
 - **Mon–Fri 19:30 UTC** — `.github/workflows/nightly-pipeline.yml` (nightly pipeline + EOD watchlist digest). **Monday** `universe-sync` also runs `us_index_universe` + `nasdaq_listed` (NDAQ ALL) before LSE `universe`.
-- **Sunday 08:00 UTC** — `.github/workflows/sunday-research-email.yml` (weekly research pack + watchlist notes to `ALERT_EMAIL`)
+- **Sunday 05:00 UTC** — `.github/workflows/sunday-research-pack.yml` (persist weekly pack + commit JSON artifact)
+- **Sunday 08:00 UTC** — `.github/workflows/sunday-research-email.yml` (digest email to `ALERT_EMAIL`; regenerates inline if no run yet)
 
 Manual test:
 

@@ -262,19 +262,31 @@ def generate_pack(sb: Client, cfg: dict | None = None) -> dict:
 
 
 def persist_pack(sb: Client, pack: dict) -> str:
+    from pipeline.research_framework.schema_preflight import (
+        ResearchWeeklySchemaError,
+        check_research_weekly_schema,
+    )
+    from pipeline.utils.supabase_errors import is_missing_column, is_missing_relation
+
+    check_research_weekly_schema(sb)
     week = pack["week_ending"]
     run_id = f"rw-{week}-{datetime.now(timezone.utc).strftime('%H%M%S')}"
-    sb.table("research_weekly_runs").insert(
-        {
-            "run_id": run_id,
-            "week_ending": week,
-            "headline": pack.get("headline"),
-            "macro": pack.get("macro") or {},
-            "sectors": pack.get("sectors") or [],
-            "risk_notes": pack.get("risk_notes") or [],
-            "config": pack.get("config"),
-        }
-    ).execute()
+    try:
+        sb.table("research_weekly_runs").insert(
+            {
+                "run_id": run_id,
+                "week_ending": week,
+                "headline": pack.get("headline"),
+                "macro": pack.get("macro") or {},
+                "sectors": pack.get("sectors") or [],
+                "risk_notes": pack.get("risk_notes") or [],
+                "config": pack.get("config"),
+            }
+        ).execute()
+    except Exception as exc:
+        if is_missing_relation(exc) or is_missing_column(exc):
+            raise ResearchWeeklySchemaError() from exc
+        raise
     rows = []
     for i, s in enumerate(pack.get("setups") or [], start=1):
         rows.append(
@@ -300,7 +312,12 @@ def persist_pack(sb: Client, pack: dict) -> str:
             }
         )
     if rows:
-        sb.table("research_weekly_setups").insert(rows).execute()
+        try:
+            sb.table("research_weekly_setups").insert(rows).execute()
+        except Exception as exc:
+            if is_missing_relation(exc) or is_missing_column(exc):
+                raise ResearchWeeklySchemaError() from exc
+            raise
     logger.info("Research weekly pack %s — %d setups", run_id, len(rows))
     return run_id
 

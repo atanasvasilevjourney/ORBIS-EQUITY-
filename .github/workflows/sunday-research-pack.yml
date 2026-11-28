@@ -26,6 +26,12 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r pipeline/requirements.txt
 
+      - name: Preflight research_weekly schema
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python -m pipeline.research_framework.schema_preflight
+
       - name: Generate weekly research pack
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
