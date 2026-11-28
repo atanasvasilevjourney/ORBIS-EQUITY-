@@ -5,6 +5,7 @@ import requests
 
 from pipeline.clients.lse_api import LSEClient
 from pipeline.compute.fundamentals_derived import (
+    _growth_ratio,
     patch_missing_snapshot,
     statement_fields_from_reports,
 )
@@ -108,6 +109,27 @@ def test_statement_fields_fill_only_missing_snapshot_values():
     assert patch["revenue"] == 100.0
     assert "source" not in patch
     assert patch["ratios_date"] == "2025-02-01"
+
+
+def test_three_year_growth_skips_a_negative_base():
+    assert _growth_ratio(-10, 5, 3) is None
+    assert _growth_ratio(-10, 5, 1) == -3.0
+    grown = _growth_ratio(100, 80, 3)
+    assert isinstance(grown, float)
+    fields = statement_fields_from_reports(
+        income_cur={"data": {"revenue": 10.0, "netIncome": 1.0}},
+        income_pri={"data": {"revenue": 8.0, "netIncome": 1.0}},
+        income_old={"data": {"revenue": -5.0, "netIncome": -1.0}},
+        balance_cur=None,
+        cashflow_cur=None,
+        growth_cur=None,
+        metrics_cur=None,
+        price=20.0,
+        sector="Technology",
+        industry="Software",
+    )
+    assert "revenue_growth_3y" not in fields
+    assert isinstance(fields["revenue"], float)
 
 
 def test_ingest_keeps_snapshot_when_screener_401(monkeypatch):
